@@ -57,13 +57,30 @@ fn client_run(address: &str, stream: &mut dyn Read) -> std::io::Result<()> {
                     socket_reader.read_line(&mut response)?;
                     
                     if response.starts_with(":") {
-                        let value = response.trim_start_matches(":").trim();
-                        println!("\"{}\"", value);
+                        println!("{}", response);
                     } else {
                         println!("{}", response.trim());
                     }
                 } else {
                     println!("Invalid INCR command. Usage: INCR <key>");
+                }
+            } else if command.starts_with("decr") {
+                let parts: Vec<&str> = command.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    let key = parts[1];
+                    let incr_command = format!("DECR {}\r\n", key);
+                    socket.write(incr_command.as_bytes())?;
+    
+                    let mut response = String::new();
+                    socket_reader.read_line(&mut response)?;
+                        
+                    if response.starts_with(":") {
+                        println!("{}", response);
+                    } else {
+                        println!("{}", response.trim());
+                    }
+                } else {
+                    println!("Invalid DECR command. Usage: INCR <key>");
                 }
             } else if command.starts_with("get") {
                 let parts: Vec<&str> = command.split_whitespace().collect();
@@ -71,26 +88,26 @@ fn client_run(address: &str, stream: &mut dyn Read) -> std::io::Result<()> {
                     let key = parts[1];
                     let get_command = format!("GET {}\r\n", key);
                     socket.write(get_command.as_bytes())?;
-            
+                    
                     let mut size_line = String::new();
                     socket_reader.read_line(&mut size_line)?;
+                    
+
+                    print!("{}", size_line);  
                     
                     if size_line.starts_with("$") {
                         let size_str = size_line.trim_end().trim_start_matches("$");
                         
                         if size_str == "-1" {
-                            println!("(nil)");
                         } else {
-                            if let Ok(size) = size_str.parse::<i32>() {
-                                let mut value = String::new();
-                                socket_reader.read_line(&mut value)?;
-                                println!("\"{}\"", value.trim());
-                            } else {
-                                println!("Error parsing size: {}", size_str);
-                            }
+                            let mut value = String::new();
+                            socket_reader.read_line(&mut value)?;
+                            
+                            print!("{}", value);
+                            
                         }
                     } else {
-                        println!("{}", size_line.trim());
+                        println!("{}", size_line);
                     }
                 } else {
                     println!("Invalid GET command. Usage: GET <key>");

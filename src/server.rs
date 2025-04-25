@@ -65,7 +65,7 @@ fn handle_client(stream: &mut TcpStream, store: Arc<Mutex<HashMap<String, String
                     let value = parts[2].to_string();
                     let mut store = store.lock().unwrap();
                     store.insert(key.clone(), value.clone());  
-                    write!(stream, "\"OK\"\r\n")?;
+                    write!(stream, "+OK\r\n")?;
                 } else {
                     write!(stream, "-Invalid SET command. Usage: SET <key> <value>\r\n")?;
                 }
@@ -83,6 +83,31 @@ fn handle_client(stream: &mut TcpStream, store: Arc<Mutex<HashMap<String, String
                     match current_value.parse::<i64>() {
                         Ok(num) => {
                             let new_value = num + 1;
+                            store.insert(key.clone(), new_value.to_string());
+                            
+                            write!(stream, ":{}\r\n", new_value)?;
+                        }
+                        Err(_) => {
+                            write!(stream, "-ERR value is not an integer or out of range\r\n")?;
+                        }
+                    }
+                } else {
+                    write!(stream, "-Invalid INCR command. Usage: INCR <key>\r\n")?;
+                }
+            } else if command.starts_with("decr"){
+                let parts: Vec<&str> = command.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    let key = parts[1].to_string();
+                    let mut store = store.lock().unwrap();
+                    
+                    if !store.contains_key(&key) {
+                        store.insert(key.clone(), "0".to_string());
+                    }
+                    
+                    let current_value = store.get(&key).unwrap();
+                    match current_value.parse::<i64>() {
+                        Ok(num) => {
+                            let new_value = num - 1;
                             store.insert(key.clone(), new_value.to_string());
                             
                             write!(stream, ":{}\r\n", new_value)?;
