@@ -54,16 +54,17 @@ impl Component for AppModel {
                     gtk::Button {                                          
                         set_margin_all: 10,
                         set_label: "Conectar",
-                        add_css_class: "boton",
-                        
+                        add_css_class: "button",
+                        add_css_class: "connect",                        
                         connect_clicked => AppMsg::Connect,
-                        set_widget_name: "button"
+                        
                     }
                 },
                 #[name="body_container"]
                 gtk::Box {
                     set_orientation: gtk::Orientation::Horizontal,                
                     set_vexpand: true,
+                    set_hexpand: true,
                     set_margin_all: 10,
                     #[name="side_bar_container"]
                     gtk::Box {
@@ -92,6 +93,7 @@ impl Component for AppModel {
                             gtk::Button {
                                 set_margin_all: 10,
                                 set_margin_top: 50,
+                                add_css_class: "new-file",
                                 add_css_class: "button",
                                 set_label: "Nuevo Archivo",
                                 connect_clicked => AppMsg::ShowNewFile
@@ -103,9 +105,10 @@ impl Component for AppModel {
                         add_css_class: "card",
                         add_css_class: "content-card",
                         set_hexpand: true,
-                        set_valign: gtk::Align::Start,
+                        set_vexpand: true,
+                        set_valign: gtk::Align::Fill,
                         set_orientation: gtk::Orientation::Vertical,
-                        set_halign: gtk::Align::Center,
+                        set_halign: gtk::Align::Fill,
                         match model.current_view.as_str()  {
                             "Home" => {
                                 gtk::Label {
