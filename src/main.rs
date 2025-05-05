@@ -109,35 +109,71 @@ impl Component for AppModel {
                         set_valign: gtk::Align::Fill,
                         set_orientation: gtk::Orientation::Vertical,
                         set_halign: gtk::Align::Fill,
-                        match model.current_view.as_str()  {
-                            "Home" => {
-                                gtk::Label {
-                                    set_text: "Bienvenido a Home!",
-                                    set_margin_all: 20,
+
+                        #[name="filter_files_container"]
+                        gtk::Box {                    
+                            add_css_class: "header-filter",                                                        
+                            set_orientation: gtk::Orientation::Horizontal,                                                
+                            set_halign: gtk::Align::Fill,                                                          
+                            gtk::Button {                                          
+                                set_hexpand: true,
+                                
+                                set_label: "Todos",
+                                add_css_class: "button",
+                                add_css_class: "filter",                                                    
+                                connect_clicked => AppMsg::Connect,                                
+                            },
+                            gtk::Button {                                          
+                                set_hexpand: true,
+                                
+                                set_label: "Texto",
+                                add_css_class: "button",
+                                add_css_class: "filter",                        
+                                connect_clicked => AppMsg::Connect,                                
+                            },
+                            gtk::Button {         
+                                set_hexpand: true,
+                                                                                                 
+                                set_label: "Cálculo",
+                                add_css_class: "button",
+                                add_css_class: "filter",  
+                                add_css_class: "last",                        
+                                connect_clicked => AppMsg::Connect,                                
+                            },
+                        },
+                        
+                        #[name="files_container"]
+                        gtk::Box{
+                            match model.current_view.as_str()  {
+                                "Home" => {
+                                    gtk::Label {
+                                        set_text: "Bienvenido a Home!",
+                                        set_margin_all: 20,
+                                    }
+                                }
+                                "Documents" => {
+                                    gtk::Label {
+                                        set_text: "Aquí están tus documentos.",
+                                        add_css_class: "content",
+                                        set_margin_all: 20,
+                                    }
+                                }
+                                "NewFile" => {
+                                    gtk::Label {
+                                        set_text: "Crea un nuevo archivo.",
+                                        add_css_class: "content",
+                                        set_margin_all: 20,
+                                    }
+                                }
+                                _ => {
+                                    gtk::Label {
+                                        set_text: "Selecciona una opción del menú.",
+                                        add_css_class: "content",
+                                        set_margin_all: 20,
+                                    }
                                 }
                             }
-                            "Documents" => {
-                                gtk::Label {
-                                    set_text: "Aquí están tus documentos.",
-                                    add_css_class: "content",
-                                    set_margin_all: 20,
-                                }
-                            }
-                            "NewFile" => {
-                                gtk::Label {
-                                    set_text: "Crea un nuevo archivo.",
-                                    add_css_class: "content",
-                                    set_margin_all: 20,
-                                }
-                            }
-                            _ => {
-                                gtk::Label {
-                                    set_text: "Selecciona una opción del menú.",
-                                    add_css_class: "content",
-                                    set_margin_all: 20,
-                                }
-                            }
-                        }
+                        },                        
                     }
                 }
             }
