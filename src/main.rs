@@ -1,11 +1,12 @@
 extern crate relm4;
 extern crate gtk4;
-use gtk4::{prelude::{BoxExt, ButtonExt, GtkWindowExt, OrientableExt, StyleContextExt, WidgetExt}, CssProvider};
+use gtk4::{prelude::{BoxExt, ButtonExt, GtkWindowExt, OrientableExt, PopoverExt, StyleContextExt, WidgetExt}, CssProvider};
 use relm4::{gtk, Component, ComponentParts, ComponentSender, RelmApp, RelmWidgetExt, SimpleComponent};
 
-struct AppModel {
-    counter: u8,
-    current_view: String
+struct AppModel {    
+    current_view: String,
+    show_popover: bool, 
+    popover: Option<gtk::Popover>,
 }
 
 #[derive(Debug)]
@@ -15,6 +16,9 @@ enum AppMsg {
     ShowHome,
     ShowDocuments,
     ShowNewFile,
+    TogglePopover,
+    CreateTextSheet,
+    CreateSpreadsheet
 }
 
 #[relm4::component]
@@ -90,14 +94,36 @@ impl Component for AppModel {
                                 connect_clicked => AppMsg::ShowDocuments
                             },
                             
+                            #[name="new_file_button"]
                             gtk::Button {
                                 set_margin_all: 10,
                                 set_margin_top: 50,
                                 add_css_class: "new-file",
                                 add_css_class: "button",
                                 set_label: "Nuevo Archivo",
-                                connect_clicked => AppMsg::ShowNewFile
+                                connect_clicked => AppMsg::TogglePopover,
+                            },
+
+                            #[name="popover"]
+                            gtk::Popover {
+                                set_has_arrow: true,
+                                set_autohide: true,
+                                set_position: gtk::PositionType::Bottom,                                                                                                
+                                #[name="popover_content"]
+                                gtk::Box {
+                                    set_orientation: gtk::Orientation::Vertical,
+                                    set_spacing: 5,
+                                    gtk::Button {
+                                        set_label: "Hoja de texto",
+                                        connect_clicked => AppMsg::CreateTextSheet,
+                                    },
+                                    gtk::Button {
+                                        set_label: "Hoja de cálculo",
+                                        connect_clicked => AppMsg::CreateSpreadsheet,
+                                    }
+                                },                                
                             }
+
                         }
                     },                    
                     #[name="body"]
@@ -157,14 +183,7 @@ impl Component for AppModel {
                                         add_css_class: "content",
                                         set_margin_all: 20,
                                     }
-                                }
-                                "NewFile" => {
-                                    gtk::Label {
-                                        set_text: "Crea un nuevo archivo.",
-                                        add_css_class: "content",
-                                        set_margin_all: 20,
-                                    }
-                                }
+                                }                                
                                 _ => {
                                     gtk::Label {
                                         set_text: "Selecciona una opción del menú.",
@@ -180,29 +199,33 @@ impl Component for AppModel {
         }
     }
 
-    // Initialize the UI.
+
     fn init(
         counter: Self::Init,
         root: Self::Root,
         _sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let model = AppModel { counter, current_view: "Home".to_string() };
-        let css_provider = CssProvider::new();
+
         
-        // Cargar el CSS directamente como string para mayor facilidad
-        // También puedes mantener el css_provider.load_from_path("app.css") si prefieres usar un archivo
+        let css_provider = CssProvider::new();
         css_provider.load_from_path("app.css");
 
-        // Aplicar el CSS a toda la aplicación
+        
         gtk4::style_context_add_provider_for_display(
             &gtk4::gdk::Display::default().expect("Could not get default display"),
             &css_provider,
             gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
+        );        
 
-        // Insert the macro code generation here
+        let mut model = AppModel {             
+            current_view: "Home".to_string(),
+            show_popover: false,
+            popover: None  
+         };
+
         let widgets = view_output!();
-
+        
+        model.popover = Some(widgets.popover.clone());
         ComponentParts { model, widgets }
     }
 
@@ -212,10 +235,32 @@ impl Component for AppModel {
             AppMsg::ShowNewFile => self.current_view = "NewFile".to_string(),
             AppMsg::ShowDocuments => self.current_view = "Documents".to_string(),
             AppMsg::Connect => self.current_view = "Documents".to_string(),
-            AppMsg::Disconnect => self.current_view = "Documents".to_string()
+            AppMsg::Disconnect => self.current_view = "Documents".to_string(),                
+            AppMsg::TogglePopover => {
+                if let Some(popover) = &self.popover {
+                    popover.popup();
+                }
+            }
+            AppMsg::CreateTextSheet => {
+                if let Some(popover) = &self.popover {
+                    popover.popdown();
+                }
+                println!("Crear hoja de texto");
+            }
+            AppMsg::CreateSpreadsheet => {
+                if let Some(popover) = &self.popover {
+                    popover.popdown();
+                }
+                println!("Crear hoja de cálculo");
+            }
+            _ => self.current_view = "Home".to_string()
         }
     }
+    
+    
 
+    
+    
     fn update_cmd(
         &mut self,
         _message: Self::CommandOutput,
@@ -223,12 +268,12 @@ impl Component for AppModel {
         _root: &Self::Root,
     )
      {
-        // vacío si no usás comandos
+
     }
 }
 
 fn main() {
-    // Forzar tema claro antes de iniciar la aplicación
+
     let app = RelmApp::new("relm4.test.simple");    
     
     app.run::<AppModel>(0);
