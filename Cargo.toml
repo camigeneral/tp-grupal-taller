@@ -7,5 +7,5 @@ name = "client"
 path = "src/client.rs"
 
 [[bin]]
-name = "server"
-path = "src/server.rs"
+name = "node"
+path = "src/node.rs"
