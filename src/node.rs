@@ -30,25 +30,22 @@ fn main() -> Result<(), ()> {
 
 fn server_run(address: &str) -> std::io::Result<()> {
     let file_path = "docs.txt".to_string();
-    let shared_docs = match get_file_content(&file_path) {
+    let docs = match get_file_content(&file_path) {
         Ok(docs) => docs,
         Err(_) => {
             let mut new_docs: HashMap<String, Vec<String>> = HashMap::new();
             new_docs.insert("doc1".to_string(), vec![]);
             new_docs.insert("doc2".to_string(), vec![]);
-            Arc::new(Mutex::new(new_docs))
+            new_docs
         }
         
     };
 
-    // hardcodeado, por ahora
-    let mut initial_docs: HashMap<String, Vec<String>> = HashMap::new();
-    initial_docs.insert("doc1".to_string(), vec![]);
-    initial_docs.insert("doc2".to_string(), vec![]);
+    let shared_docs = Arc::new(Mutex::new(docs.clone()));
 
     // guardo la informacion de los clientes
     let clients: Arc<Mutex<HashMap<String, Client>>> = Arc::new(Mutex::new(HashMap::new()));
-    let clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>> = Arc::new(Mutex::new(initial_docs));
+    let clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>> = Arc::new(Mutex::new(docs));
 
     let listener = TcpListener::bind(address)?;
 
@@ -85,7 +82,7 @@ fn server_run(address: &str) -> std::io::Result<()> {
                             eprintln!("Error en la conexión con {}: {}", client_addr, e);
                         }
                     }
-                }).join().unwrap();
+                }); // saque el .join.unwrap
             }
             Err(e) => {
                 eprintln!("Error al aceptar conexión: {}", e);
@@ -126,9 +123,13 @@ fn handle_client(stream: &mut TcpStream, clients: Arc<Mutex<HashMap<String, Clie
                     {
                         let mut lock_clients_on_docs = clients_on_docs.lock().unwrap();
                         if let Some(clients_on_doc) = lock_clients_on_docs.get_mut(doc_select) {
-                            clients_on_doc.push(client_addr.to_string());
+                            if clients_on_doc.contains(&client_addr.to_string()) {
+                                writeln!(stream, "Ya estás subscripto al documento")?;
+                            } else {
+                                clients_on_doc.push(client_addr.to_string());
+                            }
                         } else {
-                            println!("Documento no encontrado");
+                            writeln!(stream, "Documento no encontrado")?;
                         }
                     }  
                 }
@@ -154,6 +155,16 @@ fn handle_client(stream: &mut TcpStream, clients: Arc<Mutex<HashMap<String, Clie
                     } else {
                         writeln!(stream, "No se encontro el documento")?;
                     }
+                }
+                "agregar" => {
+                    let doc_name = &input[1];
+                    let mut docs_locked = docs.lock().unwrap();
+                    let mut locked_clients_on_docs = clients_on_docs.lock().unwrap();
+
+                    docs_locked.insert(doc_name.to_string(), vec![]);
+                    locked_clients_on_docs.insert(doc_name.to_string(), vec![]);
+                    
+                    writeln!(stream, "Documento creado")?;
                 }
                 _ => {
                     writeln!(stream, "Comando no reconocido")?;
@@ -210,7 +221,8 @@ pub fn write_to_file(docs:  Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Res
     Ok(())
 }
 
-pub fn get_file_content(file_path: &String) -> Result<Arc<Mutex<HashMap<String, Vec<String>>>>, String> {
+
+pub fn get_file_content(file_path: &String) -> Result<HashMap<String, Vec<String>>, String> {
     let file = File::open(file_path).map_err(|_| "file-not-found".to_string())?;
     let reader = BufReader::new(file);
     let lines = reader.lines();
@@ -240,5 +252,5 @@ pub fn get_file_content(file_path: &String) -> Result<Arc<Mutex<HashMap<String, 
         }
     }
 
-    Ok(Arc::new(Mutex::new(docs)))
+    Ok(docs)
 }
