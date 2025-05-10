@@ -6,11 +6,17 @@ use self::relm4::{gtk, Component, ComponentParts, ComponentSender, RelmApp, Relm
 #[derive(Debug)]
 pub struct HeaderModel {
     is_connected: bool,
+    popover: Option<gtk::Popover>,
+    show_popover: bool, 
+
 }
 
 #[derive(Debug)]
 pub enum NavbarInput {
     SetConnectionStatus(bool),
+    TogglePopover, 
+    CreateTextSheet,
+    CreateSpreadsheet
 }
 
 #[derive(Debug)]
@@ -48,7 +54,37 @@ impl Component for HeaderModel {
                 connect_clicked[sender] => move |_| {
                     sender.output(NavbarOutput::ToggleConnection).unwrap();
                 },                
-            }
+            },
+            gtk::Box {
+                #[name="new_file_button"]
+                gtk::Button {
+                    set_margin_all: 10,
+                    set_margin_top: 50,
+                    add_css_class: "new-file",
+                    add_css_class: "button",
+                    set_label: "Nuevo Archivo",
+                    connect_clicked => NavbarInput::TogglePopover,
+                },
+                #[name="popover"]
+                gtk::Popover {
+                    set_has_arrow: true,
+                    set_autohide: true,
+                    set_position: gtk::PositionType::Bottom,                                                                                                
+                    #[name="popover_content"]
+                    gtk::Box {
+                        set_orientation: gtk::Orientation::Vertical,
+                        set_spacing: 5,
+                        gtk::Button {
+                            set_label: "Hoja de texto",
+                            connect_clicked => NavbarInput::CreateTextSheet,
+                        },
+                        gtk::Button {
+                            set_label: "Hoja de cálculo",
+                            connect_clicked => NavbarInput::CreateSpreadsheet,
+                        }
+                    },                                
+                }
+            }            
         },
     }
 
@@ -58,12 +94,14 @@ impl Component for HeaderModel {
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
 
-        let model = HeaderModel {             
-            is_connected: false
+        let mut model = HeaderModel {             
+            is_connected: false,
+            popover: None,
+            show_popover: false
          };
 
         let widgets = view_output!();
-
+        model.popover = Some(widgets.popover.clone());
         ComponentParts { model, widgets }
     }
 
@@ -71,6 +109,23 @@ impl Component for HeaderModel {
         match message {
             NavbarInput::SetConnectionStatus(status) => {
                 self.is_connected = status;
+            }
+            NavbarInput::TogglePopover => {
+                if let Some(popover) = &self.popover {
+                    popover.popup();
+                }
+            }
+            NavbarInput::CreateTextSheet => {
+                if let Some(popover) = &self.popover {
+                    popover.popdown();
+                }
+                println!("Crear hoja de texto");
+            }
+            NavbarInput::CreateSpreadsheet => {
+                if let Some(popover) = &self.popover {
+                    popover.popdown();
+                }
+                println!("Crear hoja de cálculo");
             }
         }
     }        

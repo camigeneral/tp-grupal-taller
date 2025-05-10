@@ -1,29 +1,22 @@
 extern crate relm4;
 extern crate gtk4;
 mod components;
-use components::header::{HeaderModel, NavbarInput, NavbarOutput};
+use components::header::{HeaderModel, NavbarInput};
 use gtk4::{prelude::{BoxExt, ButtonExt, GtkWindowExt, OrientableExt, PopoverExt, StyleContextExt, WidgetExt}, CssProvider};
 
 use relm4::{gtk, Component, ComponentParts, ComponentSender, Controller, RelmApp, RelmWidgetExt, SimpleComponent, ComponentController};
 
 struct AppModel {    
     current_view: String,
-    show_popover: bool, 
-    popover: Option<gtk::Popover>,
-
     header_cont: Controller<HeaderModel>
 }
 
 #[derive(Debug)]
 enum AppMsg {
-    Connect,
-    Disconnect,
+    Connect,    
     ShowHome,
     ShowDocuments,
-    ShowNewFile,
-    TogglePopover,
-    CreateTextSheet,
-    CreateSpreadsheet
+    ShowNewFile,    
 }
 
 #[relm4::component]
@@ -78,38 +71,7 @@ impl Component for AppModel {
                                 set_label: "Mis documentos",
                                 add_css_class: "button",
                                 connect_clicked => AppMsg::ShowDocuments
-                            },
-                            
-                            #[name="new_file_button"]
-                            gtk::Button {
-                                set_margin_all: 10,
-                                set_margin_top: 50,
-                                add_css_class: "new-file",
-                                add_css_class: "button",
-                                set_label: "Nuevo Archivo",
-                                connect_clicked => AppMsg::TogglePopover,
-                            },
-
-                            #[name="popover"]
-                            gtk::Popover {
-                                set_has_arrow: true,
-                                set_autohide: true,
-                                set_position: gtk::PositionType::Bottom,                                                                                                
-                                #[name="popover_content"]
-                                gtk::Box {
-                                    set_orientation: gtk::Orientation::Vertical,
-                                    set_spacing: 5,
-                                    gtk::Button {
-                                        set_label: "Hoja de texto",
-                                        connect_clicked => AppMsg::CreateTextSheet,
-                                    },
-                                    gtk::Button {
-                                        set_label: "Hoja de cálculo",
-                                        connect_clicked => AppMsg::CreateSpreadsheet,
-                                    }
-                                },                                
-                            }
-
+                            },                                                        
                         }
                     },                    
                     #[name="body"]
@@ -182,7 +144,7 @@ impl Component for AppModel {
 
 
     fn init(
-        counter: Self::Init,
+        _init: Self::Init,
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
@@ -204,16 +166,13 @@ impl Component for AppModel {
             }            
         );
 
-        let mut model = AppModel {             
+        let model = AppModel {             
             current_view: "Home".to_string(),
-            show_popover: false,
-            popover: None,
             header_cont: header_model
          };
 
         let widgets = view_output!();
-        
-        model.popover = Some(widgets.popover.clone());
+    
         ComponentParts { model, widgets }
     }
 
@@ -225,24 +184,6 @@ impl Component for AppModel {
             AppMsg::Connect => {
                 self.header_cont.sender().send(NavbarInput::SetConnectionStatus(true)).unwrap();
             },
-            AppMsg::Disconnect => self.current_view = "Documents".to_string(),                
-            AppMsg::TogglePopover => {
-                if let Some(popover) = &self.popover {
-                    popover.popup();
-                }
-            }
-            AppMsg::CreateTextSheet => {
-                if let Some(popover) = &self.popover {
-                    popover.popdown();
-                }
-                println!("Crear hoja de texto");
-            }
-            AppMsg::CreateSpreadsheet => {
-                if let Some(popover) = &self.popover {
-                    popover.popdown();
-                }
-                println!("Crear hoja de cálculo");
-            }
             _ => self.current_view = "Home".to_string()
         }
     }
