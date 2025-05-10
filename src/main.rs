@@ -1,7 +1,7 @@
 extern crate relm4;
 extern crate gtk4;
 mod components;
-use components::header::{HeaderModel, NavbarOutput};
+use components::header::{HeaderModel, NavbarInput, NavbarOutput};
 use gtk4::{prelude::{BoxExt, ButtonExt, GtkWindowExt, OrientableExt, PopoverExt, StyleContextExt, WidgetExt}, CssProvider};
 
 use relm4::{gtk, Component, ComponentParts, ComponentSender, Controller, RelmApp, RelmWidgetExt, SimpleComponent, ComponentController};
@@ -222,7 +222,9 @@ impl Component for AppModel {
             AppMsg::ShowHome => self.current_view = "Home".to_string(),
             AppMsg::ShowNewFile => self.current_view = "NewFile".to_string(),
             AppMsg::ShowDocuments => self.current_view = "Documents".to_string(),
-            AppMsg::Connect => self.current_view = "Documents".to_string(),
+            AppMsg::Connect => {
+                self.header_cont.sender().send(NavbarInput::SetConnectionStatus(true)).unwrap();
+            },
             AppMsg::Disconnect => self.current_view = "Documents".to_string(),                
             AppMsg::TogglePopover => {
                 if let Some(popover) = &self.popover {

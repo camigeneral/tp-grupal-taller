@@ -10,7 +10,7 @@ pub struct HeaderModel {
 
 #[derive(Debug)]
 pub enum NavbarInput {
-    Connect,
+    SetConnectionStatus(bool),
 }
 
 #[derive(Debug)]
@@ -45,8 +45,9 @@ impl Component for HeaderModel {
                 set_label: &format!("{}", if model.is_connected { "Conectado" } else { "Desconectado" }),
                 add_css_class: "button",
                 add_css_class: "connect",                                        
-                connect_clicked => NavbarInput::Connect,                            
-                
+                connect_clicked[sender] => move |_| {
+                    sender.output(NavbarOutput::ToggleConnection).unwrap();
+                },                
             }
         },
     }
@@ -54,7 +55,7 @@ impl Component for HeaderModel {
     fn init(
         _init: Self::Init,
         root: Self::Root,
-        _sender: ComponentSender<Self>,
+        sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
 
         let model = HeaderModel {             
@@ -66,12 +67,10 @@ impl Component for HeaderModel {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>, _root: &Self::Root) {
+    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>, _root: &Self::Root) {
         match message {
-            NavbarInput::Connect => {
-
-
-                sender.output(NavbarOutput::ToggleConnection).unwrap();
+            NavbarInput::SetConnectionStatus(status) => {
+                self.is_connected = status;
             }
         }
     }        
