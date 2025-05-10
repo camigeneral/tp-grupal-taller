@@ -1,14 +1,12 @@
 extern crate relm4;
 extern crate gtk4;
-use self::gtk4::{prelude::{BoxExt, ButtonExt, GtkWindowExt, OrientableExt, PopoverExt, StyleContextExt, WidgetExt}, CssProvider};
-use self::relm4::{gtk, Component, ComponentParts, ComponentSender, RelmApp, RelmWidgetExt, SimpleComponent};
+use self::gtk4::prelude::{BoxExt, ButtonExt, OrientableExt, PopoverExt, WidgetExt};
+use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
 
 #[derive(Debug)]
 pub struct HeaderModel {
     is_connected: bool,
     popover: Option<gtk::Popover>,
-    show_popover: bool, 
-
 }
 
 #[derive(Debug)]
@@ -26,12 +24,11 @@ pub enum NavbarOutput {
 
 
 #[relm4::component(pub)]
-impl Component for HeaderModel {
+impl SimpleComponent for HeaderModel {
     type Init = ();
 
     type Input = NavbarInput;
-    type Output = NavbarOutput;
-    type CommandOutput = ();
+    type Output = NavbarOutput;    
 
     view! {
         #[name="header"]        
@@ -97,7 +94,6 @@ impl Component for HeaderModel {
         let mut model = HeaderModel {             
             is_connected: false,
             popover: None,
-            show_popover: false
          };
 
         let widgets = view_output!();
@@ -105,7 +101,7 @@ impl Component for HeaderModel {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>, _root: &Self::Root) {
+    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
         match message {
             NavbarInput::SetConnectionStatus(status) => {
                 self.is_connected = status;
