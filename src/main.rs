@@ -2,20 +2,20 @@ extern crate relm4;
 extern crate gtk4;
 mod components;
 use components::header::{HeaderModel, NavbarInput};
-use gtk4::{prelude::{BoxExt, ButtonExt, GtkWindowExt, OrientableExt, WidgetExt}, CssProvider};
+use components::files_manager::FilesManager;
+use gtk4::{prelude::{BoxExt, GtkWindowExt, OrientableExt, WidgetExt}, CssProvider};
 
 use relm4::{gtk, Component, ComponentParts, ComponentSender, Controller, RelmApp, RelmWidgetExt, SimpleComponent, ComponentController};
 
 struct AppModel {    
-    current_view: String,
-    header_cont: Controller<HeaderModel>
+    header_cont: Controller<HeaderModel>,
+    files_manager_cont: Controller<FilesManager>
 }
 
 #[derive(Debug)]
 enum AppMsg {
-    Connect,    
-    ShowHome,
-    ShowDocuments,
+    Connect,
+    Noop    
 }
 
 #[relm4::component]
@@ -40,106 +40,10 @@ impl SimpleComponent for AppModel {
                 set_hexpand: true,
                 set_vexpand: true,
                 append: model.header_cont.widget(),
-
-                #[name="body_container"]
-                gtk::Box {
-                    set_orientation: gtk::Orientation::Horizontal,                
-                    set_vexpand: true,
-                    set_hexpand: true,
-                    set_margin_all: 10,
-                    #[name="side_bar_container"]
-                    gtk::Box {
-                        add_css_class: "card",
-                        add_css_class: "sidebar-card",
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_halign: gtk::Align::Start,
-                        set_margin_end: 15,
-                        gtk::Box {                            
-                            set_margin_all: 10,
-                            set_orientation: gtk::Orientation::Vertical,
-                            set_halign: gtk::Align::Center,
-                            gtk::Button {
-                                set_margin_all: 10,
-                                set_label: "Home",
-                                add_css_class: "button",
-                                connect_clicked => AppMsg::ShowHome
-                            },
-                            gtk::Button {
-                                set_margin_all: 10,
-                                set_label: "Mis documentos",
-                                add_css_class: "button",
-                                connect_clicked => AppMsg::ShowDocuments
-                            },                                                        
-                        }
-                    },                    
-                    #[name="body"]
-                    gtk::Box {
-                        add_css_class: "card",
-                        add_css_class: "content-card",
-                        set_hexpand: true,
-                        set_vexpand: true,
-                        set_valign: gtk::Align::Fill,
-                        set_orientation: gtk::Orientation::Vertical,
-                        add_css_class: "header-filter",                                                        
-                            set_orientation: gtk::Orientation::Horizontal,                                                
-                            set_halign: gtk::Align::Fill,                                                          
-                            gtk::Button {                                          
-                                set_hexpand: true,
-                                
-                                set_label: "Todos",
-                                add_css_class: "button",
-                                add_css_class: "filter",                                                    
-                                connect_clicked => AppMsg::Connect,                                
-                            },
-                            gtk::Button {                                          
-                                set_hexpand: true,
-                                
-                                set_label: "Texto",
-                                add_css_class: "button",
-                                add_css_class: "filter",                        
-                                connect_clicked => AppMsg::Connect,                                
-                            },
-                            gtk::Button {         
-                                set_hexpand: true,
-                                                                                                 
-                                set_label: "Cálculo",
-                                add_css_class: "button",
-                                add_css_class: "filter",  
-                                add_css_class: "last",                        
-                                connect_clicked => AppMsg::Connect,                                
-                            },
-                        },
-                        
-                        #[name="files_container"]
-                        gtk::Box{
-                            match model.current_view.as_str()  {
-                                "Home" => {
-                                    gtk::Label {
-                                        set_text: "Bienvenido a Home!",
-                                        set_margin_all: 20,
-                                    }
-                                }
-                                "Documents" => {
-                                    gtk::Label {
-                                        set_text: "Aquí están tus documentos.",
-                                        add_css_class: "content",
-                                        set_margin_all: 20,
-                                    }
-                                }                                
-                                _ => {
-                                    gtk::Label {
-                                        set_text: "Selecciona una opción del menú.",
-                                        add_css_class: "content",
-                                        set_margin_all: 20,
-                                    }
-                                }
-                            }
-                        },                        
-                    }
+                append: model.files_manager_cont.widget()                
                 }
             }
         }    
-
 
     fn init(
         _init: Self::Init,
@@ -163,10 +67,15 @@ impl SimpleComponent for AppModel {
                 _ => AppMsg::Connect
             }            
         );
+        let files_manager_model = FilesManager::builder().launch(()).forward(
+            sender.input_sender(), |msg: () | match msg {
+                _ => AppMsg::Noop
+            }            
+        );
 
         let model = AppModel {             
-            current_view: "Home".to_string(),
-            header_cont: header_model
+            header_cont: header_model,
+            files_manager_cont: files_manager_model
          };
 
         let widgets = view_output!();
@@ -175,13 +84,11 @@ impl SimpleComponent for AppModel {
     }
 
     fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
-        match message {
-            AppMsg::ShowHome => self.current_view = "Home".to_string(),
-            AppMsg::ShowDocuments => self.current_view = "Documents".to_string(),
+        match message {            
             AppMsg::Connect => {
                 self.header_cont.sender().send(NavbarInput::SetConnectionStatus(true)).unwrap();
-            },
-            _ => self.current_view = "Home".to_string()
+            },   
+            AppMsg::Noop => {}         
         }
     }    
 }
