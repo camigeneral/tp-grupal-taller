@@ -98,80 +98,82 @@ fn handle_client(stream: &mut TcpStream, clients: Arc<Mutex<HashMap<String, Clie
     let client_addr = stream.peer_addr()?;
     let reader = BufReader::new(stream.try_clone()?);
 
-    for line in reader.lines() {
-        if let Ok(command) = line {
-            let input: Vec<String> = command.split_whitespace().map(|s| s.to_string().to_lowercase()).collect();
-            let command = &input[0];
-            println!("Recibido: {}", command);
+    for command in reader.lines().map_while(Result::ok) {
+        let input: Vec<String> = command
+            .split_whitespace()
+            .map(|s| s.to_string().to_lowercase())
+            .collect();
+        let command = &input[0];
+        println!("Recibido: {}", command);
 
-            match command.as_str() {
-                "ver" => {
-                    let doc_selected = &input[1];
-                    let doc_locked = docs.lock().unwrap();
-                    if let Some(selected_doc) = doc_locked.get(doc_selected) {
-                        writeln!(stream, "Mensajes en el documento {}", doc_selected)?;
-                        for doc_message in selected_doc {
-                            writeln!(stream, "{}", doc_message)?;
-                        }
-                        writeln!(stream, "Fin de los mensajes")?;
-                    } else {
-                        writeln!(stream, "No se encontro el documento")?;
+        match command.as_str() {
+            "ver" => {
+                let doc_selected = &input[1];
+                let doc_locked = docs.lock().unwrap();
+                if let Some(selected_doc) = doc_locked.get(doc_selected) {
+                    writeln!(stream, "Mensajes en el documento {}", doc_selected)?;
+                    for doc_message in selected_doc {
+                        writeln!(stream, "{}", doc_message)?;
                     }
-                }
-                "sub" => {
-                    let doc_select = &input[1];
-                    {
-                        let mut lock_clients_on_docs = clients_on_docs.lock().unwrap();
-                        if let Some(clients_on_doc) = lock_clients_on_docs.get_mut(doc_select) {
-                            if clients_on_doc.contains(&client_addr.to_string()) {
-                                writeln!(stream, "Ya estás subscripto al documento")?;
-                            } else {
-                                clients_on_doc.push(client_addr.to_string());
-                            }
-                        } else {
-                            writeln!(stream, "Documento no encontrado")?;
-                        }
-                    }  
-                }
-                "unsub" => {
-                    let doc_select = &input[1];
-                    {
-                        let mut lock_clients_on_docs = clients_on_docs.lock().unwrap();
-                        if let Some(clients_on_doc) = lock_clients_on_docs.get_mut(doc_select) {
-                            clients_on_doc.retain(|x| x.as_str() != client_addr.to_string().as_str());
-                        } else {
-                            println!("Documento no encontrado");
-                        }
-                    }  
-                }
-                "insertar" => {
-                    let doc_selected = &input[1];
-                    let mut doc_locked = docs.lock().unwrap();
-                    if let Some(selected_doc) = doc_locked.get_mut(doc_selected) {
-                        let message = input[2..].join(" ");
-                        let message_to_publish = format!("Nuevo mensaje en {}: {}", doc_selected, input[2..].join(" "));
-                        selected_doc.push(message);
-                        let _ = publish(Arc::clone(&clients), Arc::clone(&clients_on_docs), message_to_publish, doc_selected.to_string());
-                    } else {
-                        writeln!(stream, "No se encontro el documento")?;
-                    }
-                }
-                "agregar" => {
-                    let doc_name = &input[1];
-                    let mut docs_locked = docs.lock().unwrap();
-                    let mut locked_clients_on_docs = clients_on_docs.lock().unwrap();
-
-                    docs_locked.insert(doc_name.to_string(), vec![]);
-                    locked_clients_on_docs.insert(doc_name.to_string(), vec![]);
-                    
-                    writeln!(stream, "Documento creado")?;
-                }
-                _ => {
-                    writeln!(stream, "Comando no reconocido")?;
+                    writeln!(stream, "Fin de los mensajes")?;
+                } else {
+                    writeln!(stream, "No se encontro el documento")?;
                 }
             }
-            let _ = write_to_file(docs.clone());
+            "sub" => {
+                let doc_select = &input[1];
+                {
+                    let mut lock_clients_on_docs = clients_on_docs.lock().unwrap();
+                    if let Some(clients_on_doc) = lock_clients_on_docs.get_mut(doc_select) {
+                        if clients_on_doc.contains(&client_addr.to_string()) {
+                            writeln!(stream, "Ya estás subscripto al documento")?;
+                        } else {
+                            clients_on_doc.push(client_addr.to_string());
+                        }
+                    } else {
+                        writeln!(stream, "Documento no encontrado")?;
+                    }
+                }  
+            }
+            "unsub" => {
+                let doc_select = &input[1];
+                {
+                    let mut lock_clients_on_docs = clients_on_docs.lock().unwrap();
+                    if let Some(clients_on_doc) = lock_clients_on_docs.get_mut(doc_select) {
+                        clients_on_doc.retain(|x| x.as_str() != client_addr.to_string().as_str());
+                    } else {
+                        println!("Documento no encontrado");
+                    }
+                }  
+            }
+            "insertar" => {
+                let doc_selected = &input[1];
+                let mut doc_locked = docs.lock().unwrap();
+                if let Some(selected_doc) = doc_locked.get_mut(doc_selected) {
+                    let message = input[2..].join(" ");
+                    let message_to_publish = format!("Nuevo mensaje en {}: {}", doc_selected, input[2..].join(" "));
+                    selected_doc.push(message);
+                    let _ = publish(Arc::clone(&clients), Arc::clone(&clients_on_docs), message_to_publish, doc_selected.to_string());
+                } else {
+                    writeln!(stream, "No se encontro el documento")?;
+                }
+            }
+            "agregar" => {
+                let doc_name = &input[1];
+                let mut docs_locked = docs.lock().unwrap();
+                let mut locked_clients_on_docs = clients_on_docs.lock().unwrap();
+
+                docs_locked.insert(doc_name.to_string(), vec![]);
+                locked_clients_on_docs.insert(doc_name.to_string(), vec![]);
+                
+                writeln!(stream, "Documento creado")?;
+            }
+            _ => {
+                writeln!(stream, "Comando no reconocido")?;
+            }
         }
+        let _ = write_to_file(docs.clone());
+        
     }
 
     Ok(())
@@ -208,7 +210,7 @@ pub fn write_to_file(docs:  Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Res
     let locked_docs: std::sync::MutexGuard<'_, HashMap<String, Vec<String>>> = docs.lock().unwrap();
     let documents: Vec<&String> = locked_docs.keys().collect();
     for document in documents {
-        let mut base_string = format!("{}",document);
+        let mut base_string = document.to_string();
         base_string.push_str("/++/");
         let messages = locked_docs.get(document).unwrap();
         for message in messages {

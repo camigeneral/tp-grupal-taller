@@ -41,19 +41,17 @@ fn client_run(address: &str, stream: &mut dyn Read) -> std::io::Result<()> {
         }
     });
 
-    for line in reader.lines() {
-        if let Ok(line) = line {
-            let command = line.trim().to_lowercase();
+    for line in reader.lines().map_while(Result::ok) {
+        let command = line.trim().to_lowercase();
 
-            if command != "salir" {
-                println!("Enviando: {:?}", command);
-                
-                socket.write(command.as_bytes())?;
-                socket.write("\n".as_bytes())?;
-            } else {
-                println!("Desconectando del servidor");
-                break;
-            }
+        if command != "salir" {
+            println!("Enviando: {:?}", command);
+            
+            socket.write_all(command.as_bytes())?;
+            socket.write_all("\n".as_bytes())?;
+        } else {
+            println!("Desconectando del servidor");
+            break;
         }
     }
     Ok(())
