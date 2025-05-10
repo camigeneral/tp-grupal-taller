@@ -2,7 +2,7 @@ extern crate relm4;
 extern crate gtk4;
 mod components;
 use components::header::{HeaderModel, NavbarInput};
-use gtk4::{prelude::{BoxExt, ButtonExt, GtkWindowExt, OrientableExt, PopoverExt, StyleContextExt, WidgetExt}, CssProvider};
+use gtk4::{prelude::{BoxExt, ButtonExt, GtkWindowExt, OrientableExt, WidgetExt}, CssProvider};
 
 use relm4::{gtk, Component, ComponentParts, ComponentSender, Controller, RelmApp, RelmWidgetExt, SimpleComponent, ComponentController};
 
@@ -16,15 +16,13 @@ enum AppMsg {
     Connect,    
     ShowHome,
     ShowDocuments,
-    ShowNewFile,    
 }
 
 #[relm4::component]
-impl Component for AppModel {
+impl SimpleComponent for AppModel {
     type Init = ();
     type Input = AppMsg;
-    type Output = ();
-    type CommandOutput = (); 
+    type Output = ();    
 
     view! {
         gtk::Window {
@@ -176,31 +174,16 @@ impl Component for AppModel {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>, _root: &Self::Root) {
+    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
         match message {
             AppMsg::ShowHome => self.current_view = "Home".to_string(),
-            AppMsg::ShowNewFile => self.current_view = "NewFile".to_string(),
             AppMsg::ShowDocuments => self.current_view = "Documents".to_string(),
             AppMsg::Connect => {
                 self.header_cont.sender().send(NavbarInput::SetConnectionStatus(true)).unwrap();
             },
             _ => self.current_view = "Home".to_string()
         }
-    }
-    
-    
-
-    
-    
-    fn update_cmd(
-        &mut self,
-        _message: Self::CommandOutput,
-        _sender: ComponentSender<Self>,
-        _root: &Self::Root,
-    )
-     {
-
-    }
+    }    
 }
 
 fn main() {
