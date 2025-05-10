@@ -6,6 +6,8 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::thread;
 
+mod list_commands;
+
 static SERVER_ARGS: usize = 2;
 
  struct Client {
