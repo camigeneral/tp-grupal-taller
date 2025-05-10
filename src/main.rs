@@ -1,12 +1,17 @@
 extern crate relm4;
 extern crate gtk4;
+mod components;
+use components::header::{HeaderModel, NavbarOutput};
 use gtk4::{prelude::{BoxExt, ButtonExt, GtkWindowExt, OrientableExt, PopoverExt, StyleContextExt, WidgetExt}, CssProvider};
-use relm4::{gtk, Component, ComponentParts, ComponentSender, RelmApp, RelmWidgetExt, SimpleComponent};
+
+use relm4::{gtk, Component, ComponentParts, ComponentSender, Controller, RelmApp, RelmWidgetExt, SimpleComponent, ComponentController};
 
 struct AppModel {    
     current_view: String,
     show_popover: bool, 
     popover: Option<gtk::Popover>,
+
+    header_cont: Controller<HeaderModel>
 }
 
 #[derive(Debug)]
@@ -23,8 +28,7 @@ enum AppMsg {
 
 #[relm4::component]
 impl Component for AppModel {
-    type Init = u8;
-
+    type Init = ();
     type Input = AppMsg;
     type Output = ();
     type CommandOutput = (); 
@@ -44,26 +48,8 @@ impl Component for AppModel {
                 set_margin_all: 10,
                 set_hexpand: true,
                 set_vexpand: true,
-                #[name="header"]
-                gtk::Box {                    
-                    add_css_class: "header",
-                    set_spacing: 10,
-                    
-                    set_orientation: gtk::Orientation::Horizontal,                    
-                    set_margin_all: 10,  
-                    set_halign: gtk::Align::Fill,  
-                    gtk::Box {
-                        set_hexpand: true,
-                    },
-                    gtk::Button {                                          
-                        set_margin_all: 10,
-                        set_label: "Conectar",
-                        add_css_class: "button",
-                        add_css_class: "connect",                        
-                        connect_clicked => AppMsg::Connect,
-                        
-                    }
-                },
+                append: model.header_cont.widget(),
+
                 #[name="body_container"]
                 gtk::Box {
                     set_orientation: gtk::Orientation::Horizontal,                
@@ -134,11 +120,7 @@ impl Component for AppModel {
                         set_vexpand: true,
                         set_valign: gtk::Align::Fill,
                         set_orientation: gtk::Orientation::Vertical,
-                        set_halign: gtk::Align::Fill,
-
-                        #[name="filter_files_container"]
-                        gtk::Box {                    
-                            add_css_class: "header-filter",                                                        
+                        add_css_class: "header-filter",                                                        
                             set_orientation: gtk::Orientation::Horizontal,                                                
                             set_halign: gtk::Align::Fill,                                                          
                             gtk::Button {                                          
@@ -196,14 +178,13 @@ impl Component for AppModel {
                     }
                 }
             }
-        }
-    }
+        }    
 
 
     fn init(
         counter: Self::Init,
         root: Self::Root,
-        _sender: ComponentSender<Self>,
+        sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
 
         
@@ -217,10 +198,17 @@ impl Component for AppModel {
             gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );        
 
+        let header_model = HeaderModel::builder().launch(()).forward(
+            sender.input_sender(), |msg:components::header::NavbarOutput | match msg {
+                _ => AppMsg::Connect
+            }            
+        );
+
         let mut model = AppModel {             
             current_view: "Home".to_string(),
             show_popover: false,
-            popover: None  
+            popover: None,
+            header_cont: header_model
          };
 
         let widgets = view_output!();
@@ -276,5 +264,5 @@ fn main() {
 
     let app = RelmApp::new("relm4.test.simple");    
     
-    app.run::<AppModel>(0);
+    app.run::<AppModel>(());
 }
