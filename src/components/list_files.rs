@@ -82,10 +82,10 @@ impl SimpleComponent for FileListView {
                     connect_clicked => FileFilterAction::SpreadsheetFiles,
                 },
             },
-            
+
             gtk::ScrolledWindow {
                 set_hexpand: true,
-                set_vexpand: true,                
+                set_vexpand: true,
                 #[local_ref]
                 files_container -> gtk::Box {
                     set_orientation: gtk::Orientation::Vertical,
@@ -196,7 +196,6 @@ impl FactoryComponent for FileListItem {
             }
         }
     }
-    
 
     fn init_model(value: Self::Init, _index: &DynamicIndex, _sender: FactorySender<Self>) -> Self {
         Self {

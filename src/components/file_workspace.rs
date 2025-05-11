@@ -134,10 +134,13 @@ impl SimpleComponent for FileWorkspace {
         );
         let editor_file_cont = FileEditorModel::builder()
             .launch(("".to_string(), 0, "".to_string()))
-            .forward(sender.input_sender(), |msg: FileEditorOutputMessage| match msg {
-                FileEditorOutputMessage::GoBack => FileWorkspaceMsg::CloseEditor,
-                _ => FileWorkspaceMsg::Ignore,
-            });
+            .forward(
+                sender.input_sender(),
+                |msg: FileEditorOutputMessage| match msg {
+                    FileEditorOutputMessage::GoBack => FileWorkspaceMsg::CloseEditor,
+                    _ => FileWorkspaceMsg::Ignore,
+                },
+            );
         let model = FileWorkspace {
             file_list_ctrl: list_files_cont,
             file_editor_ctrl: editor_file_cont,

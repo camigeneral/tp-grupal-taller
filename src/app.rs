@@ -12,14 +12,13 @@ use self::relm4::{
     RelmWidgetExt, SimpleComponent,
 };
 
-
 /// Modelo principal de la aplicación que contiene los controladores de los componentes.
 ///
 /// # Campos
 /// - `header_cont`: Controlador para la barra de navegación superior
 /// - `files_manager_cont`: Controlador para el área de gestión de archivos
 pub struct AppModel {
-    header_cont: Controller<NavbarModel	>,
+    header_cont: Controller<NavbarModel>,
     files_manager_cont: Controller<FileWorkspace>,
 }
 
@@ -70,7 +69,7 @@ impl SimpleComponent for AppModel {
             gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
 
-        let header_model = NavbarModel	::builder().launch(()).forward(
+        let header_model = NavbarModel::builder().launch(()).forward(
             sender.input_sender(),
             |msg: NavbarOutput| match msg {
                 _ => AppMsg::Connect,

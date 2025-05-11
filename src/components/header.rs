@@ -95,7 +95,7 @@ impl SimpleComponent for NavbarModel {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let mut model = NavbarModel	 {
+        let mut model = NavbarModel {
             is_connected: false,
             new_file_popover: None,
         };
@@ -121,7 +121,7 @@ impl SimpleComponent for NavbarModel {
                 }
                 println!("Crear hoja de texto");
             }
-            NavbarMsg::CreateSpreadsheetDocument	 => {
+            NavbarMsg::CreateSpreadsheetDocument => {
                 if let Some(popover) = &self.new_file_popover {
                     popover.popdown();
                 }
