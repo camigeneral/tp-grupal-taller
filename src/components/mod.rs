@@ -1,3 +1,4 @@
+pub mod file_editor;
 pub mod files_manager;
 pub mod header;
 pub mod list_files;
