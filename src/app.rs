@@ -1,7 +1,7 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::{
-    prelude::{BoxExt, GtkWindowExt, OrientableExt, WidgetExt, ButtonExt},
+    prelude::{BoxExt, GtkWindowExt, OrientableExt, WidgetExt},
     CssProvider,
 };
 use components::files_manager::FilesManager;
@@ -30,7 +30,7 @@ impl SimpleComponent for AppModel {
     type Output = ();
 
     view! {
-    gtk::Window {        
+    gtk::Window {
         set_default_width: 800,
         set_width_request: 800,
         set_default_height: 600,
