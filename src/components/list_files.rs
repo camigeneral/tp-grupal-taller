@@ -11,7 +11,7 @@ struct ListItem {
     name: String,
     file_type: FileType,
     content: String,
-    qty: u8
+    qty: u8,
 }
 
 #[relm4::factory]
@@ -23,20 +23,40 @@ impl FactoryComponent for ListItem {
     type ParentWidget = gtk::Box;
 
     view! {
+        #[name="file_button"]
         gtk::Button {
-            set_label: &self.name,
-            connect_clicked[sender, name = self.name.clone(), file_type = self.file_type.clone() , content = self.content.clone(), qty = self.qty.clone()] => move |_| {
+            set_hexpand: true,
+            add_css_class: "file_button",
+            set_halign: gtk::Align::Fill,
+            set_valign: gtk::Align::Center,
+            connect_clicked[sender, name = self.name.clone(), file_type = self.file_type.clone(), content = self.content.clone(), qty = self.qty.clone()] => move |_| {
                 sender.output(FilterFiles::FileSelected(name.clone(), file_type.clone(), content.clone(), qty)).unwrap();
             },
+            gtk::Box {
+                set_orientation: gtk::Orientation::Horizontal,
+                set_spacing: 8,
+                gtk::Image {
+                    set_icon_name: Some(match self.file_type {
+                        FileType::Text => "text-x-generic",
+                        FileType::Sheet => "x-office-spreadsheet",
+                        _ => "text-x-generic"
+                    }),
+                    set_pixel_size: 50,
+                },
+                gtk::Label {
+                    set_label: &self.name,
+                }
+            }
         }
     }
+    
 
     fn init_model(value: Self::Init, _index: &DynamicIndex, _sender: FactorySender<Self>) -> Self {
         Self {
             name: value.0,
             file_type: value.1,
             content: value.2,
-            qty: value.3
+            qty: value.3,
         }
     }
 }
@@ -93,13 +113,15 @@ impl SimpleComponent for ListFiles {
                     connect_clicked => FilterFiles::Sheet,
                 },
             },
+            
             gtk::ScrolledWindow {
                 set_hexpand: true,
-                set_vexpand: true,
+                set_vexpand: true,                
                 #[local_ref]
                 files_container -> gtk::Box {
                     set_orientation: gtk::Orientation::Vertical,
                     set_spacing: 5,
+                    set_margin_top: 10
                 }
             }
         }
@@ -145,9 +167,11 @@ impl SimpleComponent for ListFiles {
                 self.current_filter = FileType::Sheet;
                 self.apply_filter();
             }
-            FilterFiles::FileSelected(file_name, file_type, content, qty) => {
-                sender.output(FilterFiles::FileSelected(file_name, file_type, content, qty)).unwrap()
-            }   
+            FilterFiles::FileSelected(file_name, file_type, content, qty) => sender
+                .output(FilterFiles::FileSelected(
+                    file_name, file_type, content, qty,
+                ))
+                .unwrap(),
         }
     }
 }
@@ -157,9 +181,12 @@ impl ListFiles {
         self.visible_files.guard().clear();
         for (name, file_type, content, qty) in &self.all_files {
             if self.current_filter == FileType::Any || *file_type == self.current_filter {
-                self.visible_files
-                    .guard()
-                    .push_back((name.clone(), file_type.clone(), content.clone(), qty.clone()));
+                self.visible_files.guard().push_back((
+                    name.clone(),
+                    file_type.clone(),
+                    content.clone(),
+                    qty.clone(),
+                ));
             }
         }
     }
