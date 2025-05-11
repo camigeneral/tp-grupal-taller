@@ -32,22 +32,11 @@ impl SimpleComponent for HeaderModel {
     view! {
         #[name="header"]
         gtk::HeaderBar {
-            
-            pack_end = &gtk::Button {
-                set_margin_all: 10,
-                #[watch]
-                set_label: &format!("{}", if model.is_connected { "Conectado" } else { "Desconectado" }),
-                add_css_class: "button",
-                add_css_class: "connect",
-                connect_clicked[sender] => move |_| {
-                    sender.output(NavbarOutput::ToggleConnection).unwrap();
-                },
-            },
-            pack_end = &gtk::Box {
+            set_show_title_buttons: true,
+            #[wrap(Some)]
+            set_title_widget = &gtk::Box {
                 #[name="new_file_button"]
                 gtk::Button {
-                    set_margin_all: 10,
-                    set_margin_top: 50,
                     add_css_class: "new-file",
                     add_css_class: "button",
                     set_label: "Nuevo Archivo",
@@ -72,8 +61,20 @@ impl SimpleComponent for HeaderModel {
                         }
                     },
                 }
-            }
-        },
+            },
+
+            pack_end = &gtk::Button {
+                #[watch]
+                set_label: &format!("{}", if model.is_connected { "Conectado" } else { "Desconectado" }),
+                add_css_class: "button",
+                add_css_class: "connect",
+                #[watch]
+                add_css_class: if model.is_connected { "connected" } else { "disconnected" },
+                connect_clicked[sender] => move |_| {
+                    sender.output(NavbarOutput::ToggleConnection).unwrap();
+                },
+            },
+         },
     }
 
     fn init(
