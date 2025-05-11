@@ -1,14 +1,7 @@
 /* Estilos generales para todas las cards */
-.card {
-    border: 1px solid #000000;
+.card {    
     border-radius: 8px;
     background-color: #ffffff;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    transition: box-shadow 0.3s ease;
-}
-
-.card:hover {
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 /* Estilos específicos para el header */
@@ -36,21 +29,22 @@
     border-radius: 0;
     color: black;
     border: 0;
-    border-bottom: 1px black solid;
-    padding: 5px 10px;
+    border-bottom: 1px black solid;    
     font-weight: bold;
     background-image: none;    
-    box-shadow: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.8s ease;
 }
 
 .button:hover {
-    background-color: #e2e2e2;
+    background-color: #575757;
     border-color: #a1a1a1;
 }
 
 .button.connect {
     border: 1px solid #000000;
     border-radius: 6px;
+    color: white;    
 }
 
 .button.filter {
@@ -66,6 +60,8 @@
     background-color: #2FA1FF;
     border-bottom: 0;
     color: white;
+    border-radius: 6px;
+
 }
 
 /* Estilo para las etiquetas */
@@ -80,6 +76,6 @@
 
 /* Estilos para la ventana principal */
 window {
-    background-color: #f0f2f5;
+    background-color: #ffffff;
     color: black;    
 }
