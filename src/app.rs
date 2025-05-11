@@ -71,15 +71,11 @@ impl SimpleComponent for AppModel {
 
         let header_model = NavbarModel::builder().launch(()).forward(
             sender.input_sender(),
-            |msg: NavbarOutput| match msg {
-                _ => AppMsg::Connect,
-            },
+            |_: NavbarOutput| AppMsg::Connect,
         );
         let files_manager_model = FileWorkspace::builder().launch(()).forward(
             sender.input_sender(),
-            |msg: ()| match msg {
-                _ => AppMsg::Ignore,
-            },
+            |_: ()| AppMsg::Ignore,
         );
 
         let model = AppModel {

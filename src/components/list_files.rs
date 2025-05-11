@@ -154,7 +154,7 @@ impl FileListView {
                     name.clone(),
                     file_type.clone(),
                     content.clone(),
-                    qty.clone(),
+                    (*qty),
                 ));
             }
         }
