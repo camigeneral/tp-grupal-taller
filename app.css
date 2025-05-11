@@ -37,8 +37,8 @@
 }
 
 .button:hover {
-    background-color: #575757;
-    border-color: #a1a1a1;
+    background-color: #575757;    
+    color: white
 }
 
 .button.connect {
@@ -49,11 +49,8 @@
 
 .button.filter {
     border-bottom: 0;
-    border-right: 1px solid #000000;
+    border: 1px solid #000000;
     padding: 10px ;    
-}
-.button.filter.last {
-    border-right: 0;
 }
 
 .button.new-file {
@@ -72,6 +69,19 @@
 
 .content {
     color: #000000;
+}
+
+.file_button {
+    background-color: white;
+    background-image: none;    
+    color: black;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.8s ease;
+}
+
+.file_button:hover {
+    background-color: rgb(179, 179, 179);
+
 }
 
 /* Estilos para la ventana principal */
