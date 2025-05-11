@@ -54,27 +54,34 @@ impl SimpleComponent for FileEditorModel {
             set_margin_all: 12,
             set_hexpand: true,
             set_vexpand: true,
-            #[name="back"]
-            gtk::Button {
-                set_label: "Volver",
-                connect_clicked[sender] => move |_| {
-                    sender.output(FileEditorOutputMessage::GoBack).unwrap();
+
+            gtk::Box {
+                set_orientation: gtk::Orientation::Horizontal,
+                set_spacing: 8,                
+                #[name="back"]
+                gtk::Button {
+                    set_label: "Volver",
+                    connect_clicked[sender] => move |_| {
+                        sender.output(FileEditorOutputMessage::GoBack).unwrap();
+                    },
                 },
+    
+                #[name="file_label"]
+                gtk::Label {
+                    #[watch]
+                    set_label: &format!("Editando archivo: {} ({} colaboradores)", model.file_name, model.num_contributors),
+                    set_xalign: 0.0,
+                }
             },
-
-            #[name="file_label"]
-            gtk::Label {
-                #[watch]
-                set_label: &format!("Editando archivo: {} ({} colaboradores)", model.file_name, model.num_contributors),
-                set_xalign: 0.0,
-            },
-
             gtk::ScrolledWindow {
                 set_vexpand: true,
                 #[wrap(Some)]
+                #[name="textview"]
                 set_child = &gtk::TextView {
                     set_buffer: Some(&model.buffer),
+                    add_css_class: "file-text-area",
                     set_visible: true,
+                    
                     set_wrap_mode: gtk::WrapMode::Word,
                     set_overwrite: true,
                 },
@@ -116,6 +123,10 @@ impl SimpleComponent for FileEditorModel {
         match message {
             FileEditorMessage::ContentChanged(new_text) => {
                 self.buffer.set_text(&new_text);
+                println!(
+                    "Nuevo contenido: {}",
+                    new_text
+                );
             }
             FileEditorMessage::UpdateFile(file_name, contributors, content) => {
                 println!(

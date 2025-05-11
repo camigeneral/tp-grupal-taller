@@ -79,8 +79,7 @@ impl SimpleComponent for NavbarModel {
             pack_end = &gtk::Button {
                 #[watch]
                 set_label: &format!("{}", if model.is_connected { "Conectado" } else { "Desconectado" }),
-                add_css_class: "button",
-                add_css_class: "connect",
+                add_css_class: "button",                
                 #[watch]
                 add_css_class: if model.is_connected { "connected" } else { "disconnected" },
                 connect_clicked[sender] => move |_| {

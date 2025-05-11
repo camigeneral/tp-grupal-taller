@@ -38,11 +38,17 @@
 
 .button:hover {
     background-color: #575757;    
-    color: white
+    color: white;
 }
 
-.button.connect {
-    border: 1px solid #000000;
+.button.connected {
+    border: 2px solid green;
+    border-radius: 6px;
+    color: white;    
+}
+
+.button.disconnected {
+    border: 1px solid red;
     border-radius: 6px;
     color: white;    
 }
@@ -82,6 +88,13 @@
 .file_button:hover {
     background-color: rgb(179, 179, 179);
 
+}
+.file-text-area {
+    padding: 10px;
+    background-color: rgb(33, 33, 33);
+    border: 1px solid white;
+    color: white;
+    border-radius: 8px;
 }
 
 /* Estilos para la ventana principal */
