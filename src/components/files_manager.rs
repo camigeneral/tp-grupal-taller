@@ -1,25 +1,19 @@
 extern crate relm4;
 extern crate gtk4;
 
-use self::gtk4::prelude::{ ButtonExt, OrientableExt, WidgetExt};
-use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
+use self::gtk4::prelude::{ OrientableExt, WidgetExt};
+use components::types::FileType;
+use super::list_files::ListFiles;
+use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent, Controller, Component, ComponentController};
 
 #[derive(Debug)]
 pub struct FilesManager {
-    current_view: FileType
+    file_list_cont: Controller<ListFiles>
 }
 
 #[derive(Debug)]
-pub enum FileType {
-    Text,
-    Sheet,
-    All    
-}
-#[derive(Debug)]
-pub enum FilterFiles {
-    Text,
-    Sheet,
-    All   
+pub enum FilterFiles {    
+    SelectedFile(String)   
 }
 
 #[relm4::component(pub)]
@@ -27,6 +21,7 @@ impl SimpleComponent for FilesManager {
     type Output = ();
     type Init = ();
     type Input = FilterFiles;
+    
     view! {
         #[name="body_container"]
         gtk::Box {
@@ -42,87 +37,48 @@ impl SimpleComponent for FilesManager {
                 set_vexpand: true,
                 set_valign: gtk::Align::Fill,
                 set_orientation: gtk::Orientation::Vertical,
-                gtk::Box {
-                    add_css_class: "header-filter",                                                        
-                    set_orientation: gtk::Orientation::Horizontal,                                                
-                    set_halign: gtk::Align::Fill,                                                          
-                    gtk::Button {                                          
-                        set_hexpand: true,
-                        
-                        set_label: "Todos",
-                        add_css_class: "button",
-                        add_css_class: "filter",                                                    
-                        connect_clicked => FilterFiles::All,                                
-                    },
-                    gtk::Button {                                          
-                        set_hexpand: true,
-                        
-                        set_label: "Texto",
-                        add_css_class: "button",
-                        add_css_class: "filter",                        
-                        connect_clicked => FilterFiles::Text,                                
-                    },
-                    gtk::Button {         
-                        set_hexpand: true,
-                                                                                            
-                        set_label: "Cálculo",
-                        add_css_class: "button",
-                        add_css_class: "filter",  
-                        add_css_class: "last",                        
-                        connect_clicked => FilterFiles::Sheet,       
-                    },
-                },                   
-                #[name="files_container"]
-                gtk::Box{
-                    match model.current_view  {
-                        FileType::All => {
-                            gtk::Label {
-                                set_text: "Todos los archivos!",
-                                set_margin_all: 20,
-                            }
-                        }
-                        FileType::Text => {
-                            gtk::Label {
-                                set_text: "Archivos de texto.",
-                                add_css_class: "content",
-                                set_margin_all: 20,
-                            }
-                        }                                
-                        FileType::Sheet => {
-                            gtk::Label {
-                                set_text: "Archivos de calculo.",
-                                add_css_class: "content",
-                                set_margin_all: 20,
-                            }
-                        }
-                    }
-                },  
-                },                                                                  
-            }            
+                #[local_ref]
+                list_box -> gtk::Box {
+                    set_orientation: gtk::Orientation::Vertical,                
+                }
+            }                                                                  
+        }            
     }
-
 
     fn init(
             _init: Self::Init,
             root: Self::Root,
             _sender: ComponentSender<Self>,
         ) -> ComponentParts<Self> {
+        
+                
+        let files_list = vec![
+            ("Documento.txt".to_string(), FileType::Text),
+            ("Informe.txt".to_string(), FileType::Text),
+            ("Presupuesto.xlsx".to_string(), FileType::Sheet),
+            ("Datos.xlsx".to_string(), FileType::Sheet),
+            ("Notas.txt".to_string(), FileType::Text),
+            ("Análisis.xlsx".to_string(), FileType::Sheet),
+        ];
+        
+        let list_files_cont = ListFiles::builder()
+            .launch(files_list)
+            .detach();
 
         let model = FilesManager {
-            current_view: FileType::All
+            file_list_cont: list_files_cont       
         };
 
+        let list_box = model.file_list_cont.widget();
 
         let widgets = view_output!();
+        
         ComponentParts { model, widgets }
     }
     
     fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
-        match message {
-            FilterFiles::All => self.current_view = FileType::All,
-            FilterFiles::Text => self.current_view = FileType::Text,
-            FilterFiles::Sheet => self.current_view = FileType::Sheet
+        match message {            
+            FilterFiles::SelectedFile(file) => println!("Archivo a entrar desde el padre: {}", file)
         }
     }
 }
-
