@@ -1,32 +1,45 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::prelude::{BoxExt, ButtonExt, OrientableExt, PopoverExt, WidgetExt};
-use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
+use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
 
+/// Modelo que representa la barra de navegación (navbar). Gestiona el estado de la conexión y
+/// el popover que permite crear nuevos documentos.
 #[derive(Debug)]
-pub struct HeaderModel {
+pub struct NavbarModel {
+    /// Indica si el sistema está conectado o no.
     is_connected: bool,
-    popover: Option<gtk::Popover>,
+    /// Popover que contiene las opciones para crear nuevos documentos.
+    new_file_popover: Option<gtk::Popover>,
 }
 
+/// Enum que define los diferentes mensajes que puede recibir el componente `NavbarModel`.
+/// Permite cambiar el estado de conexión, mostrar el popover para nuevos archivos, y crear documentos.
 #[derive(Debug)]
-pub enum NavbarInput {
+pub enum NavbarMsg {
+    /// Mensaje para establecer el estado de conexión.
     SetConnectionStatus(bool),
-    TogglePopover,
-    CreateTextSheet,
-    CreateSpreadsheet,
+    /// Mensaje para alternar la visibilidad del popover para nuevos archivos.
+    ToggleNewFilePopover,
+    /// Mensaje para crear un documento de tipo texto.
+    CreateTextDocument,
+    /// Mensaje para crear un documento de tipo hoja de cálculo.
+    CreateSpreadsheetDocument,
 }
 
+/// Enum que define las salidas posibles del componente `NavbarModel`.
+/// Actualmente solo existe un mensaje para solicitar el cambio de estado de conexión.
 #[derive(Debug)]
 pub enum NavbarOutput {
-    ToggleConnection,
+    /// Solicita alternar el estado de conexión.
+    ToggleConnectionRequested,
 }
 
 #[relm4::component(pub)]
-impl SimpleComponent for HeaderModel {
+impl SimpleComponent for NavbarModel {
     type Init = ();
 
-    type Input = NavbarInput;
+    type Input = NavbarMsg;
     type Output = NavbarOutput;
 
     view! {
@@ -40,9 +53,9 @@ impl SimpleComponent for HeaderModel {
                     add_css_class: "new-file",
                     add_css_class: "button",
                     set_label: "Nuevo Archivo",
-                    connect_clicked => NavbarInput::TogglePopover,
+                    connect_clicked => NavbarMsg::ToggleNewFilePopover,
                 },
-                #[name="popover"]
+                #[name="new_file_popover"]
                 gtk::Popover {
                     set_has_arrow: true,
                     set_autohide: true,
@@ -53,11 +66,11 @@ impl SimpleComponent for HeaderModel {
                         set_spacing: 5,
                         gtk::Button {
                             set_label: "Hoja de texto",
-                            connect_clicked => NavbarInput::CreateTextSheet,
+                            connect_clicked => NavbarMsg::CreateTextDocument,
                         },
                         gtk::Button {
                             set_label: "Hoja de cálculo",
-                            connect_clicked => NavbarInput::CreateSpreadsheet,
+                            connect_clicked => NavbarMsg::CreateSpreadsheetDocument	,
                         }
                     },
                 }
@@ -71,7 +84,7 @@ impl SimpleComponent for HeaderModel {
                 #[watch]
                 add_css_class: if model.is_connected { "connected" } else { "disconnected" },
                 connect_clicked[sender] => move |_| {
-                    sender.output(NavbarOutput::ToggleConnection).unwrap();
+                    sender.output(NavbarOutput::ToggleConnectionRequested	).unwrap();
                 },
             },
          },
@@ -82,34 +95,34 @@ impl SimpleComponent for HeaderModel {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let mut model = HeaderModel {
+        let mut model = NavbarModel	 {
             is_connected: false,
-            popover: None,
+            new_file_popover: None,
         };
 
         let widgets = view_output!();
-        model.popover = Some(widgets.popover.clone());
+        model.new_file_popover = Some(widgets.new_file_popover.clone());
         ComponentParts { model, widgets }
     }
 
     fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
         match message {
-            NavbarInput::SetConnectionStatus(status) => {
+            NavbarMsg::SetConnectionStatus(status) => {
                 self.is_connected = status;
             }
-            NavbarInput::TogglePopover => {
-                if let Some(popover) = &self.popover {
+            NavbarMsg::ToggleNewFilePopover => {
+                if let Some(popover) = &self.new_file_popover {
                     popover.popup();
                 }
             }
-            NavbarInput::CreateTextSheet => {
-                if let Some(popover) = &self.popover {
+            NavbarMsg::CreateTextDocument => {
+                if let Some(popover) = &self.new_file_popover {
                     popover.popdown();
                 }
                 println!("Crear hoja de texto");
             }
-            NavbarInput::CreateSpreadsheet => {
-                if let Some(popover) = &self.popover {
+            NavbarMsg::CreateSpreadsheetDocument	 => {
+                if let Some(popover) = &self.new_file_popover {
                     popover.popdown();
                 }
                 println!("Crear hoja de cálculo");

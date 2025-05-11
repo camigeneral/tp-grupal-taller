@@ -1,37 +1,47 @@
 extern crate gtk4;
 extern crate relm4;
 
-use crate::components::file_editor::FileEditorOutput;
+use crate::components::file_editor::FileEditorOutputMessage;
 
 use self::gtk4::prelude::{OrientableExt, WidgetExt};
 use self::relm4::{
     gtk, Component, ComponentController, ComponentParts, ComponentSender, Controller,
     RelmWidgetExt, SimpleComponent,
 };
-use super::file_editor::FileEditor;
-use super::list_files::ListFiles;
-use components::file_editor::FileEditorMsg;
+use super::file_editor::FileEditorModel;
+use super::list_files::FileListView;
+use components::file_editor::FileEditorMessage;
 use components::types::FileType;
 
 #[derive(Debug)]
-pub struct FilesManager {
-    file_list_cont: Controller<ListFiles>,
-    file_editor_cont: Controller<FileEditor>,
-    show_editor: bool,
+/// Estructura principal que gestiona el espacio de trabajo de archivos, que incluye una lista de archivos
+/// y un editor de archivos. Mantiene el estado de la visibilidad del editor de archivos.
+pub struct FileWorkspace {
+    /// Controlador para la vista de la lista de archivos.
+    file_list_ctrl: Controller<FileListView>,
+    /// Controlador para el modelo del editor de archivos.
+    file_editor_ctrl: Controller<FileEditorModel>,
+    /// Bandera que indica si el editor de archivos está visible.
+    editor_visible: bool,
 }
 
+/// Enum que define los diferentes mensajes que puede recibir el componente `FileWorkspace`.
+/// Permite abrir un archivo, cerrar el editor o ignorar un mensaje.
 #[derive(Debug)]
-pub enum File {
-    SelectedFile(String, String, u8),
-    Noop,
-    HideEditor,
+pub enum FileWorkspaceMsg {
+    /// Mensaje para abrir un archivo con nombre, contenido y cantidad de líneas.
+    OpenFile(String, String, u8),
+    /// Mensaje para ignorar una acción.
+    Ignore,
+    /// Mensaje para cerrar el editor de archivos.
+    CloseEditor,
 }
 
 #[relm4::component(pub)]
-impl SimpleComponent for FilesManager {
+impl SimpleComponent for FileWorkspace {
     type Output = ();
     type Init = ();
-    type Input = File;
+    type Input = FileWorkspaceMsg;
 
     view! {
         #[name="body_container"]
@@ -49,17 +59,17 @@ impl SimpleComponent for FilesManager {
                 set_valign: gtk::Align::Fill,
                 set_orientation: gtk::Orientation::Vertical,
                 #[local_ref]
-                list_box -> gtk::Box {
+                list_box_widget -> gtk::Box {
                     set_orientation: gtk::Orientation::Vertical,
                     #[watch]
-                    set_visible: !model.show_editor
+                    set_visible: !model.editor_visible
                 },
 
                 #[local_ref]
-                editor -> gtk::Box {
+                editor_widget -> gtk::Box {
                     set_orientation: gtk::Orientation::Vertical,
                     #[watch]
-                    set_visible: model.show_editor
+                    set_visible: model.editor_visible
                 }
 
             }
@@ -110,32 +120,32 @@ impl SimpleComponent for FilesManager {
             ),
         ];
 
-        let list_files_cont = ListFiles::builder().launch(files_list).forward(
+        let list_files_cont = FileListView::builder().launch(files_list).forward(
             sender.input_sender(),
-            |msg: crate::components::list_files::FilterFiles| match msg {
-                crate::components::list_files::FilterFiles::FileSelected(
+            |msg: crate::components::list_files::FileFilterAction| match msg {
+                crate::components::list_files::FileFilterAction::SelectFile(
                     file,
                     _file_type,
                     content,
                     qty,
-                ) => File::SelectedFile(file, content, qty),
-                _ => File::Noop,
+                ) => FileWorkspaceMsg::OpenFile(file, content, qty),
+                _ => FileWorkspaceMsg::Ignore,
             },
         );
-        let editor_file_cont = FileEditor::builder()
+        let editor_file_cont = FileEditorModel::builder()
             .launch(("".to_string(), 0, "".to_string()))
-            .forward(sender.input_sender(), |msg: FileEditorOutput| match msg {
-                FileEditorOutput::Back => File::HideEditor,
-                _ => File::Noop,
+            .forward(sender.input_sender(), |msg: FileEditorOutputMessage| match msg {
+                FileEditorOutputMessage::GoBack => FileWorkspaceMsg::CloseEditor,
+                _ => FileWorkspaceMsg::Ignore,
             });
-        let model = FilesManager {
-            file_list_cont: list_files_cont,
-            file_editor_cont: editor_file_cont,
-            show_editor: false,
+        let model = FileWorkspace {
+            file_list_ctrl: list_files_cont,
+            file_editor_ctrl: editor_file_cont,
+            editor_visible: false,
         };
 
-        let list_box = model.file_list_cont.widget();
-        let editor = model.file_editor_cont.widget();
+        let list_box_widget = model.file_list_ctrl.widget();
+        let editor_widget = model.file_editor_ctrl.widget();
         let widgets = view_output!();
 
         ComponentParts { model, widgets }
@@ -143,19 +153,19 @@ impl SimpleComponent for FilesManager {
 
     fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
         match message {
-            File::SelectedFile(file, content, qty) => {
-                self.file_editor_cont
+            FileWorkspaceMsg::OpenFile(file, content, qty) => {
+                self.file_editor_ctrl
                     .sender()
-                    .send(FileEditorMsg::UpdateFile(file, qty, content))
+                    .send(FileEditorMessage::UpdateFile(file, qty, content))
                     .unwrap();
-                self.show_editor = true;
+                self.editor_visible = true;
             }
-            File::HideEditor => {
-                self.file_editor_cont
+            FileWorkspaceMsg::CloseEditor => {
+                self.file_editor_ctrl
                     .sender()
-                    .send(FileEditorMsg::Reset)
+                    .send(FileEditorMessage::ResetEditor)
                     .unwrap();
-                self.show_editor = false;
+                self.editor_visible = false;
             }
             _ => {}
         }

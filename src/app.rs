@@ -4,23 +4,31 @@ use self::gtk4::{
     prelude::{BoxExt, GtkWindowExt, OrientableExt, WidgetExt},
     CssProvider,
 };
-use components::files_manager::FilesManager;
-use components::header::{HeaderModel, NavbarInput, NavbarOutput};
+use components::file_workspace::FileWorkspace;
+use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
 
 use self::relm4::{
     gtk, Component, ComponentController, ComponentParts, ComponentSender, Controller,
     RelmWidgetExt, SimpleComponent,
 };
 
+
+/// Modelo principal de la aplicación que contiene los controladores de los componentes.
+///
+/// # Campos
+/// - `header_cont`: Controlador para la barra de navegación superior
+/// - `files_manager_cont`: Controlador para el área de gestión de archivos
 pub struct AppModel {
-    header_cont: Controller<HeaderModel>,
-    files_manager_cont: Controller<FilesManager>,
+    header_cont: Controller<NavbarModel	>,
+    files_manager_cont: Controller<FileWorkspace>,
 }
 
 #[derive(Debug)]
 pub enum AppMsg {
+    /// Establece conexión con el server
     Connect,
-    Noop,
+    /// Mensaje vacío (no operation)
+    Ignore,
 }
 
 #[relm4::component(pub)]
@@ -62,16 +70,16 @@ impl SimpleComponent for AppModel {
             gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
 
-        let header_model = HeaderModel::builder().launch(()).forward(
+        let header_model = NavbarModel	::builder().launch(()).forward(
             sender.input_sender(),
             |msg: NavbarOutput| match msg {
                 _ => AppMsg::Connect,
             },
         );
-        let files_manager_model = FilesManager::builder().launch(()).forward(
+        let files_manager_model = FileWorkspace::builder().launch(()).forward(
             sender.input_sender(),
             |msg: ()| match msg {
-                _ => AppMsg::Noop,
+                _ => AppMsg::Ignore,
             },
         );
 
@@ -90,10 +98,10 @@ impl SimpleComponent for AppModel {
             AppMsg::Connect => {
                 self.header_cont
                     .sender()
-                    .send(NavbarInput::SetConnectionStatus(true))
+                    .send(NavbarMsg::SetConnectionStatus(true))
                     .unwrap();
             }
-            AppMsg::Noop => {}
+            AppMsg::Ignore => {}
         }
     }
 }
