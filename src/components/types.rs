@@ -2,5 +2,5 @@
 pub enum FileType {
     Text,
     Sheet,
-    Any    
+    Any,
 }

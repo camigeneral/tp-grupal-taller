@@ -1,5 +1,5 @@
-extern crate relm4;
 extern crate gtk4;
+extern crate relm4;
 use self::gtk4::prelude::{BoxExt, ButtonExt, OrientableExt, PopoverExt, WidgetExt};
 use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
 
@@ -12,45 +12,44 @@ pub struct HeaderModel {
 #[derive(Debug)]
 pub enum NavbarInput {
     SetConnectionStatus(bool),
-    TogglePopover, 
+    TogglePopover,
     CreateTextSheet,
-    CreateSpreadsheet
+    CreateSpreadsheet,
 }
 
 #[derive(Debug)]
 pub enum NavbarOutput {
-    ToggleConnection
+    ToggleConnection,
 }
-
 
 #[relm4::component(pub)]
 impl SimpleComponent for HeaderModel {
     type Init = ();
 
     type Input = NavbarInput;
-    type Output = NavbarOutput;    
+    type Output = NavbarOutput;
 
     view! {
-        #[name="header"]        
-        gtk::Box {                    
+        #[name="header"]
+        gtk::Box {
             add_css_class: "header",
             set_spacing: 10,
-            
-            set_orientation: gtk::Orientation::Horizontal,                    
-            set_margin_all: 10,  
-            set_halign: gtk::Align::Fill,  
+
+            set_orientation: gtk::Orientation::Horizontal,
+            set_margin_all: 10,
+            set_halign: gtk::Align::Fill,
             gtk::Box {
                 set_hexpand: true,
             },
-            gtk::Button {                                          
+            gtk::Button {
                 set_margin_all: 10,
                 #[watch]
                 set_label: &format!("{}", if model.is_connected { "Conectado" } else { "Desconectado" }),
                 add_css_class: "button",
-                add_css_class: "connect",                                        
+                add_css_class: "connect",
                 connect_clicked[sender] => move |_| {
                     sender.output(NavbarOutput::ToggleConnection).unwrap();
-                },                
+                },
             },
             gtk::Box {
                 #[name="new_file_button"]
@@ -66,7 +65,7 @@ impl SimpleComponent for HeaderModel {
                 gtk::Popover {
                     set_has_arrow: true,
                     set_autohide: true,
-                    set_position: gtk::PositionType::Bottom,                                                                                                
+                    set_position: gtk::PositionType::Bottom,
                     #[name="popover_content"]
                     gtk::Box {
                         set_orientation: gtk::Orientation::Vertical,
@@ -79,9 +78,9 @@ impl SimpleComponent for HeaderModel {
                             set_label: "Hoja de cálculo",
                             connect_clicked => NavbarInput::CreateSpreadsheet,
                         }
-                    },                                
+                    },
                 }
-            }            
+            }
         },
     }
 
@@ -90,11 +89,10 @@ impl SimpleComponent for HeaderModel {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-
-        let mut model = HeaderModel {             
+        let mut model = HeaderModel {
             is_connected: false,
             popover: None,
-         };
+        };
 
         let widgets = view_output!();
         model.popover = Some(widgets.popover.clone());
@@ -124,7 +122,5 @@ impl SimpleComponent for HeaderModel {
                 println!("Crear hoja de cálculo");
             }
         }
-    }        
+    }
 }
-
-
