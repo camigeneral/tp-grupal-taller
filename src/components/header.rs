@@ -31,17 +31,9 @@ impl SimpleComponent for HeaderModel {
 
     view! {
         #[name="header"]
-        gtk::Box {
-            add_css_class: "header",
-            set_spacing: 10,
-
-            set_orientation: gtk::Orientation::Horizontal,
-            set_margin_all: 10,
-            set_halign: gtk::Align::Fill,
-            gtk::Box {
-                set_hexpand: true,
-            },
-            gtk::Button {
+        gtk::HeaderBar {
+            
+            pack_end = &gtk::Button {
                 set_margin_all: 10,
                 #[watch]
                 set_label: &format!("{}", if model.is_connected { "Conectado" } else { "Desconectado" }),
@@ -51,7 +43,7 @@ impl SimpleComponent for HeaderModel {
                     sender.output(NavbarOutput::ToggleConnection).unwrap();
                 },
             },
-            gtk::Box {
+            pack_end = &gtk::Box {
                 #[name="new_file_button"]
                 gtk::Button {
                     set_margin_all: 10,

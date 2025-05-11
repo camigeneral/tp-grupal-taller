@@ -1,7 +1,7 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::{
-    prelude::{BoxExt, GtkWindowExt, OrientableExt, WidgetExt},
+    prelude::{BoxExt, GtkWindowExt, OrientableExt, WidgetExt, ButtonExt},
     CssProvider,
 };
 use components::files_manager::FilesManager;
@@ -30,13 +30,12 @@ impl SimpleComponent for AppModel {
     type Output = ();
 
     view! {
-    gtk::Window {
-        set_title: Some("Rusty Docs"),
+    gtk::Window {        
         set_default_width: 800,
         set_width_request: 800,
         set_default_height: 600,
-
-
+        #[wrap(Some)]
+        set_titlebar = model.header_cont.widget(),
         #[name="main_container"]
         gtk::Box {
             set_orientation: gtk::Orientation::Vertical,
@@ -44,7 +43,6 @@ impl SimpleComponent for AppModel {
             set_margin_all: 10,
             set_hexpand: true,
             set_vexpand: true,
-            append: model.header_cont.widget(),
             append: model.files_manager_cont.widget()
             }
         }
