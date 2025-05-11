@@ -10,11 +10,13 @@ use components::types::FileType;
 struct ListItem {
     name: String,
     file_type: FileType,
+    content: String,
+    qty: u8
 }
 
 #[relm4::factory]
 impl FactoryComponent for ListItem {
-    type Init = (String, FileType);
+    type Init = (String, FileType, String, u8);
     type Input = ();
     type Output = FilterFiles;
     type CommandOutput = ();
@@ -23,8 +25,8 @@ impl FactoryComponent for ListItem {
     view! {
         gtk::Button {
             set_label: &self.name,
-            connect_clicked[sender, name = self.name.clone()] => move |_| {
-                sender.output(FilterFiles::FileSelected(name.clone())).unwrap();
+            connect_clicked[sender, name = self.name.clone(), file_type = self.file_type.clone() , content = self.content.clone(), qty = self.qty.clone()] => move |_| {
+                sender.output(FilterFiles::FileSelected(name.clone(), file_type.clone(), content.clone(), qty)).unwrap();
             },
         }
     }
@@ -33,6 +35,8 @@ impl FactoryComponent for ListItem {
         Self {
             name: value.0,
             file_type: value.1,
+            content: value.2,
+            qty: value.3
         }
     }
 }
@@ -40,7 +44,7 @@ impl FactoryComponent for ListItem {
 #[derive(Debug)]
 pub struct ListFiles {
     current_filter: FileType,
-    all_files: Vec<(String, FileType)>,
+    all_files: Vec<(String, FileType, String, u8)>,
     visible_files: FactoryVecDeque<ListItem>,
 }
 
@@ -49,13 +53,13 @@ pub enum FilterFiles {
     Text,
     Sheet,
     Any,
-    FileSelected(String),
+    FileSelected(String, FileType, String, u8),
 }
 
 #[relm4::component(pub)]
 impl SimpleComponent for ListFiles {
     type Output = FilterFiles;
-    type Init = Vec<(String, FileType)>;
+    type Init = Vec<(String, FileType, String, u8)>;
     type Input = FilterFiles;
     view! {
         #[name="container_2"]
@@ -124,7 +128,7 @@ impl SimpleComponent for ListFiles {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
+    fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
             FilterFiles::Any => {
                 println!("Filtro: Todos los archivos");
@@ -141,9 +145,9 @@ impl SimpleComponent for ListFiles {
                 self.current_filter = FileType::Sheet;
                 self.apply_filter();
             }
-            FilterFiles::FileSelected(file_name) => {
-                println!("Archivo seleccionado: {}", file_name);
-            }
+            FilterFiles::FileSelected(file_name, file_type, content, qty) => {
+                sender.output(FilterFiles::FileSelected(file_name, file_type, content, qty)).unwrap()
+            }   
         }
     }
 }
@@ -151,11 +155,11 @@ impl SimpleComponent for ListFiles {
 impl ListFiles {
     fn apply_filter(&mut self) {
         self.visible_files.guard().clear();
-        for (name, file_type) in &self.all_files {
+        for (name, file_type, content, qty) in &self.all_files {
             if self.current_filter == FileType::Any || *file_type == self.current_filter {
                 self.visible_files
                     .guard()
-                    .push_back((name.clone(), file_type.clone()));
+                    .push_back((name.clone(), file_type.clone(), content.clone(), qty.clone()));
             }
         }
     }
