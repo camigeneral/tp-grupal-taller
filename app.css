@@ -1,0 +1,104 @@
+/* Estilos generales para todas las cards */
+.card {    
+    border-radius: 8px;
+    background-color: #ffffff;
+}
+
+/* Estilos específicos para el header */
+.header {    
+    border-bottom: 2px solid #000000;
+    padding: 5px;        
+}
+
+.header-filter {
+    border-bottom: 2px solid #000000;
+}
+
+/* Estilos para la barra lateral */
+.sidebar-card {    
+    min-width: 200px;    
+}
+
+/* Estilos para el contenido principal */
+.content-card {
+    padding: 15px;
+}
+
+/* Estilos para los botones */
+.button {    
+    border-radius: 0;
+    color: black;
+    border: 0;
+    border-bottom: 1px black solid;    
+    font-weight: bold;
+    background-image: none;    
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.8s ease;
+}
+
+.button:hover {
+    background-color: #575757;    
+    color: white;
+}
+
+.button.connected {
+    border: 2px solid green;
+    border-radius: 6px;
+    color: white;    
+}
+
+.button.disconnected {
+    border: 1px solid red;
+    border-radius: 6px;
+    color: white;    
+}
+
+.button.filter {
+    border-bottom: 0;
+    border: 1px solid #000000;
+    padding: 10px ;    
+}
+
+.button.new-file {
+    background-color: #2FA1FF;
+    border-bottom: 0;
+    color: white;
+    border-radius: 6px;
+
+}
+
+/* Estilo para las etiquetas */
+/* label {
+    font-size: 16px ;
+    color: white ;
+} */
+
+.content {
+    color: #000000;
+}
+
+.file_button {
+    background-color: white;
+    background-image: none;    
+    color: black;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.8s ease;
+}
+
+.file_button:hover {
+    background-color: rgb(179, 179, 179);
+
+}
+.file-text-area {
+    padding: 10px;
+    background-color: rgb(33, 33, 33);
+    border: 1px solid white;
+    color: white;
+    border-radius: 8px;
+}
+
+/* Estilos para la ventana principal */
+window {
+    background-color: #ffffff;
+    color: black;    
+}
