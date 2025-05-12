@@ -1,6 +1,11 @@
-# Taller de Programacion {Grupo}
+# Taller de Programacion - A Todo Rust
 
 ## Integrantes
+
+* Camila General
+* Ramiro Mantero
+* Valentina Moreno
+* Franco Secchi
 
 ## Como usar 
 
