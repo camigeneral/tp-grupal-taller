@@ -1,19 +1,19 @@
+use std::collections::HashMap;
 use std::env::args;
-use std::io::{self, BufRead, BufReader, Write};
 use std::fs::{File, OpenOptions};
+use std::io::{self, BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
 use std::thread;
 
 mod list_commands;
 
 static SERVER_ARGS: usize = 2;
 
- struct Client {
+struct Client {
     // addr: String,
-    stream: TcpStream
- }
+    stream: TcpStream,
+}
 
 fn main() -> Result<(), ()> {
     let argv = args().collect::<Vec<String>>();
@@ -29,7 +29,6 @@ fn main() -> Result<(), ()> {
     Ok(())
 }
 
-
 fn server_run(address: &str) -> std::io::Result<()> {
     let file_path = "docs.txt".to_string();
     let docs = match get_file_content(&file_path) {
@@ -40,7 +39,6 @@ fn server_run(address: &str) -> std::io::Result<()> {
             new_docs.insert("doc2".to_string(), vec![]);
             new_docs
         }
-        
     };
 
     let shared_docs = Arc::new(Mutex::new(docs.clone()));
@@ -64,11 +62,11 @@ fn server_run(address: &str) -> std::io::Result<()> {
                     let client_key = client_addr.to_string();
                     let client = Client {
                         // addr: client_addr.to_string(),
-                        stream: cloned_stream
+                        stream: cloned_stream,
                     };
                     let mut lock_clients = clients.lock().unwrap();
                     lock_clients.insert(client_key, client);
-                }   
+                }
                 // bloque inseguro?
 
                 let cloned_clients = Arc::clone(&clients);
@@ -76,7 +74,12 @@ fn server_run(address: &str) -> std::io::Result<()> {
                 let cloned_docs = Arc::clone(&shared_docs);
 
                 thread::spawn(move || {
-                    match handle_client(&mut client_stream, cloned_clients, cloned_clients_on_docs, cloned_docs) {
+                    match handle_client(
+                        &mut client_stream,
+                        cloned_clients,
+                        cloned_clients_on_docs,
+                        cloned_docs,
+                    ) {
                         Ok(_) => {
                             println!("El cliente {} se ha desconectado.", client_addr);
                         }
@@ -95,14 +98,21 @@ fn server_run(address: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-
-fn handle_client(stream: &mut TcpStream, clients: Arc<Mutex<HashMap<String, Client>>>, clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>, docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> std::io::Result<()> {
+fn handle_client(
+    stream: &mut TcpStream,
+    clients: Arc<Mutex<HashMap<String, Client>>>,
+    clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+) -> std::io::Result<()> {
     let client_addr = stream.peer_addr()?;
     let reader = BufReader::new(stream.try_clone()?);
 
     for line in reader.lines() {
         if let Ok(command) = line {
-            let input: Vec<String> = command.split_whitespace().map(|s| s.to_string().to_lowercase()).collect();
+            let input: Vec<String> = command
+                .split_whitespace()
+                .map(|s| s.to_string().to_lowercase())
+                .collect();
             let command = &input[0];
             println!("Recibido: {}", command);
 
@@ -133,27 +143,37 @@ fn handle_client(stream: &mut TcpStream, clients: Arc<Mutex<HashMap<String, Clie
                         } else {
                             writeln!(stream, "Documento no encontrado")?;
                         }
-                    }  
+                    }
                 }
                 "unsub" => {
                     let doc_select = &input[1];
                     {
                         let mut lock_clients_on_docs = clients_on_docs.lock().unwrap();
                         if let Some(clients_on_doc) = lock_clients_on_docs.get_mut(doc_select) {
-                            clients_on_doc.retain(|x| x.as_str() != client_addr.to_string().as_str());
+                            clients_on_doc
+                                .retain(|x| x.as_str() != client_addr.to_string().as_str());
                         } else {
                             println!("Documento no encontrado");
                         }
-                    }  
+                    }
                 }
                 "insertar" => {
                     let doc_selected = &input[1];
                     let mut doc_locked = docs.lock().unwrap();
                     if let Some(selected_doc) = doc_locked.get_mut(doc_selected) {
                         let message = input[2..].join(" ");
-                        let message_to_publish = format!("Nuevo mensaje en {}: {}", doc_selected, input[2..].join(" "));
+                        let message_to_publish = format!(
+                            "Nuevo mensaje en {}: {}",
+                            doc_selected,
+                            input[2..].join(" ")
+                        );
                         selected_doc.push(message);
-                        let _ = publish(Arc::clone(&clients), Arc::clone(&clients_on_docs), message_to_publish, doc_selected.to_string());
+                        let _ = publish(
+                            Arc::clone(&clients),
+                            Arc::clone(&clients_on_docs),
+                            message_to_publish,
+                            doc_selected.to_string(),
+                        );
                     } else {
                         writeln!(stream, "No se encontro el documento")?;
                     }
@@ -165,7 +185,7 @@ fn handle_client(stream: &mut TcpStream, clients: Arc<Mutex<HashMap<String, Clie
 
                     docs_locked.insert(doc_name.to_string(), vec![]);
                     locked_clients_on_docs.insert(doc_name.to_string(), vec![]);
-                    
+
                     writeln!(stream, "Documento creado")?;
                 }
                 _ => {
@@ -179,8 +199,12 @@ fn handle_client(stream: &mut TcpStream, clients: Arc<Mutex<HashMap<String, Clie
     Ok(())
 }
 
-
-fn publish(clients: Arc<Mutex<HashMap<String, Client>>>, clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>, message: String, doc: String) -> std::io::Result<()> {
+fn publish(
+    clients: Arc<Mutex<HashMap<String, Client>>>,
+    clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    message: String,
+    doc: String,
+) -> std::io::Result<()> {
     let mut lock_clients = clients.lock().unwrap();
     let mut lock_clients_on_docs = clients_on_docs.lock().unwrap();
 
@@ -199,8 +223,7 @@ fn publish(clients: Arc<Mutex<HashMap<String, Client>>>, clients_on_docs: Arc<Mu
     Ok(())
 }
 
-
-pub fn write_to_file(docs:  Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Result<()> {
+pub fn write_to_file(docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Result<()> {
     let mut file = OpenOptions::new()
         .create(true)
         .truncate(true)
@@ -210,7 +233,7 @@ pub fn write_to_file(docs:  Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Res
     let locked_docs: std::sync::MutexGuard<'_, HashMap<String, Vec<String>>> = docs.lock().unwrap();
     let documents: Vec<&String> = locked_docs.keys().collect();
     for document in documents {
-        let mut base_string = format!("{}",document);
+        let mut base_string = format!("{}", document);
         base_string.push_str("/++/");
         let messages = locked_docs.get(document).unwrap();
         for message in messages {
@@ -219,10 +242,9 @@ pub fn write_to_file(docs:  Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Res
         }
         writeln!(file, "{}", base_string)?;
     }
-    
+
     Ok(())
 }
-
 
 pub fn get_file_content(file_path: &String) -> Result<HashMap<String, Vec<String>>, String> {
     let file = File::open(file_path).map_err(|_| "file-not-found".to_string())?;
