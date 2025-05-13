@@ -174,6 +174,8 @@ fn execute_command(
         "unsubscribe" => handle_unsubscribe(&request, clients_on_docs, client_addr),
         "append" => handle_append(&request, docs, clients, clients_on_docs),
         "scard" => handle_scard(&request,clients_on_docs),
+        "smembers" => handle_smembers(&request,clients_on_docs),
+        "sscan" => handle_sscan(&request,clients_on_docs),
         _ => CommandResponse::Error("Unknown command".to_string()),
     }
 }
@@ -321,12 +323,84 @@ fn handle_scard(
 ) -> CommandResponse {
     let doc = match &request.key {
         Some(k) => k,
-        None => return CommandResponse::Error("Usage: UNSUBSCRIBE <document>".to_string()),
+        None => return CommandResponse::Error("Usage: SCARD <document>".to_string()),
     };
 
     let lock_clients_on_docs = clients_on_docs.lock().unwrap();
     if let Some(subscribers) = lock_clients_on_docs.get(doc) {
         CommandResponse::String(format!("Number of subscribers in channel {}: {}",doc, subscribers.len()))
+    } else {
+        CommandResponse::Error("Document not found".to_string())
+    }
+}
+
+fn handle_smembers(
+    request: &CommandRequest,
+    clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+) -> CommandResponse {
+    let doc = match &request.key {
+        Some(k) => k,
+        None => return CommandResponse::Error("Usage: SMEMBERS <document>".to_string()),
+    };
+
+    let lock_clients_on_docs = clients_on_docs.lock().unwrap();
+    if let Some(subscribers) = lock_clients_on_docs.get(doc) {
+        if subscribers.is_empty() {
+            return CommandResponse::String(format!("No subscribers in document {}", doc));
+        }
+        
+        // Opción 1: Devolver como una cadena con formato
+        let mut response = format!("Subscribers in document {}:\n", doc);
+        for subscriber in subscribers {
+            response.push_str(&format!("{}\n", subscriber));
+        }
+        CommandResponse::String(response)
+    } else {
+        CommandResponse::Error("Document not found".to_string())
+    }
+}
+
+fn handle_sscan(
+    request: &CommandRequest,
+    clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+) -> CommandResponse {
+    // Obtener el documento (key) del request
+    let doc = match &request.key {
+        Some(k) => k,
+        None => return CommandResponse::Error("Usage: SSCAN <document> [pattern]".to_string()),
+    };
+
+    // Extraer el patrón del primer argumento (si existe)
+    let pattern = if !request.arguments.is_empty() {
+        match &request.arguments[0] {
+            ValueType::String(s) => s,
+            ValueType::Integer(i) => return CommandResponse::Error(format!("Expected string pattern, got integer: {}", i)),
+            // Agrega otros casos según los tipos que pueda tener ValueType
+            _ => return CommandResponse::Error("Pattern must be a string".to_string()),
+        }
+    } else {
+        "" // Si no hay patrón, usamos cadena vacía (coincide con todo)
+    };
+    
+    let lock_clients_on_docs = clients_on_docs.lock().unwrap();
+    if let Some(subscribers) = lock_clients_on_docs.get(doc) {
+        // Filtrar los suscriptores que coinciden con el patrón
+        let matching_subscribers: Vec<&String> = subscribers
+            .iter()
+            .filter(|s| s.contains(pattern))
+            .collect();
+        
+        if matching_subscribers.is_empty() {
+            return CommandResponse::String(format!("No subscribers matching '{}' in document {}", pattern, doc));
+        }
+        
+        // Construir la respuesta con todos los suscriptores que coinciden
+        let mut response = format!("Subscribers in {} matching '{}':\n", doc, pattern);
+        for subscriber in matching_subscribers {
+            response.push_str(&format!("{}\n", subscriber));
+        }
+        
+        CommandResponse::String(response)
     } else {
         CommandResponse::Error("Document not found".to_string())
     }
