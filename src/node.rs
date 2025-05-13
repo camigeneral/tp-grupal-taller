@@ -173,9 +173,9 @@ fn execute_command(
         "subscribe" => handle_subscribe(&request, clients_on_docs, client_addr),
         "unsubscribe" => handle_unsubscribe(&request, clients_on_docs, client_addr),
         "append" => handle_append(&request, docs, clients, clients_on_docs),
-        "scard" => handle_scard(&request,clients_on_docs),
-        "smembers" => handle_smembers(&request,clients_on_docs),
-        "sscan" => handle_sscan(&request,clients_on_docs),
+        "scard" => handle_scard(&request, clients_on_docs),
+        "smembers" => handle_smembers(&request, clients_on_docs),
+        "sscan" => handle_sscan(&request, clients_on_docs),
         _ => CommandResponse::Error("Unknown command".to_string()),
     }
 }
@@ -216,7 +216,7 @@ fn handle_set(
     {
         let mut docs_lock = docs.lock().unwrap();
         docs_lock.insert(doc_name.clone(), vec![content.clone()]);
-        
+
         let mut clients_on_docs_lock = clients_on_docs.lock().unwrap();
         if !clients_on_docs_lock.contains_key(&doc_name) {
             clients_on_docs_lock.insert(doc_name.clone(), Vec::new());
@@ -328,7 +328,11 @@ fn handle_scard(
 
     let lock_clients_on_docs = clients_on_docs.lock().unwrap();
     if let Some(subscribers) = lock_clients_on_docs.get(doc) {
-        CommandResponse::String(format!("Number of subscribers in channel {}: {}",doc, subscribers.len()))
+        CommandResponse::String(format!(
+            "Number of subscribers in channel {}: {}",
+            doc,
+            subscribers.len()
+        ))
     } else {
         CommandResponse::Error("Document not found".to_string())
     }
@@ -348,7 +352,7 @@ fn handle_smembers(
         if subscribers.is_empty() {
             return CommandResponse::String(format!("No subscribers in document {}", doc));
         }
-        
+
         // Opción 1: Devolver como una cadena con formato
         let mut response = format!("Subscribers in document {}:\n", doc);
         for subscriber in subscribers {
@@ -374,32 +378,38 @@ fn handle_sscan(
     let pattern = if !request.arguments.is_empty() {
         match &request.arguments[0] {
             ValueType::String(s) => s,
-            ValueType::Integer(i) => return CommandResponse::Error(format!("Expected string pattern, got integer: {}", i)),
+            ValueType::Integer(i) => {
+                return CommandResponse::Error(format!(
+                    "Expected string pattern, got integer: {}",
+                    i
+                ))
+            }
             // Agrega otros casos según los tipos que pueda tener ValueType
             _ => return CommandResponse::Error("Pattern must be a string".to_string()),
         }
     } else {
         "" // Si no hay patrón, usamos cadena vacía (coincide con todo)
     };
-    
+
     let lock_clients_on_docs = clients_on_docs.lock().unwrap();
     if let Some(subscribers) = lock_clients_on_docs.get(doc) {
         // Filtrar los suscriptores que coinciden con el patrón
-        let matching_subscribers: Vec<&String> = subscribers
-            .iter()
-            .filter(|s| s.contains(pattern))
-            .collect();
-        
+        let matching_subscribers: Vec<&String> =
+            subscribers.iter().filter(|s| s.contains(pattern)).collect();
+
         if matching_subscribers.is_empty() {
-            return CommandResponse::String(format!("No subscribers matching '{}' in document {}", pattern, doc));
+            return CommandResponse::String(format!(
+                "No subscribers matching '{}' in document {}",
+                pattern, doc
+            ));
         }
-        
+
         // Construir la respuesta con todos los suscriptores que coinciden
         let mut response = format!("Subscribers in {} matching '{}':\n", doc, pattern);
         for subscriber in matching_subscribers {
             response.push_str(&format!("{}\n", subscriber));
         }
-        
+
         CommandResponse::String(response)
     } else {
         CommandResponse::Error("Document not found".to_string())
