@@ -11,7 +11,7 @@ use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
 pub struct LoginForm {
     username: String,
     password: String,
-    users: HashMap<String, String>, // Base de usuarios
+    users: HashMap<String, String>, 
     error_message: Option<String>,
 }
 
