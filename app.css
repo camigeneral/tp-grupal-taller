@@ -22,8 +22,11 @@ window {
 }
 
 .header-filter {
+    background-color: #dddddd;
     border-bottom: none;
     background-color: transparent;
+
+    padding-bottom: 20px;
 }
 
 /* Sidebar */
