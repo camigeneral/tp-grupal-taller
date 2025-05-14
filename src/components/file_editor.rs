@@ -55,7 +55,7 @@ impl SimpleComponent for FileEditorModel {
 
             gtk::Box {
                 set_orientation: gtk::Orientation::Horizontal,
-                set_spacing: 8,
+                set_spacing: 20,
                 #[name="back"]
                 gtk::Button {
                     set_label: "Volver",
@@ -66,13 +66,14 @@ impl SimpleComponent for FileEditorModel {
 
                 #[name="file_label"]
                 gtk::Label {
-                    #[watch]
+                    #[watch]                    
                     set_label: &format!("Editando archivo: {} ({} colaboradores)", model.file_name, model.num_contributors),
                     set_xalign: 0.0,
                 },
                 gtk::Button {
                     set_label: "Desuscribirse",
                     add_css_class: "unsubscribe",
+                    add_css_class: "button",
                 },
             },
             gtk::ScrolledWindow {
