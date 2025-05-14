@@ -12,7 +12,7 @@ pub struct LoginForm {
     username: String,
     password: String,
     users: HashMap<String, String>,
-    error_message: Option<String>,
+    error_message: String,
 }
 
 /// Mensajes que puede recibir el formulario de login.
@@ -78,7 +78,10 @@ impl SimpleComponent for LoginForm {
             gtk::Label {
                 set_wrap: true,
                 set_css_classes: &["error"],
-                set_visible: false,
+                #[watch]
+                set_visible: model.error_message != "",
+                #[watch]
+                set_label: &(model.error_message)
             }
         }
     }
@@ -92,7 +95,7 @@ impl SimpleComponent for LoginForm {
             username: String::new(),
             password: String::new(),
             users,
-            error_message: None,
+            error_message: "".to_string(),
         };
 
         let widgets = view_output!();
@@ -111,13 +114,13 @@ impl SimpleComponent for LoginForm {
                 let user_ok = self.users.get(&self.username);
                 match user_ok {
                     Some(expected_pass) if expected_pass == &self.password => {
-                        self.error_message = None;
+                        self.error_message = "".to_string();
                         sender
                             .output(LoginOutput::LoginSuccess(self.username.clone()))
                             .unwrap();
                     }
                     _ => {
-                        self.error_message = Some("Credenciales inválidas".to_string());
+                        self.error_message = "Credenciales inválidas".to_string();
                     }
                 }
             }

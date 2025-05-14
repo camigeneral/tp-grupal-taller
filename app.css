@@ -46,9 +46,13 @@
     background-color: red;
     background-image: none;    
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.4s ease;
+    border: 0;
 
 }
-
+.unsubscribe:hover {    
+    background-color: rgb(167, 13, 13);    
+}
 .username {
     text-transform: uppercase;
     color: white;
