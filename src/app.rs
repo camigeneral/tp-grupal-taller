@@ -1,11 +1,10 @@
 extern crate gtk4;
 extern crate relm4;
-use crate::components::login::{LoginForm, LoginOutput};
-
 use self::gtk4::{
-    prelude::{BoxExt, GtkWindowExt, OrientableExt, WidgetExt},
+    prelude::{BoxExt, ButtonExt, EditableExt, EntryExt, GtkWindowExt, OrientableExt, WidgetExt},
     CssProvider,
 };
+use crate::components::login::{LoginForm, LoginOutput};
 use components::file_workspace::FileWorkspace;
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
 use std::collections::HashMap;
@@ -27,6 +26,7 @@ pub struct AppModel {
     files_manager_cont: Controller<FileWorkspace>,
     login_form_cont: Controller<LoginForm>,
     is_logged_in: bool,
+    command: String,
 }
 
 #[derive(Debug)]
@@ -36,6 +36,8 @@ pub enum AppMsg {
     LoginSuccess(String),
     LoginFailure(String),
     Logout,
+    CommandChanged(String),
+    ExecuteCommand,
 }
 
 #[relm4::component(pub)]
@@ -53,13 +55,35 @@ impl SimpleComponent for AppModel {
         set_titlebar = model.header_cont.widget(),
 
         #[name="main_container"]
-        gtk::Box {
-            set_orientation: gtk::Orientation::Vertical,
-            set_spacing: 5,
-            set_margin_all: 10,
-            set_hexpand: true,
-            set_vexpand: true,
+        gtk::Box {                      
             gtk::Box {
+                set_orientation: gtk::Orientation::Vertical,
+                set_spacing: 5,
+                set_margin_all: 10,
+                set_hexpand: true,
+                set_vexpand: true,  
+                gtk::Box {
+                    set_orientation: gtk::Orientation::Horizontal,
+                    set_spacing: 15,
+                    gtk::Label {
+                        set_label: "Comandos:",
+                    },
+                    #[name = "command_entry"]
+                    gtk::Entry {
+                        connect_changed[sender] => move |entry| {
+                            sender.input(AppMsg::CommandChanged(entry.text().to_string()));
+                        }
+                    },
+    
+                    gtk::Button {
+                        set_label: "Ejecutar",
+                        add_css_class: "execute-command",
+                        connect_clicked[sender] => move |_| {
+                            sender.input(AppMsg::ExecuteCommand);
+                        }
+                    },
+                },
+
                 append: model.files_manager_cont.widget(),
                 #[watch]
                 set_visible: model.is_logged_in
@@ -124,6 +148,7 @@ impl SimpleComponent for AppModel {
             files_manager_cont: files_manager_model,
             login_form_cont: login_form_model,
             is_logged_in: false,
+            command: "".to_string(),
         };
 
         let widgets = view_output!();
@@ -167,6 +192,11 @@ impl SimpleComponent for AppModel {
                     .unwrap();
 
                 self.is_logged_in = false;
+            }
+            AppMsg::CommandChanged(command) => self.command = command,
+
+            AppMsg::ExecuteCommand => {
+                println!("Se ejecuto el siguiente comando: {}", self.command)
             }
         }
     }
