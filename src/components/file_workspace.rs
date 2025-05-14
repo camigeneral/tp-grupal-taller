@@ -137,7 +137,7 @@ impl SimpleComponent for FileWorkspace {
             .forward(
                 sender.input_sender(),
                 |msg: FileEditorOutputMessage| match msg {
-                    FileEditorOutputMessage::GoBack => FileWorkspaceMsg::CloseEditor,                    
+                    FileEditorOutputMessage::GoBack => FileWorkspaceMsg::CloseEditor,
                 },
             );
         let model = FileWorkspace {

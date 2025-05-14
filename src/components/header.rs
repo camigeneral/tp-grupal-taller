@@ -28,7 +28,7 @@ pub enum NavbarMsg {
     /// Mensaje para crear un documento de tipo hoja de cálculo.
     CreateSpreadsheetDocument,
 
-    SetLoggedInUser(String)
+    SetLoggedInUser(String),
 }
 
 /// Enum que define las salidas posibles del componente `NavbarModel`.
@@ -53,7 +53,7 @@ impl SimpleComponent for NavbarModel {
 
             pack_start = &gtk::Label {
                 #[watch]
-                set_label: &(model.username),                
+                set_label: &(model.username),
                 add_css_class: "username"
             },
             #[wrap(Some)]
@@ -88,7 +88,7 @@ impl SimpleComponent for NavbarModel {
 
             pack_end = &gtk::Button {
                 #[watch]
-                set_label: &(if model.is_connected { "Conectado" } else { "Desconectado" }),                
+                set_label: &(if model.is_connected { "Conectado" } else { "Desconectado" }),
 
                 connect_clicked[sender] => move |_| {
                     sender.output(NavbarOutput::ToggleConnectionRequested).unwrap();
@@ -114,7 +114,6 @@ impl SimpleComponent for NavbarModel {
     }
 
     fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
-
         match message {
             NavbarMsg::SetConnectionStatus(status) => {
                 self.is_connected = status;
@@ -135,9 +134,9 @@ impl SimpleComponent for NavbarModel {
                     popover.popdown();
                 }
                 println!("Crear hoja de cálculo");
-            },
+            }
             NavbarMsg::SetLoggedInUser(username) => {
-                self.username = username;                
+                self.username = username;
             }
         }
     }

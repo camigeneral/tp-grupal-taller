@@ -51,33 +51,33 @@ impl SimpleComponent for AppModel {
         set_default_height: 600,
         #[wrap(Some)]
         set_titlebar = model.header_cont.widget(),
-        
+
         #[name="main_container"]
         gtk::Box {
             set_orientation: gtk::Orientation::Vertical,
             set_spacing: 5,
             set_margin_all: 10,
             set_hexpand: true,
-            set_vexpand: true,            
-            gtk::Box {                
-                append: model.files_manager_cont.widget(), 
+            set_vexpand: true,
+            gtk::Box {
+                append: model.files_manager_cont.widget(),
                 #[watch]
-                set_visible: model.is_logged_in     
+                set_visible: model.is_logged_in
             },
 
             gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
                 set_halign: gtk::Align::Center,
-                set_valign: gtk::Align::Center,        
+                set_valign: gtk::Align::Center,
                 set_hexpand: true,
-                set_vexpand: true,        
-                append: model.login_form_cont.widget(),                                    
+                set_vexpand: true,
+                append: model.login_form_cont.widget(),
                 #[watch]
                 set_visible: !model.is_logged_in
-            },    
-                                         
-        },                                             
-        
+            },
+
+        },
+
     }
     }
 
@@ -99,24 +99,23 @@ impl SimpleComponent for AppModel {
         users.insert("fran".to_string(), "123123".to_string());
         users.insert("cami".to_string(), "123123".to_string());
         users.insert("valen".to_string(), "123123".to_string());
-        users.insert("rama".to_string(), "123123".to_string());        
+        users.insert("rama".to_string(), "123123".to_string());
 
         let header_model = NavbarModel::builder().launch(()).forward(
             sender.input_sender(),
             |output| match output {
-                NavbarOutput::ToggleConnectionRequested => AppMsg::Connect,            
+                NavbarOutput::ToggleConnectionRequested => AppMsg::Connect,
             },
         );
-        
-        let files_manager_model = FileWorkspace::builder().launch(()).forward(
-            sender.input_sender(),
-            |_: ()| AppMsg::Ignore,
-        );
-        
+
+        let files_manager_model = FileWorkspace::builder()
+            .launch(())
+            .forward(sender.input_sender(), |_: ()| AppMsg::Ignore);
+
         let login_form_model = LoginForm::builder().launch(users).forward(
             sender.input_sender(),
             |output| match output {
-                LoginOutput::LoginSuccess(username) => AppMsg::LoginSuccess(username),               
+                LoginOutput::LoginSuccess(username) => AppMsg::LoginSuccess(username),
             },
         );
 
@@ -143,26 +142,25 @@ impl SimpleComponent for AppModel {
                 }
             }
             AppMsg::Ignore => {}
-            AppMsg::LoginSuccess(username) => {                
+            AppMsg::LoginSuccess(username) => {
                 self.header_cont
                     .sender()
                     .send(NavbarMsg::SetLoggedInUser(username))
                     .unwrap();
-                
+
                 self.header_cont
                     .sender()
                     .send(NavbarMsg::SetConnectionStatus(true))
                     .unwrap();
-                self.is_logged_in = true;                        
+                self.is_logged_in = true;
             }
-            AppMsg::LoginFailure(_error) => {
-            }
+            AppMsg::LoginFailure(_error) => {}
             AppMsg::Logout => {
                 self.header_cont
                     .sender()
                     .send(NavbarMsg::SetConnectionStatus(false))
                     .unwrap();
-                
+
                 self.header_cont
                     .sender()
                     .send(NavbarMsg::SetLoggedInUser("".to_string()))

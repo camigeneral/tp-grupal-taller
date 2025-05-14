@@ -57,7 +57,7 @@ impl SimpleComponent for FileEditorModel {
 
             gtk::Box {
                 set_orientation: gtk::Orientation::Horizontal,
-                set_spacing: 8,                
+                set_spacing: 8,
                 #[name="back"]
                 gtk::Button {
                     set_label: "Volver",
@@ -65,7 +65,7 @@ impl SimpleComponent for FileEditorModel {
                         sender.output(FileEditorOutputMessage::GoBack).unwrap();
                     },
                 },
-    
+
                 #[name="file_label"]
                 gtk::Label {
                     #[watch]
@@ -81,7 +81,7 @@ impl SimpleComponent for FileEditorModel {
                     set_buffer: Some(&model.buffer),
                     add_css_class: "file-text-area",
                     set_visible: true,
-                    
+
                     set_wrap_mode: gtk::WrapMode::Word,
                     set_overwrite: true,
                 },
@@ -123,10 +123,7 @@ impl SimpleComponent for FileEditorModel {
         match message {
             FileEditorMessage::ContentChanged(new_text) => {
                 self.buffer.set_text(&new_text);
-                println!(
-                    "Nuevo contenido: {}",
-                    new_text
-                );
+                println!("Nuevo contenido: {}", new_text);
             }
             FileEditorMessage::UpdateFile(file_name, contributors, content) => {
                 println!(

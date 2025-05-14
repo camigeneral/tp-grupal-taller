@@ -11,7 +11,7 @@ use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
 pub struct LoginForm {
     username: String,
     password: String,
-    users: HashMap<String, String>, 
+    users: HashMap<String, String>,
     error_message: Option<String>,
 }
 
@@ -23,7 +23,6 @@ pub enum LoginMsg {
     Submit,
 }
 
-
 /// Resultado del login.
 #[derive(Debug)]
 pub enum LoginOutput {
@@ -31,13 +30,12 @@ pub enum LoginOutput {
     //LoginFailure(String),
 }
 
-
 #[relm4::component(pub)]
 impl SimpleComponent for LoginForm {
     type Init = HashMap<String, String>;
 
     type Input = LoginMsg;
-    
+
     type Output = LoginOutput;
 
     view! {
@@ -93,10 +91,9 @@ impl SimpleComponent for LoginForm {
         let model = LoginForm {
             username: String::new(),
             password: String::new(),
-            users: users,
-            error_message: None
+            users,
+            error_message: None,
         };
-
 
         let widgets = view_output!();
         ComponentParts { model, widgets }
@@ -120,7 +117,7 @@ impl SimpleComponent for LoginForm {
                             .unwrap();
                     }
                     _ => {
-                        self.error_message = Some("Credenciales inválidas".to_string());                        
+                        self.error_message = Some("Credenciales inválidas".to_string());
                     }
                 }
             }
