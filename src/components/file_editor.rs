@@ -3,8 +3,9 @@ extern crate relm4;
 
 use self::gtk4::glib::clone;
 use self::gtk4::prelude::{
-    BoxExt, ButtonExt, OrientableExt, TextBufferExt, TextViewExt, WidgetExt,
+    BoxExt, ButtonExt, OrientableExt, TextBufferExt, TextViewExt, WidgetExt, TextBufferExtManual
 };
+
 use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
 
 /// Estructura que representa el modelo del editor de archivos. Contiene información sobre el archivo
@@ -26,11 +27,9 @@ pub struct FileEditorModel {
 /// Enum que define los posibles mensajes que el editor de archivos puede recibir.
 #[derive(Debug)]
 pub enum FileEditorMessage {
-    /// Mensaje que indica que el contenido del archivo ha cambiado.
-    ContentChanged(String),
-    /// Mensaje para actualizar el editor con un nuevo archivo, número de colaboradores y contenido.
+    ContentAdded(String, i32),
+    ContentRemoved(i32, i32),
     UpdateFile(String, u8, String),
-    /// Mensaje para resetear el editor de archivos.
     ResetEditor,
 }
 
@@ -71,7 +70,11 @@ impl SimpleComponent for FileEditorModel {
                     #[watch]
                     set_label: &format!("Editando archivo: {} ({} colaboradores)", model.file_name, model.num_contributors),
                     set_xalign: 0.0,
-                }
+                },
+                gtk::Button {
+                    set_label: "Desuscribirse",
+                    add_css_class: "unsubscribe",                    
+                },
             },
             gtk::ScrolledWindow {
                 set_vexpand: true,
@@ -104,16 +107,20 @@ impl SimpleComponent for FileEditorModel {
 
         model.buffer = gtk::TextBuffer::builder().text(&model.content).build();
 
-        model.buffer.connect_end_user_action(clone!(
-            #[strong]
-            sender,
-            move |buffer| {
-                let text = buffer
-                    .text(&buffer.start_iter(), &buffer.end_iter(), false)
-                    .to_string();
-                sender.input(FileEditorMessage::ContentChanged(text));
-            }
-        ));
+        let sender = sender.clone();
+        
+        // Pensar como hacer para que al resetear no mande el mensaje a la api para borrar el contenido 
+         
+        let sender_insert = sender.clone();
+            model.buffer.connect_insert_text(move |_buffer, iter, text| {
+                sender_insert.input(FileEditorMessage::ContentAdded(text.to_string(), iter.offset()));
+        });
+
+        let sender_delete = sender.clone();
+            model.buffer.connect_delete_range(move |_buffer, start, end| {
+                sender_delete.input(FileEditorMessage::ContentRemoved(start.offset(), end.offset()));
+        });
+
 
         let widgets = view_output!();
         ComponentParts { model, widgets }
@@ -121,9 +128,12 @@ impl SimpleComponent for FileEditorModel {
 
     fn update(&mut self, message: FileEditorMessage, _sender: ComponentSender<Self>) {
         match message {
-            FileEditorMessage::ContentChanged(new_text) => {
-                self.buffer.set_text(&new_text);
-                println!("Nuevo contenido: {}", new_text);
+            FileEditorMessage::ContentAdded(new_text, offset) => {
+                println!("Nuevo caracter: {}, en offset: {}", new_text, offset)
+                //Llamado a la api para insertar caracter
+            },
+            FileEditorMessage::ContentRemoved(start_offset, end_offset) => {
+                println!("Caracter eliminado en start: {}, en end offset: {}", start_offset, end_offset)
             }
             FileEditorMessage::UpdateFile(file_name, contributors, content) => {
                 println!(
