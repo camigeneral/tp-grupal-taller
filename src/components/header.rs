@@ -9,6 +9,8 @@ use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
 pub struct NavbarModel {
     /// Indica si el sistema está conectado o no.
     is_connected: bool,
+    /// Indica si el usuario esta
+    username: String,
     /// Popover que contiene las opciones para crear nuevos documentos.
     new_file_popover: Option<gtk::Popover>,
 }
@@ -25,6 +27,8 @@ pub enum NavbarMsg {
     CreateTextDocument,
     /// Mensaje para crear un documento de tipo hoja de cálculo.
     CreateSpreadsheetDocument,
+
+    SetLoggedInUser(String)
 }
 
 /// Enum que define las salidas posibles del componente `NavbarModel`.
@@ -46,6 +50,12 @@ impl SimpleComponent for NavbarModel {
         #[name="header"]
         gtk::HeaderBar {
             set_show_title_buttons: true,
+
+            pack_start = &gtk::Label {
+                #[watch]
+                set_label: &(model.username),                
+                add_css_class: "username"
+            },
             #[wrap(Some)]
             set_title_widget = &gtk::Box {
                 #[name="new_file_button"]
@@ -78,12 +88,10 @@ impl SimpleComponent for NavbarModel {
 
             pack_end = &gtk::Button {
                 #[watch]
-                set_label: &(if model.is_connected { "Conectado" } else { "Desconectado" }),
-                add_css_class: "button",                
-                #[watch]
-                add_css_class: if model.is_connected { "connected" } else { "disconnected" },
+                set_label: &(if model.is_connected { "Conectado" } else { "Desconectado" }),                
+
                 connect_clicked[sender] => move |_| {
-                    sender.output(NavbarOutput::ToggleConnectionRequested	).unwrap();
+                    sender.output(NavbarOutput::ToggleConnectionRequested).unwrap();
                 },
             },
          },
@@ -97,6 +105,7 @@ impl SimpleComponent for NavbarModel {
         let mut model = NavbarModel {
             is_connected: false,
             new_file_popover: None,
+            username: "".to_string(),
         };
 
         let widgets = view_output!();
@@ -105,6 +114,7 @@ impl SimpleComponent for NavbarModel {
     }
 
     fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
+
         match message {
             NavbarMsg::SetConnectionStatus(status) => {
                 self.is_connected = status;
@@ -125,6 +135,9 @@ impl SimpleComponent for NavbarModel {
                     popover.popdown();
                 }
                 println!("Crear hoja de cálculo");
+            },
+            NavbarMsg::SetLoggedInUser(username) => {
+                self.username = username;                
             }
         }
     }
