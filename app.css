@@ -41,6 +41,14 @@
     color: white;
 }
 
+.unsubscribe {
+    color: white;
+    background-color: red;
+    background-image: none;    
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+
+}
+
 .username {
     text-transform: uppercase;
     color: white;
