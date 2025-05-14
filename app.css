@@ -41,16 +41,11 @@
     color: white;
 }
 
-.button.connected {
-    border: 2px solid green;
-    border-radius: 6px;
-    color: white;    
-}
-
-.button.disconnected {
-    border: 1px solid red;
-    border-radius: 6px;
-    color: white;    
+.username {
+    text-transform: uppercase;
+    color: white;
+    font-weight: 700;
+    margin-left: 10px;
 }
 
 .button.filter {
