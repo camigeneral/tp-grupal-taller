@@ -32,15 +32,17 @@ fn main() -> Result<(), ()> {
 
 fn server_run(address: &str) -> std::io::Result<()> {
     let file_path = "docs.txt".to_string();
-    let shared_docs = match get_file_content(&file_path) {
+    let docs = match get_file_content(&file_path) {
         Ok(docs) => docs,
         Err(_) => {
             let mut new_docs: HashMap<String, Vec<String>> = HashMap::new();
             new_docs.insert("doc1".to_string(), vec![]);
             new_docs.insert("doc2".to_string(), vec![]);
-            Arc::new(Mutex::new(new_docs))
+            new_docs
         }
     };
+
+    let shared_docs = Arc::new(Mutex::new(docs.clone()));
 
     let mut initial_docs: HashMap<String, Vec<String>> = HashMap::new();
     initial_docs.insert("doc1".to_string(), vec![]);
@@ -353,7 +355,6 @@ fn handle_smembers(
             return CommandResponse::String(format!("No subscribers in document {}", doc));
         }
 
-        // Opción 1: Devolver como una cadena con formato
         let mut response = format!("Subscribers in document {}:\n", doc);
         for subscriber in subscribers {
             response.push_str(&format!("{}\n", subscriber));
@@ -368,13 +369,11 @@ fn handle_sscan(
     request: &CommandRequest,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) -> CommandResponse {
-    // Obtener el documento (key) del request
     let doc = match &request.key {
         Some(k) => k,
         None => return CommandResponse::Error("Usage: SSCAN <document> [pattern]".to_string()),
     };
 
-    // Extraer el patrón del primer argumento (si existe)
     let pattern = if !request.arguments.is_empty() {
         match &request.arguments[0] {
             ValueType::String(s) => s,
@@ -384,16 +383,14 @@ fn handle_sscan(
                     i
                 ))
             }
-            // Agrega otros casos según los tipos que pueda tener ValueType
             _ => return CommandResponse::Error("Pattern must be a string".to_string()),
         }
     } else {
-        "" // Si no hay patrón, usamos cadena vacía (coincide con todo)
+        ""
     };
 
     let lock_clients_on_docs = clients_on_docs.lock().unwrap();
     if let Some(subscribers) = lock_clients_on_docs.get(doc) {
-        // Filtrar los suscriptores que coinciden con el patrón
         let matching_subscribers: Vec<&String> =
             subscribers.iter().filter(|s| s.contains(pattern)).collect();
 
@@ -404,7 +401,6 @@ fn handle_sscan(
             ));
         }
 
-        // Construir la respuesta con todos los suscriptores que coinciden
         let mut response = format!("Subscribers in {} matching '{}':\n", doc, pattern);
         for subscriber in matching_subscribers {
             response.push_str(&format!("{}\n", subscriber));
@@ -477,9 +473,7 @@ pub fn write_to_file(docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Resu
     Ok(())
 }
 
-pub fn get_file_content(
-    file_path: &String,
-) -> Result<Arc<Mutex<HashMap<String, Vec<String>>>>, String> {
+pub fn get_file_content(file_path: &String) -> Result<HashMap<String, Vec<String>>, String> {
     let file = File::open(file_path).map_err(|_| "file-not-found".to_string())?;
     let reader = BufReader::new(file);
     let lines = reader.lines();
@@ -509,5 +503,5 @@ pub fn get_file_content(
         }
     }
 
-    Ok(Arc::new(Mutex::new(docs)))
+    Ok(docs)
 }

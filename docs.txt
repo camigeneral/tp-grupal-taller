@@ -1,9 +1,11 @@
-doc89/++/hello/--/
-doc4/++/hola/--/
-doc100/++/por favor funciona/--/
-doc5/++/helloooo/--/
-doc88/++/hola/--/
-doc3/++/hola/--/
 doc45/++/holi/--/
+doc89/++/hello/--/
+doc3/++/hola/--/
+doc1/++/borro todo/--/
+doc9/++/hola/--/hola/--/
+doc0/++/nuevo mensaje/--/
+doc5/++/helloooo/--/
+doc4/++/hola/--/
+doc88/++/hola/--/
 doc2/++/agregooo/--/holaaa/--/
-doc1/++/nuevo doc 2/--/yess/--/nooo/--/
+doc100/++/por favor funciona/--/
