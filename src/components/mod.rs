@@ -37,3 +37,9 @@ pub mod list_files;
 /// (por ejemplo, texto, hoja de cálculo, etc.).
 ///
 pub mod types;
+
+/// Módulo que maneja el sistema de login del usuario.
+///
+/// Este módulo define el formulario del ingreso, validaciones y los usuarios permitidos para el manejo de la aplicacion.
+///
+pub mod login;
