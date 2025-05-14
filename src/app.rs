@@ -55,13 +55,13 @@ impl SimpleComponent for AppModel {
         set_titlebar = model.header_cont.widget(),
 
         #[name="main_container"]
-        gtk::Box {                      
+        gtk::Box {
             gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
                 set_spacing: 5,
                 set_margin_all: 10,
                 set_hexpand: true,
-                set_vexpand: true,  
+                set_vexpand: true,
                 gtk::Box {
                     set_orientation: gtk::Orientation::Horizontal,
                     set_spacing: 15,
@@ -74,7 +74,7 @@ impl SimpleComponent for AppModel {
                             sender.input(AppMsg::CommandChanged(entry.text().to_string()));
                         }
                     },
-    
+
                     gtk::Button {
                         set_label: "Ejecutar",
                         add_css_class: "execute-command",
