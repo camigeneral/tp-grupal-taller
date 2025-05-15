@@ -5,6 +5,8 @@ use std::io::{BufRead, BufReader, Read};
 use std::net::TcpStream;
 use std::thread;
 
+use std::sync::mpsc::Receiver;
+
 //static CLIENT_ARGS: usize = 3;
 
 pub fn connect_client(port: u16) -> Result<(), ()> {
@@ -22,6 +24,22 @@ pub fn connect_client(port: u16) -> Result<(), ()> {
 
 
     client_run(&address, &mut stdin()).unwrap();
+    Ok(())
+}
+
+pub fn connect_client_with_channel(port: u16, rx: Receiver<String>) -> Result<(), Box<dyn std::error::Error>>{
+    let address = format!("127.0.0.1:{}", port);    
+    println!("Conectándome a {:?}", address);
+
+
+    //client_run(&address, &mut stdin()).unwrap();
+    let mut socket = TcpStream::connect(address).unwrap();
+
+    for command in rx {
+        socket.write_all(command.as_bytes()).unwrap();
+        socket.write_all(b"\n").unwrap();
+    }
+    
     Ok(())
 }
 

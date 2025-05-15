@@ -188,7 +188,7 @@ fn publish(clients: Arc<Mutex<HashMap<String, Client>>>, clients_on_docs: Arc<Mu
             if let Some(client) = lock_clients.get_mut(subscriber_addr) {
                 writeln!(client.stream, "{}", message.trim())?;
             } else {
-                println!("Cliente no encontrado");
+                println!("Cliente no encontrado: {}", subscriber_addr);
             }
         }
     } else {

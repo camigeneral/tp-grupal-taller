@@ -9,8 +9,10 @@ use components::file_workspace::FileWorkspace;
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
 use std::collections::HashMap;
 
-use client::connect_client;
+use client::connect_client_with_channel;
 use std::thread;
+
+use std::sync::mpsc::{Sender, channel};
 
 
 use self::relm4::{
@@ -31,7 +33,8 @@ pub struct AppModel {
     login_form_cont: Controller<LoginForm>,
     is_logged_in: bool,
     command: String,
-    port: u16
+    port: u16,
+    command_sender: Option<Sender<String>>,
 }
 
 #[derive(Debug)]
@@ -154,7 +157,8 @@ impl SimpleComponent for AppModel {
             login_form_cont: login_form_model,
             is_logged_in: false,
             command: "".to_string(),
-            port
+            port,
+            command_sender: None,
         };
 
         let widgets = view_output!();
@@ -180,9 +184,12 @@ impl SimpleComponent for AppModel {
                     .unwrap();
                     
                 //Conectar con el server   self.port
+                let (tx, rx) = channel::<String>();
+                self.command_sender = Some(tx.clone());
+
                 let port = self.port;
                 thread::spawn(move || {
-                    if let Err(e) = connect_client(port) {
+                    if let Err(e) = connect_client_with_channel(port, rx) {
                         eprintln!("Error al iniciar el cliente: {:?}", e);
                     }
                 });
@@ -215,7 +222,12 @@ impl SimpleComponent for AppModel {
             AppMsg::CommandChanged(command) => self.command = command,
 
             AppMsg::ExecuteCommand => {
-                println!("Se ejecuto el siguiente comando: {}", self.command)
+                println!("Se ejecuto el siguiente comando: {}", self.command);
+                if let Some(channel_sender) = &self.command_sender {
+                    channel_sender.send(self.command.clone()).unwrap();
+                } else {
+                    println!("No hay un canal de comando disponible.");
+                }
             }
         }
     }
