@@ -1,22 +1,23 @@
-use std::env::args;
+// use std::env::args;
 use std::io::stdin;
 use std::io::Write;
 use std::io::{BufRead, BufReader, Read};
 use std::net::TcpStream;
 use std::thread;
 
-static CLIENT_ARGS: usize = 3;
+//static CLIENT_ARGS: usize = 3;
 
-fn main() -> Result<(), ()> {
-    let argv = args().collect::<Vec<String>>();
+pub fn connect_client(port: u16) -> Result<(), ()> {
+/*     let argv = args().collect::<Vec<String>>();
     if argv.len() != CLIENT_ARGS {
         println!("Cantidad de argumentos inválido");
         let app_name = &argv[0];
         println!("{:?} <host> <puerto>", app_name);
         return Err(());
     }
-
-    let address = argv[1].clone() + ":" + &argv[2];
+ */
+ 
+    let address = format!("127.0.0.1:{}", port);    
     println!("Conectándome a {:?}", address);
 
 
