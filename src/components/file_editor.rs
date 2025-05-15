@@ -66,7 +66,7 @@ impl SimpleComponent for FileEditorModel {
 
                 #[name="file_label"]
                 gtk::Label {
-                    #[watch]                    
+                    #[watch]
                     set_label: &format!("Editando archivo: {} ({} colaboradores)", model.file_name, model.num_contributors),
                     set_xalign: 0.0,
                 },

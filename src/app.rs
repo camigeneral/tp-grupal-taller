@@ -120,10 +120,10 @@ impl SimpleComponent for AppModel {
         );
 
         let mut users = HashMap::new();
-        users.insert("fran".to_string(), "123123".to_string());
-        users.insert("cami".to_string(), "123123".to_string());
-        users.insert("valen".to_string(), "123123".to_string());
-        users.insert("rama".to_string(), "123123".to_string());
+        users.insert("fran".to_string(), "123".to_string());
+        users.insert("cami".to_string(), "123".to_string());
+        users.insert("valen".to_string(), "123".to_string());
+        users.insert("rama".to_string(), "123".to_string());
 
         let header_model = NavbarModel::builder().launch(()).forward(
             sender.input_sender(),
