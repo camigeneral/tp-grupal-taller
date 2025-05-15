@@ -13,6 +13,9 @@ use super::list_files::FileListView;
 use components::file_editor::FileEditorMessage;
 use components::types::FileType;
 
+use std::collections::HashMap;
+use crate::node::get_file_content;
+
 #[derive(Debug)]
 /// Estructura principal que gestiona el espacio de trabajo de archivos, que incluye una lista de archivos
 /// y un editor de archivos. Mantiene el estado de la visibilidad del editor de archivos.
@@ -81,44 +84,22 @@ impl SimpleComponent for FileWorkspace {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let files_list = vec![
-            (
-                "Documento.txt".to_string(),
-                FileType::Text,
-                "Contenido del archivo Documento".to_string(),
-                6,
-            ),
-            (
-                "Informe.txt".to_string(),
-                FileType::Text,
-                "Contenido del archivo Informe".to_string(),
-                8,
-            ),
-            (
-                "Presupuesto.xlsx".to_string(),
-                FileType::Sheet,
-                "Contenido del archivo de calculo Presupuesto".to_string(),
-                10,
-            ),
-            (
-                "Datos.xlsx".to_string(),
-                FileType::Sheet,
-                "Contenido del archivo de calculo Datos".to_string(),
-                3,
-            ),
-            (
-                "Notas.txt".to_string(),
-                FileType::Text,
-                "Contenido del archivo de Notas".to_string(),
-                1,
-            ),
-            (
-                "Análisis.xlsx".to_string(),
-                FileType::Sheet,
-                "Contenido del archivo de calculo Analisis".to_string(),
-                2,
-            ),
-        ];
+        let docs = get_file_content(&"docs.txt".to_string()).unwrap_or_else(|_| HashMap::new());
+
+        // Convierte el HashMap a la lista que espera FileListView
+        let files_list: Vec<(String, FileType, String, u8)> = docs
+            .into_iter()
+            .map(|(nombre, mensajes)| {
+                let contenido = mensajes.join("\n");
+                let qty = mensajes.len() as u8;
+                let file_type = if nombre.ends_with(".xlsx") {
+                    FileType::Sheet
+                } else {
+                    FileType::Text
+                };
+                (nombre, file_type, contenido, qty)
+            })
+            .collect();
 
         let list_files_cont = FileListView::builder().launch(files_list).forward(
             sender.input_sender(),

@@ -1,4 +1,3 @@
-use std::env::args;
 use std::io::{self, BufRead, BufReader, Write};
 use std::fs::{File, OpenOptions};
 use std::net::{TcpListener, TcpStream};
@@ -6,29 +5,29 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::thread;
 
-static SERVER_ARGS: usize = 2;
+//static SERVER_ARGS: usize = 2;
 
  struct Client {
     // addr: String,
     stream: TcpStream
  }
 
-fn main() -> Result<(), ()> {
-    let argv = args().collect::<Vec<String>>();
-    if argv.len() != SERVER_ARGS {
-        println!("Cantidad de argumentos inválido");
-        let app_name = &argv[0];
-        println!("Usage:\n{:?} <puerto>", app_name);
-        return Err(());
-    }
+pub fn start_server(port: u16) -> Result<(), ()> {
+    // let argv = args().collect::<Vec<String>>();
+    // if argv.len() != SERVER_ARGS {
+    //     println!("Cantidad de argumentos inválido");
+    //     let app_name = &argv[0];
+    //     println!("Usage:\n{:?} <puerto>", app_name);
+    //     return Err(());
+    // }
 
-    let address = "127.0.0.1:".to_owned() + &argv[1];
-    server_run(&address).unwrap();
+    let address = format!("127.0.0.1:{}", port);
+    connect_clients(&address).unwrap(); //por ahora
     Ok(())
 }
 
 
-fn server_run(address: &str) -> std::io::Result<()> {
+fn connect_clients(address: &str) -> std::io::Result<()> {
     let file_path = "docs.txt".to_string();
     let docs = match get_file_content(&file_path) {
         Ok(docs) => docs,
@@ -189,7 +188,7 @@ fn publish(clients: Arc<Mutex<HashMap<String, Client>>>, clients_on_docs: Arc<Mu
             if let Some(client) = lock_clients.get_mut(subscriber_addr) {
                 writeln!(client.stream, "{}", message.trim())?;
             } else {
-                println!("Cliente no encontrado");
+                println!("Cliente no encontrado: {}", subscriber_addr);
             }
         }
     } else {

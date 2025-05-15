@@ -18,3 +18,7 @@ pub mod app;
 /// - `header`: Define el componente de la barra de navegación superior.
 /// - `file_editor`: Define el componente de edición de archivos.
 pub mod components;
+
+pub mod node;
+
+pub mod client;
