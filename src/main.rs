@@ -8,7 +8,6 @@ mod node;
 use node::start_server;
 
 fn main() {
-
     let port = 4000;
 
     thread::spawn(move || {
@@ -19,5 +18,4 @@ fn main() {
 
     let app = RelmApp::new("rusty.docs");
     app.run::<AppModel>(port);
-    
 }

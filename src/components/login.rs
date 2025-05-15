@@ -79,7 +79,7 @@ impl SimpleComponent for LoginForm {
                 set_wrap: true,
                 set_css_classes: &["error"],
                 #[watch]
-                set_visible: model.error_message != "",
+                set_visible: !model.error_message.is_empty(),
                 #[watch]
                 set_label: &(model.error_message)
             }
