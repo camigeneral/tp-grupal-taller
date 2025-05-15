@@ -4,24 +4,25 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::thread;
+use std::env::args;
 
-//static SERVER_ARGS: usize = 2;
+static SERVER_ARGS: usize = 2;
 
  struct Client {
     // addr: String,
     stream: TcpStream
  }
 
-pub fn start_server(port: u16) -> Result<(), ()> {
-    // let argv = args().collect::<Vec<String>>();
-    // if argv.len() != SERVER_ARGS {
-    //     println!("Cantidad de argumentos inválido");
-    //     let app_name = &argv[0];
-    //     println!("Usage:\n{:?} <puerto>", app_name);
-    //     return Err(());
-    // }
+pub fn main() -> Result<(), ()> {
+    let argv = args().collect::<Vec<String>>();
+    if argv.len() != SERVER_ARGS {
+        println!("Cantidad de argumentos inválido");
+        let app_name = &argv[0];
+        println!("Usage:\n{:?} <puerto>", app_name);
+        return Err(());
+    }
 
-    let address = format!("127.0.0.1:{}", port);
+    let address = "127.0.0.1:".to_owned() + &argv[1];
     connect_clients(&address).unwrap(); //por ahora
     Ok(())
 }
