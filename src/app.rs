@@ -8,9 +8,7 @@ use crate::components::login::{LoginForm, LoginOutput};
 use components::file_workspace::FileWorkspace;
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
 use std::collections::HashMap;
-use std::io::stdin;
 
-use client::connect_client_with_channel;
 use client::client_run;
 use std::thread;
 
