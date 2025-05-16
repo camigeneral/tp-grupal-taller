@@ -135,7 +135,6 @@ fn handle_client(
         let redis_response = redis_commands::execute_command(
             command_request,
             docs.clone(),
-            clients.clone(),
             clients_on_docs.clone(),
             client_addr.clone(),
         );
@@ -153,11 +152,11 @@ fn handle_client(
         }
     }
 
+    cleanup_client(&client_addr, &clients, &clients_on_docs);
     if let Err(e) = write_to_file(docs.clone()) {
         eprintln!("Error writing to file: {}", e);
     }
 
-    cleanup_client(&client_addr, &clients, &clients_on_docs);
     Ok(())
 }
 

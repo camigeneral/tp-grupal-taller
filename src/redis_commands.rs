@@ -3,22 +3,20 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use parse::{CommandRequest, CommandResponse, ValueType};
 use crate::redis_response::{RedisResponse};
-use crate::client_info::Client;
 
 
 pub fn execute_command(
     request: CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    clients: Arc<Mutex<HashMap<String, Client>>>,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
     client_addr: String,
 ) -> RedisResponse {
     match request.command.as_str() {
         "get" => handle_get(&request, docs),
-        "set" => handle_set(&request, docs, clients, clients_on_docs),
+        "set" => handle_set(&request, docs, clients_on_docs),
         "subscribe" => handle_subscribe(&request, clients_on_docs, client_addr),
         "unsubscribe" => handle_unsubscribe(&request, clients_on_docs, client_addr),
-        "append" => handle_append(&request, docs, clients, clients_on_docs),
+        "append" => handle_append(&request, docs),
         "scard" => handle_scard(&request, clients_on_docs),
         "smembers" => handle_smembers(&request, clients_on_docs),
         "sscan" => handle_sscan(&request, clients_on_docs),
@@ -70,7 +68,6 @@ fn handle_get(
 fn handle_set(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    clients: Arc<Mutex<HashMap<String, Client>>>,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) -> RedisResponse {
     let doc_name = match &request.key {
@@ -192,8 +189,6 @@ fn handle_unsubscribe(
 fn handle_append(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    clients: Arc<Mutex<HashMap<String, Client>>>,
-    clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
