@@ -83,16 +83,19 @@ impl SimpleComponent for NavbarModel {
                             connect_clicked => NavbarMsg::CreateSpreadsheetDocument	,
                         }
                     },
-                }
+                },
+                #[watch]
+                set_visible: model.is_connected,
             },
 
             pack_end = &gtk::Button {
                 #[watch]
                 set_label: &(if model.is_connected { "Conectado" } else { "Desconectado" }),
-
                 connect_clicked[sender] => move |_| {
                     sender.output(NavbarOutput::ToggleConnectionRequested).unwrap();
                 },
+                #[watch]
+                set_visible: model.is_connected,
             },
          },
     }
