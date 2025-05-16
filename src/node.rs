@@ -11,6 +11,10 @@ mod parse;
 mod redis_commands;
 mod client_info;
 mod redis_response;
+mod list_commands;
+mod set_commands;
+mod string_commands;
+pub mod pub_sub_commands;
 
 static SERVER_ARGS: usize = 2;
 

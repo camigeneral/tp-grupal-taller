@@ -1,103 +1,253 @@
-#[allow(dead_code)]
-pub fn lset(list: &mut [String], index: i32, element: &str) {
-    let index_usize = if index < 0 {
-        let abs_index = index.unsigned_abs() as usize;
-        list.len() - abs_index
-    } else {
-        index as usize
+use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
+use parse::{CommandRequest, CommandResponse, ValueType};
+use crate::redis_response::{RedisResponse};
+
+
+pub fn handle_linsert(
+    request: &CommandRequest,
+    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+) -> RedisResponse {
+    let doc = match &request.key {
+        Some(k) => k.clone(),
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Usage: LINSERT <doc> BEFORE|AFTER <pivot> <element>".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
     };
-    list[index_usize] = element.to_string();
-}
 
-#[allow(dead_code)]
-pub fn llen(list: &[String]) -> usize {
-    list.len()
-}
-
-#[allow(dead_code)]
-pub fn rpush(list: &mut Vec<String>, values: Vec<String>) {
-    for value in values {
-        list.push(value);
+    if request.arguments.len() != 3 {
+        return RedisResponse::new(
+            CommandResponse::Error("Incorrect number of arguments for LINSERT".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        );
     }
-}
 
-#[allow(dead_code)]
-pub fn linsert(list: &mut Vec<String>, flag: String, pivot: String, element: String) {
-    if let Some(index) = list.iter().position(|x| *x == pivot) {
-        match flag.to_lowercase().as_str() {
-            "before" => {
-                list.insert(index, element);
-            }
+    let (flag, pivot, element) = (
+        &request.arguments[0],
+        &request.arguments[1],
+        &request.arguments[2],
+    );
+
+    let (flag_str, pivot_str, element_str) = match (flag, pivot, element) {
+        (ValueType::String(f), ValueType::String(p), ValueType::String(e)) => {
+            (f.to_lowercase(), p.clone(), e.clone())
+        }
+        _ => {
+            return RedisResponse::new(
+                CommandResponse::Error("Arguments must be strings".to_string()),
+                false,
+                "".to_string(),
+                doc,
+            )
+        }
+    };
+
+    let mut docs_lock = docs.lock().unwrap();
+    let entry_doc = docs_lock.entry(doc.clone()).or_default();
+
+    if let Some(index) = entry_doc.iter().position(|x| x == &pivot_str) {
+        match flag_str.as_str() {
+            "before" => entry_doc.insert(index, element_str.clone()),
             "after" => {
-                if list.len() > index + 1 {
-                    list.insert(index + 1, element);
+                if entry_doc.len() > index + 1 {
+                    entry_doc.insert(index + 1, element_str.clone());
                 } else {
-                    list.push(element);
+                    entry_doc.push(element_str.clone());
                 }
             }
-            _ => {}
+            _ => {
+                return RedisResponse::new(
+                    CommandResponse::Error("Invalid flag argument".to_string()),
+                    false,
+                    "".to_string(),
+                    doc,
+                );
+            }
+        }
+
+        let message = format!("Inserted '{}' {} '{}'", element_str, flag_str, pivot_str);
+        return RedisResponse::new(
+            CommandResponse::Integer(entry_doc.len() as i64),
+            true,
+            message,
+            doc,
+        );
+    } else {
+        return RedisResponse::new(
+            CommandResponse::Error("Invalid pivot argument".to_string()),
+            false,
+            "".to_string(),
+            doc,
+        );
+    }
+}
+
+
+pub fn handle_lset(
+    request: &CommandRequest,
+    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+) -> RedisResponse {
+    let doc = match &request.key {
+        Some(k) => k.clone(),
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Usage: LSET <doc> <index> <element>".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
+    };
+
+    if request.arguments.len() != 2 {
+        return RedisResponse::new(
+            CommandResponse::Error("Invalid arguments for LSET".to_string()),
+            false,
+            "".to_string(),
+            doc,
+        );
+    }
+
+    let (index, element) = (&request.arguments[0], &request.arguments[1]);
+    let (index_i32, element_str) = match (index, element) {
+        (ValueType::Integer(i), ValueType::String(s)) => (*i as i32, s.clone()),
+        _ => {
+            return RedisResponse::new(
+                CommandResponse::Error("Invalid arguments for LSET".to_string()),
+                false,
+                "".to_string(),
+                doc,
+            )
+        }
+    };
+
+    let mut docs_lock = docs.lock().unwrap();
+    let list = docs_lock.entry(doc.clone()).or_default();
+
+    let index_usize = if index_i32 < 0 {
+        let abs_index = index_i32.unsigned_abs() as usize;
+        if abs_index > list.len() {
+            return RedisResponse::new(
+                CommandResponse::Error("Index out of bounds".to_string()),
+                false,
+                "".to_string(),
+                doc,
+            );
+        }
+        list.len() - abs_index
+    } else {
+        index_i32 as usize
+    };
+
+    if index_usize >= list.len() {
+        return RedisResponse::new(
+            CommandResponse::Error("Index out of bounds".to_string()),
+            false,
+            "".to_string(),
+            doc,
+        );
+    }
+
+    list[index_usize] = element_str.clone();
+
+    let message = format!("Updated index {} with '{}'", index_i32, element_str);
+    RedisResponse::new(
+        CommandResponse::String("OK".to_string()),
+        false,
+        message,
+        doc,
+    )
+}
+
+
+pub fn handle_llen(
+    request: &CommandRequest,
+    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+) -> RedisResponse {
+    let doc = match &request.key {
+        Some(k) => k.clone(),
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Usage: LLEN <doc>".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
+    };
+
+    let docs_lock = docs.lock().unwrap();
+    let list = docs_lock.get(&doc);
+
+    let length = match list {
+        Some(l) => l.len(),
+        None => 0,
+    };
+
+    RedisResponse::new(
+        CommandResponse::Integer(length as i64),
+        false,
+        "".to_string(),
+        doc,
+    )
+}
+
+
+pub fn handle_rpush(
+    request: &CommandRequest,
+    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+) -> RedisResponse {
+    let doc = match &request.key {
+        Some(k) => k.clone(),
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Usage: RPUSH <doc> <value1> [value2 ...]".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
+    };
+
+    if request.arguments.is_empty() {
+        return RedisResponse::new(
+            CommandResponse::Error("Invalid arguments for RPUSH".to_string()),
+            false,
+            "".to_string(),
+            doc.clone(),
+        );
+    }
+
+    let mut docs_lock = docs.lock().unwrap();
+    let list = docs_lock.entry(doc.clone()).or_default();
+
+    let mut pushed_count = 0;
+    for val in &request.arguments {
+        if let ValueType::String(s) = val {
+            list.push(s.clone());
+            pushed_count += 1;
+        } else {
+            return RedisResponse::new(
+                CommandResponse::Error("Invalid arguments for RPUSH".to_string()),
+                false,
+                "".to_string(),
+                doc,
+            );
         }
     }
+
+    RedisResponse::new(
+        CommandResponse::Integer(list.len() as i64),
+        true,
+        format!("{} elements pushed", pushed_count),
+        doc,
+    )
 }
 
-//------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_lset() {
-        let mut list: Vec<String> = vec!["1".to_string(), "2".to_string(), "3".to_string()];
-        lset(&mut list, 0, "4");
-        lset(&mut list, -2, "5");
-        assert_eq!(list[0], "4");
-        assert_eq!(list[1], "5");
-        assert_eq!(list[2], "3");
-    }
-
-    #[test]
-    fn test_llen() {
-        let list: Vec<String> = vec!["1".to_string(), "2".to_string(), "3".to_string()];
-        assert_eq!(llen(&list), 3);
-    }
-
-    #[test]
-    fn test_rpush() {
-        let mut list: Vec<String> = vec!["1".to_string(), "2".to_string(), "3".to_string()];
-        let values: Vec<String> = vec!["4".to_string(), "5".to_string()];
-        rpush(&mut list, values);
-        assert_eq!(list[0], "1");
-        assert_eq!(list[1], "2");
-        assert_eq!(list[2], "3");
-        assert_eq!(list[3], "4");
-        assert_eq!(list[4], "5");
-    }
-
-    #[test]
-    fn test_linsert() {
-        let mut list: Vec<String> = vec!["1".to_string(), "2".to_string(), "3".to_string()];
-        linsert(
-            &mut list,
-            "before".to_string(),
-            "2".to_string(),
-            "4".to_string(),
-        );
-        assert_eq!(list[0], "1");
-        assert_eq!(list[1], "4");
-        assert_eq!(list[2], "2");
-        assert_eq!(list[3], "3");
-
-        linsert(
-            &mut list,
-            "after".to_string(),
-            "2".to_string(),
-            "5".to_string(),
-        );
-        assert_eq!(list[0], "1");
-        assert_eq!(list[1], "4");
-        assert_eq!(list[2], "2");
-        assert_eq!(list[3], "5");
-        assert_eq!(list[4], "3");
-    }
-}
