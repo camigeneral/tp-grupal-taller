@@ -7,9 +7,10 @@ use std::str;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use crate::parse;
-use crate::redis_commands;
-use crate::client_info::{Client};
+mod parse;
+mod redis_commands;
+mod client_info;
+mod redis_response;
 
 static SERVER_ARGS: usize = 2;
 
@@ -27,6 +28,7 @@ fn main() -> Result<(), ()> {
     server_run(&address).unwrap();
     Ok(())
 }
+
 
 fn server_run(address: &str) -> std::io::Result<()> {
     let file_path = "docs.txt".to_string();
@@ -46,7 +48,7 @@ fn server_run(address: &str) -> std::io::Result<()> {
     initial_docs.insert("doc1".to_string(), vec![]);
     initial_docs.insert("doc2".to_string(), vec![]);
 
-    let clients: Arc<Mutex<HashMap<String, Client>>> = Arc::new(Mutex::new(HashMap::new()));
+    let clients: Arc<Mutex<HashMap<String, client_info::Client>>> = Arc::new(Mutex::new(HashMap::new()));
     let clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>> =
         Arc::new(Mutex::new(initial_docs));
 
@@ -64,7 +66,7 @@ fn server_run(address: &str) -> std::io::Result<()> {
                 {
                     let client_addr = cloned_stream.peer_addr()?;
                     let client_key = client_addr.to_string();
-                    let client = Client {
+                    let client = client_info::Client {
                         stream: cloned_stream,
                     };
                     let mut lock_clients = clients.lock().unwrap();
@@ -102,9 +104,10 @@ fn server_run(address: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+
 fn handle_client(
     stream: &mut TcpStream,
-    clients: Arc<Mutex<HashMap<String, Client>>>,
+    clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
     client_addr: String,
@@ -129,7 +132,7 @@ fn handle_client(
 
         println!("Received command: {:?}", command_request);
 
-        let response = redis_commands::execute_command(
+        let redis_response = redis_commands::execute_command(
             command_request,
             docs.clone(),
             clients.clone(),
@@ -137,6 +140,13 @@ fn handle_client(
             client_addr.clone(),
         );
 
+        if redis_response.publish { 
+            if let Err(e) = publish(clients.clone(), clients_on_docs.clone(), redis_response.message, redis_response.doc) {
+                eprintln!("Error publishing update: {}", e);
+            }
+        }
+
+        let response = redis_response.response;
         if let Err(e) = parse::write_response(stream, &response) {
             println!("Error writing response: {}", e);
             break;
@@ -151,9 +161,10 @@ fn handle_client(
     Ok(())
 }
 
+
 fn cleanup_client(
     client_addr: &str,
-    clients: &Arc<Mutex<HashMap<String, Client>>>,
+    clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
     clients_on_docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) {
     clients.lock().unwrap().remove(client_addr);
@@ -164,8 +175,9 @@ fn cleanup_client(
     }
 }
 
+
 pub fn publish(
-    clients: Arc<Mutex<HashMap<String, Client>>>,
+    clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
     message: String,
     doc: String,
@@ -187,6 +199,7 @@ pub fn publish(
 
     Ok(())
 }
+
 
 pub fn write_to_file(docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Result<()> {
     let mut file = OpenOptions::new()
@@ -210,6 +223,7 @@ pub fn write_to_file(docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Resu
 
     Ok(())
 }
+
 
 pub fn get_file_content(file_path: &String) -> Result<HashMap<String, Vec<String>>, String> {
     let file = File::open(file_path).map_err(|_| "file-not-found".to_string())?;

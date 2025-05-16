@@ -1,8 +1,10 @@
 
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
-use parse::{CommandRequest, CommandResponse, RedisResponse, ValueType};
-use crate::client_info::{Client};
+use parse::{CommandRequest, CommandResponse, ValueType};
+use crate::redis_response::{RedisResponse};
+use crate::client_info::Client;
+
 
 pub fn execute_command(
     request: CommandRequest,
@@ -10,7 +12,7 @@ pub fn execute_command(
     clients: Arc<Mutex<HashMap<String, Client>>>,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
     client_addr: String,
-) -> CommandResponse {
+) -> RedisResponse {
     match request.command.as_str() {
         "get" => handle_get(&request, docs),
         "set" => handle_set(&request, docs, clients, clients_on_docs),
@@ -20,39 +22,74 @@ pub fn execute_command(
         "scard" => handle_scard(&request, clients_on_docs),
         "smembers" => handle_smembers(&request, clients_on_docs),
         "sscan" => handle_sscan(&request, clients_on_docs),
-        _ => CommandResponse::Error("Unknown command".to_string()),
+        _ => RedisResponse::new(
+            CommandResponse::Error("Unkown".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        )
     }
 }
+
 
 fn handle_get(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-) -> CommandResponse {
+) -> RedisResponse {
     let key = match &request.key {
         Some(k) => k,
-        None => return CommandResponse::Error("Wrong number of arguments for GET".to_string()),
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Wrong number of arguments for GET".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        },
     };
 
     let docs = docs.lock().unwrap();
     match docs.get(key) {
-        Some(value) => CommandResponse::String(value.join("\n")),
-        None => CommandResponse::Null,
+        Some(value) => RedisResponse::new(
+            CommandResponse::String(value.join("\n")),
+            false,
+            "".to_string(),
+            "".to_string(),
+        ),
+        None => RedisResponse::new(
+            CommandResponse::Null,
+            false,
+            "".to_string(),
+            "".to_string(),
+        ),
     }
+
 }
+
 
 fn handle_set(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
     clients: Arc<Mutex<HashMap<String, Client>>>,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-) -> CommandResponse {
+) -> RedisResponse {
     let doc_name = match &request.key {
         Some(k) => k.clone(),
-        None => return CommandResponse::Error("Wrong number of arguments for SET".to_string()),
+        None => return RedisResponse::new(
+            CommandResponse::Error("Wrong number of arguments for SET".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        ),
     };
 
     if request.arguments.is_empty() {
-        return CommandResponse::Error("Wrong number of arguments for SET".to_string());
+        return RedisResponse::new(
+            CommandResponse::Error("Wrong number of arguments for SET".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        );
     }
 
     let content = extract_string_arguments(&request.arguments);
@@ -73,64 +110,109 @@ fn handle_set(
         doc_name, notification
     );
 
-    if let Err(e) = node::publish(clients, clients_on_docs, notification, doc_name.clone()) {
-        eprintln!("Error publishing update: {}", e);
-    }
-
-    CommandResponse::Ok
+    RedisResponse::new(
+        CommandResponse::Ok,
+        true,
+        notification,
+        doc_name,
+    )
 }
+
 
 fn handle_subscribe(
     request: &CommandRequest,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
     client_addr: String,
-) -> CommandResponse {
+) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k,
-        None => return CommandResponse::Error("Usage: SUBSCRIBE <document>".to_string()),
+        None => return RedisResponse::new(
+            CommandResponse::Error("Usage: SUBSCRIBE <document>".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        ),
     };
 
     let mut map = clients_on_docs.lock().unwrap();
     if let Some(list) = map.get_mut(doc) {
         list.push(client_addr);
-        CommandResponse::String(format!("Subscribed to {}", doc))
+        RedisResponse::new(
+            CommandResponse::String(format!("Subscribed to {}", doc)),
+            false,
+            "".to_string(),
+            "".to_string(),
+        )
     } else {
-        CommandResponse::Error("Document not found".to_string())
+        RedisResponse::new(
+            CommandResponse::Error("Document not found".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        )
     }
 }
+
 
 fn handle_unsubscribe(
     request: &CommandRequest,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
     client_addr: String,
-) -> CommandResponse {
+) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k,
-        None => return CommandResponse::Error("Usage: UNSUBSCRIBE <document>".to_string()),
+        None => return RedisResponse::new(
+            CommandResponse::Error("Usage: UNSUBSCRIBE <document>".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        ),
     };
 
     let mut map = clients_on_docs.lock().unwrap();
     if let Some(list) = map.get_mut(doc) {
         list.retain(|x| x != &client_addr);
-        CommandResponse::String(format!("Unsubscribed from {}", doc))
+        RedisResponse::new(
+            CommandResponse::String(format!("Unsubscribed from {}", doc)),
+            false,
+            "".to_string(),
+            "".to_string(),
+        )
     } else {
-        CommandResponse::Error("Document not found".to_string())
+        RedisResponse::new(
+            CommandResponse::Error("Document not found".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        )
     }
 }
+
 
 fn handle_append(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
     clients: Arc<Mutex<HashMap<String, Client>>>,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-) -> CommandResponse {
+) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
-        None => return CommandResponse::Error("Usage: APPEND <document> <text...>".to_string()),
+        None => return RedisResponse::new(
+            CommandResponse::Error("Usage: APPEND <document> <text...>".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        ),
     };
 
     if request.arguments.is_empty() {
-        return CommandResponse::Error("Usage: APPEND <document> <text...>".to_string());
+        return RedisResponse::new(
+            CommandResponse::Error("Usage: APPEND <document> <text...>".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        )
+        ;
     }
 
     let content = extract_string_arguments(&request.arguments);
@@ -146,78 +228,125 @@ fn handle_append(
     let notification = format!("New content in {}: {}", doc, content);
     println!("Publishing to subscribers of {}: {}", doc, notification);
 
-    if let Err(e) = node::publish(clients, clients_on_docs, notification, doc) {
-        eprintln!("Error publishing update: {}", e);
-    }
-
-    CommandResponse::Integer(line_number as i64)
+    RedisResponse::new(
+        CommandResponse::Integer(line_number as i64),
+        true,
+        notification,
+        doc,
+    )
 }
+
 
 fn handle_scard(
     request: &CommandRequest,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-) -> CommandResponse {
+) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k,
-        None => return CommandResponse::Error("Usage: SCARD <document>".to_string()),
+        None => return RedisResponse::new(
+            CommandResponse::Error("Usage: SCARD <document>".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        ),
     };
 
     let lock_clients_on_docs = clients_on_docs.lock().unwrap();
     if let Some(subscribers) = lock_clients_on_docs.get(doc) {
-        CommandResponse::String(format!(
-            "Number of subscribers in channel {}: {}",
-            doc,
-            subscribers.len()
-        ))
+        RedisResponse::new(
+            CommandResponse::String(format!("Number of subscribers in channel {}: {}", doc, subscribers.len())),
+            false,
+            "".to_string(),
+            "".to_string(),
+        )        
     } else {
-        CommandResponse::Error("Document not found".to_string())
+        RedisResponse::new(
+            CommandResponse::Error("Document not found".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        )
     }
 }
+
 
 fn handle_smembers(
     request: &CommandRequest,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-) -> CommandResponse {
+) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k,
-        None => return CommandResponse::Error("Usage: SMEMBERS <document>".to_string()),
+        None => return RedisResponse::new(
+            CommandResponse::Error("Usage: SMEMBERS <document>".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        ),
     };
 
     let lock_clients_on_docs = clients_on_docs.lock().unwrap();
     if let Some(subscribers) = lock_clients_on_docs.get(doc) {
         if subscribers.is_empty() {
-            return CommandResponse::String(format!("No subscribers in document {}", doc));
+            return RedisResponse::new(
+                CommandResponse::String(format!("No subscribers in document {}", doc)),
+                false,
+                "".to_string(),
+                "".to_string(),
+            );
         }
 
         let mut response = format!("Subscribers in document {}:\n", doc);
         for subscriber in subscribers {
             response.push_str(&format!("{}\n", subscriber));
         }
-        CommandResponse::String(response)
+        RedisResponse::new(
+            CommandResponse::String(response),
+            false,
+            "".to_string(),
+            "".to_string(),
+        )
     } else {
-        CommandResponse::Error("Document not found".to_string())
+        RedisResponse::new(
+            CommandResponse::Error("Document not found".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        )
     }
 }
+
 
 fn handle_sscan(
     request: &CommandRequest,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-) -> CommandResponse {
+) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k,
-        None => return CommandResponse::Error("Usage: SSCAN <document> [pattern]".to_string()),
+        None => return RedisResponse::new(
+            CommandResponse::Error("Usage: SSCAN <document> [pattern]".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        ),
     };
 
     let pattern = if !request.arguments.is_empty() {
         match &request.arguments[0] {
             ValueType::String(s) => s,
             ValueType::Integer(i) => {
-                return CommandResponse::Error(format!(
-                    "Expected string pattern, got integer: {}",
-                    i
-                ))
+                return RedisResponse::new(
+                    CommandResponse::Error(format!("Expected string pattern, got integer: {}", i)),
+                    false,
+                    "".to_string(),
+                    "".to_string(),
+                )
             }
-            _ => return CommandResponse::Error("Pattern must be a string".to_string()),
+            _ => return RedisResponse::new(
+                CommandResponse::Error("Pattern must be a string".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            ),
         }
     } else {
         ""
@@ -229,22 +358,35 @@ fn handle_sscan(
             subscribers.iter().filter(|s| s.contains(pattern)).collect();
 
         if matching_subscribers.is_empty() {
-            return CommandResponse::String(format!(
-                "No subscribers matching '{}' in document {}",
-                pattern, doc
-            ));
+            return RedisResponse::new(
+                CommandResponse::String(format!("No subscribers matching '{}' in document {}", pattern, doc)),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
         }
 
         let mut response = format!("Subscribers in {} matching '{}':\n", doc, pattern);
         for subscriber in matching_subscribers {
             response.push_str(&format!("{}\n", subscriber));
         }
+        RedisResponse::new(
+            CommandResponse::String(response),
+            false,
+            "".to_string(),
+            "".to_string(),
+        )
 
-        CommandResponse::String(response)
     } else {
-        CommandResponse::Error("Document not found".to_string())
+        RedisResponse::new(
+            CommandResponse::Error("Document not found".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        )
     }
 }
+
 
 fn extract_string_arguments(arguments: &[ValueType]) -> String {
     arguments
