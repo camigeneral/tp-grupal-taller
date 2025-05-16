@@ -4,7 +4,6 @@ use relm4::RelmApp;
 use rusty_docs::app::AppModel;
 extern crate rand;
 use rand::Rng;
-// to do: no podemos usar esto!!!! o preguntar
 
 mod node;
 
