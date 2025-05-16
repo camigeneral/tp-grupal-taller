@@ -23,6 +23,7 @@ fn main() -> Result<(), ()> {
     Ok(())
 }
 
+
 fn client_run(address: &str, stream: &mut dyn Read) -> std::io::Result<()> {
     let reader = BufReader::new(stream);
     let mut socket = TcpStream::connect(address)?;
@@ -57,6 +58,7 @@ fn client_run(address: &str, stream: &mut dyn Read) -> std::io::Result<()> {
     Ok(())
 }
 
+
 fn format_resp_command(parts: &[&str]) -> String {
     let mut resp = format!("*{}\r\n", parts.len());
 
@@ -66,6 +68,7 @@ fn format_resp_command(parts: &[&str]) -> String {
 
     resp
 }
+
 
 fn listen_to_subscriptions(socket: TcpStream) -> std::io::Result<()> {
     let mut reader = BufReader::new(socket);

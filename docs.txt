@@ -1,17 +1,3 @@
-<<<<<<< HEAD
-doc45/++/holi/--/
-doc89/++/hello/--/
-doc3/++/hola/--/
-doc1/++/borro todo/--/
-doc9/++/hola/--/hola/--/
-doc0/++/nuevo mensaje/--/
-doc5/++/helloooo/--/
-doc4/++/hola/--/
-doc88/++/hola/--/
-doc2/++/agregooo/--/holaaa/--/
-doc100/++/por favor funciona/--/
-=======
 doc3/++/
 doc1/++/hola/--/
 doc2/++/hola_doc2/--/
->>>>>>> origin/comandos-lista
