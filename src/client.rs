@@ -1,16 +1,15 @@
 use std::io::Write;
 use std::io::{BufRead, BufReader};
 use std::net::TcpStream;
-use std::thread;
 use std::sync::mpsc::Receiver;
-
+use std::thread;
 
 pub fn client_run(port: u16, rx: Receiver<String>) -> std::io::Result<()> {
-    let address = format!("127.0.0.1:{}", port); 
+    let address = format!("127.0.0.1:{}", port);
 
     println!("Conectándome a {:?}", address);
     let mut socket = TcpStream::connect(address)?;
-    
+
     let cloned_socket = socket.try_clone()?;
 
     thread::spawn(move || {
@@ -33,8 +32,7 @@ pub fn client_run(port: u16, rx: Receiver<String>) -> std::io::Result<()> {
     Ok(())
 }
 
-
-fn listen_to_subscriptions(socket: TcpStream)-> std::io::Result<()> {
+fn listen_to_subscriptions(socket: TcpStream) -> std::io::Result<()> {
     let mut reader = BufReader::new(socket);
     loop {
         let mut response = String::new();

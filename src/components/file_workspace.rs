@@ -13,8 +13,8 @@ use super::list_files::FileListView;
 use components::file_editor::FileEditorMessage;
 use components::types::FileType;
 
-use std::collections::HashMap;
 use crate::node::get_file_content;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 /// Estructura principal que gestiona el espacio de trabajo de archivos, que incluye una lista de archivos

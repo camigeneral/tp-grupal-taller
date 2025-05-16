@@ -12,8 +12,7 @@ use std::collections::HashMap;
 use client::client_run;
 use std::thread;
 
-use std::sync::mpsc::{Sender, channel};
-
+use std::sync::mpsc::{channel, Sender};
 
 use self::relm4::{
     gtk, Component, ComponentController, ComponentParts, ComponentSender, Controller,
@@ -182,7 +181,7 @@ impl SimpleComponent for AppModel {
                     .sender()
                     .send(NavbarMsg::SetLoggedInUser(username))
                     .unwrap();
-                    
+
                 //Conectar con el server   self.port
                 let (tx, rx) = channel::<String>();
                 self.command_sender = Some(tx.clone());
@@ -199,12 +198,10 @@ impl SimpleComponent for AppModel {
                     .send(NavbarMsg::SetConnectionStatus(true))
                     .unwrap();
                 self.is_logged_in = true;
-
-
             }
             AppMsg::LoginFailure(_error) => {
 
-                //seria que valen ya esta conectada 
+                //seria que valen ya esta conectada
             }
             AppMsg::Logout => {
                 self.header_cont
