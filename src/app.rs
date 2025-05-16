@@ -1,10 +1,13 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::{
-    prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, WidgetExt},
+    prelude::{
+         BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, WidgetExt,
+    },
     CssProvider,
 };
 use crate::components::login::{LoginForm, LoginOutput};
+use app::gtk4::glib::Propagation;
 use components::file_workspace::FileWorkspace;
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
 use std::collections::HashMap;
@@ -45,6 +48,7 @@ pub enum AppMsg {
     Logout,
     CommandChanged(String),
     ExecuteCommand,
+    CloseApplication,
 }
 
 #[relm4::component(pub)]
@@ -119,7 +123,6 @@ impl SimpleComponent for AppModel {
     ) -> ComponentParts<Self> {
         let css_provider = CssProvider::new();
         css_provider.load_from_path("app.css");
-
         gtk4::style_context_add_provider_for_display(
             &gtk4::gdk::Display::default().expect("Could not get default display"),
             &css_provider,
@@ -127,10 +130,10 @@ impl SimpleComponent for AppModel {
         );
 
         let mut users = HashMap::new();
-        users.insert("fran".to_string(), "123123".to_string());
-        users.insert("cami".to_string(), "123123".to_string());
-        users.insert("valen".to_string(), "123123".to_string());
-        users.insert("rama".to_string(), "123123".to_string());
+        users.insert("fran".to_string(), "123".to_string());
+        users.insert("cami".to_string(), "123".to_string());
+        users.insert("valen".to_string(), "123".to_string());
+        users.insert("rama".to_string(), "123".to_string());
 
         let header_model = NavbarModel::builder().launch(()).forward(
             sender.input_sender(),
@@ -160,6 +163,13 @@ impl SimpleComponent for AppModel {
             command_sender: None,
         };
 
+        let sender_clone = sender.clone();
+
+        root.connect_close_request(move |_| {
+            sender_clone.input(AppMsg::CommandChanged("cerrar".to_string()));
+            sender_clone.input(AppMsg::ExecuteCommand);
+            Propagation::Proceed
+        });
         let widgets = view_output!();
 
         ComponentParts { model, widgets }
@@ -227,6 +237,15 @@ impl SimpleComponent for AppModel {
                     }
                 } else {
                     println!("No hay un canal de comando disponible.");
+                }
+            }
+
+            AppMsg::CloseApplication => {
+                if let Some(channel_sender) = &self.command_sender {
+                    println!("Enviando comando de cierre al servidor");
+                    if let Err(e) = channel_sender.send("cerrar".to_string()) {
+                        eprintln!("Error al enviar comando de cierre: {:?}", e);
+                    }
                 }
             }
         }

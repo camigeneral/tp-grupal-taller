@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::env::args;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -190,6 +190,27 @@ fn handle_client(
                 locked_clients_on_docs.insert(doc_name.to_string(), vec![]);
 
                 writeln!(stream, "Documento creado")?;
+            }
+            "cerrar" => {
+                println!("Cliente {} solicitó cierre de conexión", client_addr);
+
+                {
+                    let mut lock_clients = clients.lock().unwrap();
+                    lock_clients.remove(&client_addr.to_string());
+                }
+
+                {
+                    let mut lock_clients_on_docs = clients_on_docs.lock().unwrap();
+                    for (_doc_name, clients_list) in lock_clients_on_docs.iter_mut() {
+                        clients_list.retain(|addr| addr != &client_addr.to_string());
+                    }
+                }
+
+                writeln!(stream, "Conexión cerrada por solicitud del cliente")?;
+
+                stream.shutdown(Shutdown::Both)?;
+
+                return Ok(());
             }
             _ => {
                 writeln!(stream, "Comando no reconocido")?;
