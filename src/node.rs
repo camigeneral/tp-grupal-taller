@@ -154,12 +154,15 @@ fn handle_client(
             println!("Error writing response: {}", e);
             break;
         }
+
+        println!("escribiendo en el archivo !!!!!");
+        if let Err(e) = write_to_file(docs.clone()) {
+            eprintln!("Error writing to file: {}", e);
+        }
     }
 
     cleanup_client(&client_addr, &clients, &clients_on_docs);
-    if let Err(e) = write_to_file(docs.clone()) {
-        eprintln!("Error writing to file: {}", e);
-    }
+    // to do: agregar comando para salir, esto nunca se ejecuta porque nunca termina el loop
 
     Ok(())
 }
