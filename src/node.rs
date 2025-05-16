@@ -1,27 +1,28 @@
 use std::collections::HashMap;
+use std::env::args;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-//static SERVER_ARGS: usize = 2;
+static SERVER_ARGS: usize = 2;
 
 struct Client {
     // addr: String,
     stream: TcpStream,
 }
 
-pub fn start_server(port: u16) -> Result<(), ()> {
-    // let argv = args().collect::<Vec<String>>();
-    // if argv.len() != SERVER_ARGS {
-    //     println!("Cantidad de argumentos inválido");
-    //     let app_name = &argv[0];
-    //     println!("Usage:\n{:?} <puerto>", app_name);
-    //     return Err(());
-    // }
+pub fn main() -> Result<(), ()> {
+    let argv = args().collect::<Vec<String>>();
+    if argv.len() != SERVER_ARGS {
+        println!("Cantidad de argumentos inválido");
+        let app_name = &argv[0];
+        println!("Usage:\n{:?} <puerto>", app_name);
+        return Err(());
+    }
 
-    let address = format!("127.0.0.1:{}", port);
+    let address = "127.0.0.1:".to_owned() + &argv[1];
     connect_clients(&address).unwrap(); //por ahora
     Ok(())
 }
@@ -40,9 +41,16 @@ fn connect_clients(address: &str) -> std::io::Result<()> {
 
     let shared_docs = Arc::new(Mutex::new(docs.clone()));
 
+    let mut initial_clients_on_doc = HashMap::new();
+
+    for document in docs.keys() {
+        initial_clients_on_doc.insert(document.to_string(), Vec::new());
+    }
+
     // guardo la informacion de los clientes
+    let clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>> =
+        Arc::new(Mutex::new(initial_clients_on_doc));
     let clients: Arc<Mutex<HashMap<String, Client>>> = Arc::new(Mutex::new(HashMap::new()));
-    let clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>> = Arc::new(Mutex::new(docs));
 
     let listener = TcpListener::bind(address)?;
 
@@ -223,8 +231,8 @@ fn publish(
     let mut lock_clients = clients.lock().unwrap();
     let mut lock_clients_on_docs = clients_on_docs.lock().unwrap();
 
-    if let Some(clients_on_doc) = lock_clients_on_docs.get_mut(&doc) {
-        for subscriber_addr in clients_on_doc {
+    if let Some(clients_on_current_doc) = lock_clients_on_docs.get_mut(&doc) {
+        for subscriber_addr in clients_on_current_doc {
             if let Some(client) = lock_clients.get_mut(subscriber_addr) {
                 writeln!(client.stream, "{}", message.trim())?;
             } else {

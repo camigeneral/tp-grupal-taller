@@ -1,4 +1,2 @@
-doc1/++/hola/--/
-doc2/++/hola_doc2/--/agrego palabra/--/holaaa/--/nuevaaa/--/
-documento1/++/
-doc3/++/
+doc2/++/hola_doc2/--/hola/--/
+doc1/++/aaaa/--/bbbb/--/hola/--/
