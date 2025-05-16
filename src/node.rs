@@ -29,7 +29,6 @@ fn main() -> Result<(), ()> {
     Ok(())
 }
 
-
 fn server_run(address: &str) -> std::io::Result<()> {
     let file_path = "docs.txt".to_string();
     let docs = match get_file_content(&file_path) {
@@ -199,7 +198,6 @@ pub fn publish(
     Ok(())
 }
 
-
 pub fn write_to_file(docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Result<()> {
     let mut file = OpenOptions::new()
         .create(true)
@@ -222,7 +220,6 @@ pub fn write_to_file(docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Resu
 
     Ok(())
 }
-
 
 pub fn get_file_content(file_path: &String) -> Result<HashMap<String, Vec<String>>, String> {
     let file = File::open(file_path).map_err(|_| "file-not-found".to_string())?;

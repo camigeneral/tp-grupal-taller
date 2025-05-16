@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 doc45/++/holi/--/
 doc89/++/hello/--/
 doc3/++/hola/--/
@@ -9,3 +10,8 @@ doc4/++/hola/--/
 doc88/++/hola/--/
 doc2/++/agregooo/--/holaaa/--/
 doc100/++/por favor funciona/--/
+=======
+doc3/++/
+doc1/++/hola/--/
+doc2/++/hola_doc2/--/
+>>>>>>> origin/comandos-lista
