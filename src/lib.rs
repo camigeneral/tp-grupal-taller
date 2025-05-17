@@ -1,11 +1,12 @@
-// pub mod redis_commands;
-// pub mod parse;
-// pub mod client_info;
-// pub mod redis_response;
-// pub mod list_commands;
-// pub mod set_commands;
-// pub mod string_commands;
-// pub mod pub_sub_commands;
+pub mod redis_commands;
+pub mod parse;
+pub mod client_info;
+pub mod redis_response;
+pub mod list_commands;
+pub mod set_commands;
+pub mod string_commands;
+pub mod pub_sub_commands;
+
 /// Módulo principal de la aplicación.
 ///
 /// Este módulo define la estructura de la aplicación, incluyendo los componentes principales como
@@ -26,7 +27,5 @@ pub mod app;
 /// - `header`: Define el componente de la barra de navegación superior.
 /// - `file_editor`: Define el componente de edición de archivos.
 pub mod components;
-
-pub mod node;
 
 pub mod client;
