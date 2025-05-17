@@ -2,16 +2,33 @@ use std::collections::HashMap;
 use std::env::args;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write};
-use std::net::{Shutdown, TcpListener, TcpStream};
+use std::str;
+use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+
+// use parse;
+// use redis_commands;
+mod parse;
+mod redis_commands;
+mod pub_sub_commands;
+mod string_commands;
+mod set_commands;
+mod list_commands;
+mod redis_response;
+// use redis_response;
+// use list_commands;
+// use set_commands;
+// use string_commands;
+// use pub_sub_commands;
+
+// use client_info;
+mod client_info;
+// use client_info::Client;
+
 static SERVER_ARGS: usize = 2;
 
-struct Client {
-    // addr: String,
-    stream: TcpStream,
-}
 
 pub fn main() -> Result<(), ()> {
     let argv = args().collect::<Vec<String>>();
@@ -26,6 +43,7 @@ pub fn main() -> Result<(), ()> {
     connect_clients(&address).unwrap(); //por ahora
     Ok(())
 }
+
 
 fn connect_clients(address: &str) -> std::io::Result<()> {
     let file_path = "docs.txt".to_string();
@@ -50,33 +68,33 @@ fn connect_clients(address: &str) -> std::io::Result<()> {
     // guardo la informacion de los clientes
     let clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>> =
         Arc::new(Mutex::new(initial_clients_on_doc));
-    let clients: Arc<Mutex<HashMap<String, Client>>> = Arc::new(Mutex::new(HashMap::new()));
+    let clients: Arc<Mutex<HashMap<String, client_info::Client>>> = Arc::new(Mutex::new(HashMap::new()));
 
     let listener = TcpListener::bind(address)?;
+    println!("Server listening on {}", address);
 
     for stream in listener.incoming() {
         match stream {
             Ok(mut client_stream) => {
                 let client_addr = client_stream.peer_addr()?;
-                println!("La socket addr del client: {}", client_addr);
+                println!("New client connected: {}", client_addr);
 
                 let cloned_stream = client_stream.try_clone()?;
 
                 {
                     let client_addr = cloned_stream.peer_addr()?;
                     let client_key = client_addr.to_string();
-                    let client = Client {
-                        // addr: client_addr.to_string(),
+                    let client = client_info::Client {
                         stream: cloned_stream,
                     };
                     let mut lock_clients = clients.lock().unwrap();
                     lock_clients.insert(client_key, client);
                 }
-                // bloque inseguro?
 
                 let cloned_clients = Arc::clone(&clients);
                 let cloned_clients_on_docs = Arc::clone(&clients_on_docs);
                 let cloned_docs = Arc::clone(&shared_docs);
+                let client_addr_str = client_addr.to_string();
 
                 thread::spawn(move || {
                     match handle_client(
@@ -84,18 +102,19 @@ fn connect_clients(address: &str) -> std::io::Result<()> {
                         cloned_clients,
                         cloned_clients_on_docs,
                         cloned_docs,
+                        client_addr_str,
                     ) {
                         Ok(_) => {
-                            println!("El cliente {} se ha desconectado.", client_addr);
+                            println!("Client {} disconnected.", client_addr);
                         }
                         Err(e) => {
-                            eprintln!("Error en la conexión con {}: {}", client_addr, e);
+                            eprintln!("Error in connection with {}: {}", client_addr, e);
                         }
                     }
-                }); // saque el .join.unwrap
+                });
             }
             Err(e) => {
-                eprintln!("Error al aceptar conexión: {}", e);
+                eprintln!("Error accepting connection: {}", e);
             }
         }
     }
@@ -103,127 +122,83 @@ fn connect_clients(address: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+
 fn handle_client(
     stream: &mut TcpStream,
-    clients: Arc<Mutex<HashMap<String, Client>>>,
+    clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    client_addr: String,
 ) -> std::io::Result<()> {
-    let client_addr = stream.peer_addr()?;
-    let reader = BufReader::new(stream.try_clone()?);
+    let mut reader = BufReader::new(stream.try_clone()?);
 
-    for command in reader.lines().map_while(Result::ok) {
-        let input: Vec<String> = command
-            .split_whitespace()
-            .map(|s| s.to_string().to_lowercase())
-            .collect();
-        let command = &input[0];
-        println!("Recibido: {}", command);
-
-        match command.as_str() {
-            "ver" => {
-                let doc_selected = &input[1];
-                let doc_locked = docs.lock().unwrap();
-                if let Some(selected_doc) = doc_locked.get(doc_selected) {
-                    writeln!(stream, "Mensajes en el documento {}", doc_selected)?;
-                    for doc_message in selected_doc {
-                        writeln!(stream, "{}", doc_message)?;
-                    }
-                    writeln!(stream, "Fin de los mensajes")?;
-                } else {
-                    writeln!(stream, "No se encontro el documento")?;
+    loop {
+        let command_request = match parse::parse_command(&mut reader) {
+            Ok(req) => req,
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::UnexpectedEof {
+                    break;
                 }
+                println!("Error parsing command: {}", e);
+                parse::write_response(
+                    stream,
+                    &parse::CommandResponse::Error("Invalid command".to_string()),
+                )?;
+                continue;
             }
-            "sub" => {
-                let doc_select = &input[1];
-                {
-                    let mut lock_clients_on_docs = clients_on_docs.lock().unwrap();
-                    if let Some(clients_on_doc) = lock_clients_on_docs.get_mut(doc_select) {
-                        if clients_on_doc.contains(&client_addr.to_string()) {
-                            writeln!(stream, "Ya estás subscripto al documento")?;
-                        } else {
-                            clients_on_doc.push(client_addr.to_string());
-                        }
-                    } else {
-                        writeln!(stream, "Documento no encontrado")?;
-                    }
-                }
+        };
+
+        println!("Received command: {:?}", command_request);
+
+        let redis_response = redis_commands::execute_command(
+            command_request,
+            docs.clone(),
+            clients_on_docs.clone(),
+            client_addr.clone(),
+        );
+
+        if redis_response.publish { 
+            if let Err(e) = publish(clients.clone(), clients_on_docs.clone(), redis_response.message, redis_response.doc) {
+                eprintln!("Error publishing update: {}", e);
             }
-            "unsub" => {
-                let doc_select = &input[1];
-                {
-                    let mut lock_clients_on_docs = clients_on_docs.lock().unwrap();
-                    if let Some(clients_on_doc) = lock_clients_on_docs.get_mut(doc_select) {
-                        clients_on_doc.retain(|x| x.as_str() != client_addr.to_string().as_str());
-                    } else {
-                        println!("Documento no encontrado");
-                    }
-                }
-            }
-            "insertar" => {
-                let doc_selected = &input[1];
-                let mut doc_locked = docs.lock().unwrap();
-                if let Some(selected_doc) = doc_locked.get_mut(doc_selected) {
-                    let message = input[2..].join(" ");
-                    let message_to_publish = format!(
-                        "Nuevo mensaje en {}: {}",
-                        doc_selected,
-                        input[2..].join(" ")
-                    );
-                    selected_doc.push(message);
-                    let _ = publish(
-                        Arc::clone(&clients),
-                        Arc::clone(&clients_on_docs),
-                        message_to_publish,
-                        doc_selected.to_string(),
-                    );
-                } else {
-                    writeln!(stream, "No se encontro el documento")?;
-                }
-            }
-            "agregar" => {
-                let doc_name = &input[1];
-                let mut docs_locked = docs.lock().unwrap();
-                let mut locked_clients_on_docs = clients_on_docs.lock().unwrap();
+        }
 
-                docs_locked.insert(doc_name.to_string(), vec![]);
-                locked_clients_on_docs.insert(doc_name.to_string(), vec![]);
+        let response = redis_response.response;
+        if let Err(e) = parse::write_response(stream, &response) {
+            println!("Error writing response: {}", e);
+            break;
+        }
 
-                writeln!(stream, "Documento creado")?;
-            }
-            "cerrar" => {
-                println!("Cliente {} solicitó cierre de conexión", client_addr);
-
-                {
-                    let mut lock_clients = clients.lock().unwrap();
-                    lock_clients.remove(&client_addr.to_string());
-                }
-
-                {
-                    let mut lock_clients_on_docs = clients_on_docs.lock().unwrap();
-                    for (_doc_name, clients_list) in lock_clients_on_docs.iter_mut() {
-                        clients_list.retain(|addr| addr != &client_addr.to_string());
-                    }
-                }
-
-                writeln!(stream, "Conexión cerrada por solicitud del cliente")?;
-
-                stream.shutdown(Shutdown::Both)?;
-
-                return Ok(());
-            }
-            _ => {
-                writeln!(stream, "Comando no reconocido")?;
-            }
+        println!("escribiendo en el archivo !!!!!");
+        if let Err(e) = write_to_file(docs.clone()) {
+            eprintln!("Error writing to file: {}", e);
         }
         let _ = write_to_file(docs.clone());
     }
 
+    cleanup_client(&client_addr, &clients, &clients_on_docs);
+    // to do: agregar comando para salir, esto nunca se ejecuta porque nunca termina el loop
+
     Ok(())
 }
 
-fn publish(
-    clients: Arc<Mutex<HashMap<String, Client>>>,
+
+fn cleanup_client(
+    client_addr: &str,
+    clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
+    clients_on_docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+) {
+    clients.lock().unwrap().remove(client_addr);
+
+    let mut docs_lock = clients_on_docs.lock().unwrap();
+    for subscribers in docs_lock.values_mut() {
+        subscribers.retain(|addr| addr != client_addr);
+    }
+}
+
+
+pub fn publish(
+    clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
     message: String,
     doc: String,
@@ -245,6 +220,7 @@ fn publish(
 
     Ok(())
 }
+
 
 pub fn write_to_file(docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Result<()> {
     let mut file = OpenOptions::new()
@@ -268,6 +244,7 @@ pub fn write_to_file(docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Resu
 
     Ok(())
 }
+
 
 pub fn get_file_content(file_path: &String) -> Result<HashMap<String, Vec<String>>, String> {
     let file = File::open(file_path).map_err(|_| "file-not-found".to_string())?;

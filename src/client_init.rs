@@ -5,7 +5,6 @@ use rusty_docs::app::AppModel;
 extern crate rand;
 use rand::Rng;
 
-mod node;
 
 fn main() {
     let port = 4000;
