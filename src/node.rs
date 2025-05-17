@@ -2,24 +2,25 @@ use std::collections::HashMap;
 use std::env::args;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write};
-use std::net::{TcpListener, TcpStream};
 use std::str;
+use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-mod parse;
-mod redis_commands;
-mod client_info;
-mod redis_response;
-mod list_commands;
-mod set_commands;
-mod string_commands;
-pub mod pub_sub_commands;
+use crate::parse;
+use crate::redis_commands;
+// use redis_response;
+// use list_commands;
+// use set_commands;
+// use string_commands;
+// use pub_sub_commands;
+use crate::client_info;
+use client_info::Client;
 
 static SERVER_ARGS: usize = 2;
 
 
-fn main() -> Result<(), ()> {
+pub fn main() -> Result<(), ()> {
     let argv = args().collect::<Vec<String>>();
     if argv.len() != SERVER_ARGS {
         println!("Cantidad de argumentos inválido");
@@ -29,12 +30,11 @@ fn main() -> Result<(), ()> {
     }
 
     let address = "127.0.0.1:".to_owned() + &argv[1];
-    server_run(&address).unwrap();
+    connect_clients(&address).unwrap(); //por ahora
     Ok(())
 }
 
-
-fn server_run(address: &str) -> std::io::Result<()> {
+fn connect_clients(address: &str) -> std::io::Result<()> {
     let file_path = "docs.txt".to_string();
     let docs = match get_file_content(&file_path) {
         Ok(docs) => docs,
@@ -48,13 +48,16 @@ fn server_run(address: &str) -> std::io::Result<()> {
 
     let shared_docs = Arc::new(Mutex::new(docs.clone()));
 
-    let mut initial_docs: HashMap<String, Vec<String>> = HashMap::new();
-    initial_docs.insert("doc1".to_string(), vec![]);
-    initial_docs.insert("doc2".to_string(), vec![]);
+    let mut initial_clients_on_doc = HashMap::new();
 
-    let clients: Arc<Mutex<HashMap<String, client_info::Client>>> = Arc::new(Mutex::new(HashMap::new()));
+    for document in docs.keys() {
+        initial_clients_on_doc.insert(document.to_string(), Vec::new());
+    }
+
+    // guardo la informacion de los clientes
     let clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>> =
-        Arc::new(Mutex::new(initial_docs));
+        Arc::new(Mutex::new(initial_clients_on_doc));
+    let clients: Arc<Mutex<HashMap<String, Client>>> = Arc::new(Mutex::new(HashMap::new()));
 
     let listener = TcpListener::bind(address)?;
     println!("Server listening on {}", address);
@@ -159,6 +162,7 @@ fn handle_client(
         if let Err(e) = write_to_file(docs.clone()) {
             eprintln!("Error writing to file: {}", e);
         }
+        let _ = write_to_file(docs.clone());
     }
 
     cleanup_client(&client_addr, &clients, &clients_on_docs);
@@ -191,12 +195,12 @@ pub fn publish(
     let mut lock_clients = clients.lock().unwrap();
     let mut lock_clients_on_docs = clients_on_docs.lock().unwrap();
 
-    if let Some(clients_on_doc) = lock_clients_on_docs.get_mut(&doc) {
-        for subscriber_addr in clients_on_doc {
+    if let Some(clients_on_current_doc) = lock_clients_on_docs.get_mut(&doc) {
+        for subscriber_addr in clients_on_current_doc {
             if let Some(client) = lock_clients.get_mut(subscriber_addr) {
                 writeln!(client.stream, "{}", message.trim())?;
             } else {
-                println!("Cliente no encontrado");
+                println!("Cliente no encontrado: {}", subscriber_addr);
             }
         }
     } else {
@@ -205,7 +209,6 @@ pub fn publish(
 
     Ok(())
 }
-
 
 pub fn write_to_file(docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Result<()> {
     let mut file = OpenOptions::new()
@@ -229,7 +232,6 @@ pub fn write_to_file(docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Resu
 
     Ok(())
 }
-
 
 pub fn get_file_content(file_path: &String) -> Result<HashMap<String, Vec<String>>, String> {
     let file = File::open(file_path).map_err(|_| "file-not-found".to_string())?;

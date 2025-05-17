@@ -1,47 +1,32 @@
-use std::env::args;
-use std::io::stdin;
 use std::io::Write;
-use std::io::{BufRead, BufReader, Read};
+use std::io::Read;
+use std::io::{BufRead, BufReader};
 use std::net::TcpStream;
+use std::sync::mpsc::Receiver;
 use std::thread;
 
-static CLIENT_ARGS: usize = 3;
+pub fn client_run(port: u16, rx: Receiver<String>) -> std::io::Result<()> {
+    let address = format!("127.0.0.1:{}", port);
 
-fn main() -> Result<(), ()> {
-    let argv = args().collect::<Vec<String>>();
-    if argv.len() != CLIENT_ARGS {
-        println!("Cantidad de argumentos inválido");
-        let app_name = &argv[0];
-        println!("{:?} <host> <puerto>", app_name);
-        return Err(());
-    }
-
-    let address = argv[1].clone() + ":" + &argv[2];
     println!("Conectándome a {:?}", address);
-
-    client_run(&address, &mut stdin()).unwrap();
-    Ok(())
-}
-
-
-fn client_run(address: &str, stream: &mut dyn Read) -> std::io::Result<()> {
-    let reader = BufReader::new(stream);
     let mut socket = TcpStream::connect(address)?;
 
     let cloned_socket = socket.try_clone()?;
-    thread::spawn(move || match listen_to_subscriptions(cloned_socket) {
-        Ok(_) => {
-            println!("Desconectado del nodo");
-        }
-        Err(e) => {
+
+    thread::spawn(move || {
+        if let Err(e) = listen_to_subscriptions(cloned_socket) {
             eprintln!("Error en la conexión con nodo: {}", e);
         }
     });
 
-    for line in reader.lines().map_while(Result::ok) {
-        let command = line.trim();
+    for command in rx {
 
-        if command.to_lowercase() != "salir" {
+        let trimmed_command = command.trim().to_lowercase();
+
+        if trimmed_command == "salir" {
+            println!("Desconectando del servidor");
+            break;
+        }else{
             println!("Enviando: {:?}", command);
 
             let parts: Vec<&str> = command.split_whitespace().collect();
@@ -50,11 +35,9 @@ fn client_run(address: &str, stream: &mut dyn Read) -> std::io::Result<()> {
             println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
 
             socket.write_all(resp_command.as_bytes())?;
-        } else {
-            println!("Desconectando del servidor");
-            break;
         }
     }
+    
     Ok(())
 }
 
