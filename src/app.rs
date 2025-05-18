@@ -250,8 +250,4 @@ impl SimpleComponent for AppModel {
             }
         }
     }
-
-    pub fn get_users_map(&self) -> HashMap<String, String> {
-        self.login_form_cont.model().get_users()
-    }
 }

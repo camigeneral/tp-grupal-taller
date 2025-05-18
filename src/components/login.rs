@@ -30,10 +30,6 @@ pub enum LoginOutput {
     //LoginFailure(String),
 }
 
-pub fn get_users(&self) -> HashMap<String, String> {
-    self.users.clone() // Devuelve una copia del mapa de usuarios
-}
-
 #[relm4::component(pub)]
 impl SimpleComponent for LoginForm {
     type Init = HashMap<String, String>;
