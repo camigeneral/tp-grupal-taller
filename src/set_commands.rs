@@ -40,6 +40,7 @@ pub fn handle_scard(
 pub fn handle_smembers(
     request: &CommandRequest,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    users_map: Arc<Mutex<HashMap<String, String>>>, // Add user map as a parameter
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k,
@@ -63,9 +64,20 @@ pub fn handle_smembers(
         }
 
         let mut response = format!("Subscribers in document {}:\n", doc);
+        
+        // Get the user mapping data
+        let users_map_lock = users_map.lock().unwrap();
+        
         for subscriber in subscribers {
-            response.push_str(&format!("{}\n", subscriber));
+            // Try to find the username for this subscriber
+            let username = match users_map_lock.iter().find(|(_, id)| id == &subscriber) {
+                Some((username, _)) => username,
+                None => subscriber, // Fallback to the subscriber ID if username not found
+            };
+            
+            response.push_str(&format!("{}\n", username));
         }
+        
         RedisResponse::new(
             CommandResponse::String(response),
             false,
@@ -81,7 +93,6 @@ pub fn handle_smembers(
         )
     }
 }
-
 
 pub fn handle_sscan(
     request: &CommandRequest,

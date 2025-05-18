@@ -15,6 +15,7 @@ pub fn execute_command(
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
     client_addr: String,
 ) -> RedisResponse {
+    let users_map = Arc::new(Mutex::new(self.get_users_map())); // Obtener el mapa de usuarios
     match request.command.as_str() {
         "get" => string_commands::handle_get(&request, docs),
         "set" => string_commands::handle_set(&request, docs, clients_on_docs),
@@ -22,7 +23,7 @@ pub fn execute_command(
         "unsubscribe" => pub_sub_commands::handle_unsubscribe(&request, clients_on_docs, client_addr),
         "append" => string_commands::handle_append(&request, docs),
         "scard" => set_commands::handle_scard(&request, clients_on_docs),
-        "smembers" => set_commands::handle_smembers(&request, clients_on_docs),
+        "smembers" => set_commands::handle_smembers(&request, clients_on_docs,users_map),
         "sscan" => set_commands::handle_sscan(&request, clients_on_docs),
         "llen" => list_commands::handle_llen(&request, docs),
         "rpush" => list_commands::handle_rpush(&request, docs),
