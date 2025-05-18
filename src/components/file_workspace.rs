@@ -2,7 +2,7 @@ extern crate gtk4;
 extern crate relm4;
 
 use std::collections::HashMap;
-use std::fs::{File};
+use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 use crate::components::file_editor::FileEditorOutputMessage;
@@ -16,8 +16,6 @@ use super::file_editor::FileEditorModel;
 use super::list_files::FileListView;
 use components::file_editor::FileEditorMessage;
 use components::types::FileType;
-
-
 
 #[derive(Debug)]
 /// Estructura principal que gestiona el espacio de trabajo de archivos, que incluye una lista de archivos
@@ -87,7 +85,8 @@ impl SimpleComponent for FileWorkspace {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let docs = get_file_content_workspace(&"docs.txt".to_string()).unwrap_or_else(|_| HashMap::new());
+        let docs =
+            get_file_content_workspace(&"docs.txt".to_string()).unwrap_or_else(|_| HashMap::new());
 
         // Convierte el HashMap a la lista que espera FileListView
         let files_list: Vec<(String, FileType, String, u8)> = docs
@@ -158,7 +157,9 @@ impl SimpleComponent for FileWorkspace {
     }
 }
 
-pub fn get_file_content_workspace(file_path: &String) -> Result<HashMap<String, Vec<String>>, String> {
+pub fn get_file_content_workspace(
+    file_path: &String,
+) -> Result<HashMap<String, Vec<String>>, String> {
     let file = File::open(file_path).map_err(|_| "file-not-found".to_string())?;
     let reader = BufReader::new(file);
     let lines = reader.lines();

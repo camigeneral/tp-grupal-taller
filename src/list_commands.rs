@@ -1,8 +1,7 @@
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
+use crate::redis_response::RedisResponse;
 use parse::{CommandRequest, CommandResponse, ValueType};
-use crate::redis_response::{RedisResponse};
-
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 pub fn handle_linsert(
     request: &CommandRequest,
@@ -12,7 +11,9 @@ pub fn handle_linsert(
         Some(k) => k.clone(),
         None => {
             return RedisResponse::new(
-                CommandResponse::Error("Usage: LINSERT <doc> BEFORE|AFTER <pivot> <element>".to_string()),
+                CommandResponse::Error(
+                    "Usage: LINSERT <doc> BEFORE|AFTER <pivot> <element>".to_string(),
+                ),
                 false,
                 "".to_string(),
                 "".to_string(),
@@ -88,7 +89,6 @@ pub fn handle_linsert(
         );
     }
 }
-
 
 pub fn handle_lset(
     request: &CommandRequest,
@@ -166,7 +166,6 @@ pub fn handle_lset(
     )
 }
 
-
 pub fn handle_llen(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
@@ -198,7 +197,6 @@ pub fn handle_llen(
         doc,
     )
 }
-
 
 pub fn handle_rpush(
     request: &CommandRequest,
@@ -251,3 +249,128 @@ pub fn handle_rpush(
     )
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn setup() -> Arc<Mutex<HashMap<String, Vec<String>>>> {
+        Arc::new(Mutex::new(HashMap::new()))
+    }
+
+    #[test]
+    fn test_handle_linsert() {
+        let docs = setup();
+
+        // Test inserting before with empty list
+        let request = CommandRequest {
+            command: "LINSERT".to_string(),
+            key: Some("test".to_string()),
+            arguments: vec![
+                ValueType::String("before".to_string()),
+                ValueType::String("pivot".to_string()),
+                ValueType::String("new".to_string()),
+            ],
+        };
+
+        let response = handle_linsert(&request, Arc::clone(&docs));
+        assert!(matches!(response.response, CommandResponse::Error(_)));
+
+        // Test inserting after existing element
+        {
+            let mut docs_lock = docs.lock().unwrap();
+            docs_lock.insert("test".to_string(), vec!["pivot".to_string()]);
+        }
+
+        let request = CommandRequest {
+            command: "LINSERT".to_string(),
+            key: Some("test".to_string()),
+            arguments: vec![
+                ValueType::String("after".to_string()),
+                ValueType::String("pivot".to_string()),
+                ValueType::String("new".to_string()),
+            ],
+        };
+
+        let response = handle_linsert(&request, Arc::clone(&docs));
+        assert!(matches!(response.response, CommandResponse::Integer(2)));
+    }
+
+    #[test]
+    fn test_handle_lset() {
+        let docs = setup();
+
+        // Test setting invalid index
+        let request = CommandRequest {
+            command: "LSET".to_string(),
+            key: Some("test".to_string()),
+            arguments: vec![
+                ValueType::Integer(0),
+                ValueType::String("value".to_string()),
+            ],
+        };
+
+        let response = handle_lset(&request, Arc::clone(&docs));
+        assert!(matches!(response.response, CommandResponse::Error(_)));
+
+        // Test valid set
+        {
+            let mut docs_lock = docs.lock().unwrap();
+            docs_lock.insert("test".to_string(), vec!["old".to_string()]);
+        }
+
+        let response = handle_lset(&request, Arc::clone(&docs));
+        assert!(matches!(response.response, CommandResponse::String(_)));
+    }
+
+    #[test]
+    fn test_handle_llen() {
+        let docs = setup();
+
+        // Test empty list
+        let request = CommandRequest {
+            command: "LLEN".to_string(),
+            key: Some("test".to_string()),
+            arguments: vec![],
+        };
+
+        let response = handle_llen(&request, Arc::clone(&docs));
+        assert!(matches!(response.response, CommandResponse::Integer(0)));
+
+        // Test non-empty list
+        {
+            let mut docs_lock = docs.lock().unwrap();
+            docs_lock.insert("test".to_string(), vec!["value".to_string()]);
+        }
+
+        let response = handle_llen(&request, Arc::clone(&docs));
+        assert!(matches!(response.response, CommandResponse::Integer(1)));
+    }
+
+    #[test]
+    fn test_handle_rpush() {
+        let docs = setup();
+
+        // Test pushing single value
+        let request = CommandRequest {
+            command: "RPUSH".to_string(),
+            key: Some("test".to_string()),
+            arguments: vec![ValueType::String("value".to_string())],
+        };
+
+        let response = handle_rpush(&request, Arc::clone(&docs));
+        assert!(matches!(response.response, CommandResponse::Integer(1)));
+
+        // Test pushing multiple values
+        let request = CommandRequest {
+            command: "RPUSH".to_string(),
+            key: Some("test".to_string()),
+            arguments: vec![
+                ValueType::String("value1".to_string()),
+                ValueType::String("value2".to_string()),
+            ],
+        };
+
+        let response = handle_rpush(&request, Arc::clone(&docs));
+        assert!(matches!(response.response, CommandResponse::Integer(3)));
+    }
+}

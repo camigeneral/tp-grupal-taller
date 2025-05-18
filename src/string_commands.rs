@@ -1,9 +1,8 @@
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-use parse::{CommandRequest, CommandResponse};
-use crate::redis_response::{RedisResponse};
 use crate::redis_commands;
-
+use crate::redis_response::RedisResponse;
+use parse::{CommandRequest, CommandResponse, ValueType};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 pub fn handle_get(
     request: &CommandRequest,
@@ -18,7 +17,7 @@ pub fn handle_get(
                 "".to_string(),
                 "".to_string(),
             )
-        },
+        }
     };
 
     let docs = docs.lock().unwrap();
@@ -29,16 +28,9 @@ pub fn handle_get(
             "".to_string(),
             "".to_string(),
         ),
-        None => RedisResponse::new(
-            CommandResponse::Null,
-            false,
-            "".to_string(),
-            "".to_string(),
-        ),
+        None => RedisResponse::new(CommandResponse::Null, false, "".to_string(), "".to_string()),
     }
-
 }
-
 
 pub fn handle_set(
     request: &CommandRequest,
@@ -47,12 +39,14 @@ pub fn handle_set(
 ) -> RedisResponse {
     let doc_name = match &request.key {
         Some(k) => k.clone(),
-        None => return RedisResponse::new(
-            CommandResponse::Error("Wrong number of arguments for SET".to_string()),
-            false,
-            "".to_string(),
-            "".to_string(),
-        ),
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Wrong number of arguments for SET".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
     };
 
     if request.arguments.is_empty() {
@@ -82,14 +76,8 @@ pub fn handle_set(
         doc_name, notification
     );
 
-    RedisResponse::new(
-        CommandResponse::Ok,
-        true,
-        notification,
-        doc_name,
-    )
+    RedisResponse::new(CommandResponse::Ok, true, notification, doc_name)
 }
-
 
 pub fn handle_append(
     request: &CommandRequest,
@@ -97,12 +85,14 @@ pub fn handle_append(
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
-        None => return RedisResponse::new(
-            CommandResponse::Error("Usage: APPEND <document> <text...>".to_string()),
-            false,
-            "".to_string(),
-            "".to_string(),
-        ),
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Usage: APPEND <document> <text...>".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
     };
 
     if request.arguments.is_empty() {
@@ -111,8 +101,7 @@ pub fn handle_append(
             false,
             "".to_string(),
             "".to_string(),
-        )
-        ;
+        );
     }
 
     let content = redis_commands::extract_string_arguments(&request.arguments);
@@ -134,4 +123,160 @@ pub fn handle_append(
         notification,
         doc,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn setup_docs() -> Arc<Mutex<HashMap<String, Vec<String>>>> {
+        Arc::new(Mutex::new(HashMap::new()))
+    }
+    fn setup_clients() -> Arc<Mutex<HashMap<String, Vec<String>>>> {
+        Arc::new(Mutex::new(HashMap::new()))
+    }
+
+    #[test]
+    fn test_handle_get_existing_key() {
+        let docs = setup_docs();
+        docs.lock().unwrap().insert(
+            "doc1".to_string(),
+            vec!["line1".to_string(), "line2".to_string()],
+        );
+        let req = CommandRequest {
+            command: "GET".to_string(),
+            key: Some("doc1".to_string()),
+            arguments: vec![],
+        };
+        let resp = handle_get(&req, docs);
+        let com_resp = CommandResponse::String("line1\nline2".to_string());
+        assert_eq!(resp.response, com_resp);
+    }
+
+    #[test]
+    fn test_handle_get_missing_key() {
+        let docs = setup_docs();
+        let req = CommandRequest {
+            command: "GET".to_string(),
+            key: Some("missing".to_string()),
+            arguments: vec![],
+        };
+        let resp = handle_get(&req, docs);
+        assert_eq!(resp.response, CommandResponse::Null);
+    }
+
+    #[test]
+    fn test_handle_get_no_key() {
+        let docs = setup_docs();
+        let req = CommandRequest {
+            command: "GET".to_string(),
+            key: None,
+            arguments: vec![],
+        };
+        let resp = handle_get(&req, docs);
+        assert!(matches!(resp.response, CommandResponse::Error(_)));
+    }
+
+    #[test]
+    fn test_handle_set_success() {
+        let docs = setup_docs();
+        let clients = setup_clients();
+        let req = CommandRequest {
+            command: "SET".to_string(),
+            key: Some("doc2".to_string()),
+            arguments: vec![ValueType::String("hello world".to_string())],
+        };
+        let resp = handle_set(&req, docs.clone(), clients.clone());
+        assert_eq!(resp.response, CommandResponse::Ok);
+        let docs_guard = docs.lock().unwrap();
+        assert_eq!(
+            docs_guard.get("doc2").unwrap(),
+            &vec!["hello world".to_string()]
+        );
+        let clients_guard = clients.lock().unwrap();
+        assert!(clients_guard.contains_key("doc2"));
+    }
+
+    #[test]
+    fn test_handle_set_no_key() {
+        let docs = setup_docs();
+        let clients = setup_clients();
+        let req = CommandRequest {
+            command: "SET".to_string(),
+            key: None,
+            arguments: vec![ValueType::String("something".to_string())],
+        };
+        let resp = handle_set(&req, docs, clients);
+        assert!(matches!(resp.response, CommandResponse::Error(_)));
+    }
+
+    #[test]
+    fn test_handle_set_no_arguments() {
+        let docs = setup_docs();
+        let clients = setup_clients();
+        let req = CommandRequest {
+            command: "SET".to_string(),
+            key: Some("doc3".to_string()),
+            arguments: vec![],
+        };
+        let resp = handle_set(&req, docs, clients);
+        assert!(matches!(resp.response, CommandResponse::Error(_)));
+    }
+
+    #[test]
+    fn test_handle_append_success() {
+        let docs = setup_docs();
+        docs.lock()
+            .unwrap()
+            .insert("doc4".to_string(), vec!["first".to_string()]);
+        let req = CommandRequest {
+            command: "APPEND".to_string(),
+            key: Some("doc4".to_string()),
+            arguments: vec![ValueType::String("second".to_string())],
+        };
+        let resp = handle_append(&req, docs.clone());
+        assert_eq!(resp.response, CommandResponse::Integer(2));
+        let docs_guard = docs.lock().unwrap();
+        assert_eq!(
+            docs_guard.get("doc4").unwrap(),
+            &vec!["first".to_string(), "second".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_handle_append_new_doc() {
+        let docs = setup_docs();
+        let req = CommandRequest {
+            command: "APPEND".to_string(),
+            key: Some("doc5".to_string()),
+            arguments: vec![ValueType::String("line".to_string())],
+        };
+        let resp = handle_append(&req, docs.clone());
+        assert_eq!(resp.response, CommandResponse::Integer(1));
+        let docs_guard = docs.lock().unwrap();
+        assert_eq!(docs_guard.get("doc5").unwrap(), &vec!["line".to_string()]);
+    }
+
+    #[test]
+    fn test_handle_append_no_key() {
+        let docs = setup_docs();
+        let req = CommandRequest {
+            command: "APPEND".to_string(),
+            key: None,
+            arguments: vec![ValueType::String("text".to_string())],
+        };
+        let resp = handle_append(&req, docs);
+        assert!(matches!(resp.response, CommandResponse::Error(_)));
+    }
+
+    #[test]
+    fn test_handle_append_no_arguments() {
+        let docs = setup_docs();
+        let req = CommandRequest {
+            command: "APPEND".to_string(),
+            key: Some("doc6".to_string()),
+            arguments: vec![],
+        };
+        let resp = handle_append(&req, docs);
+        assert!(matches!(resp.response, CommandResponse::Error(_)));
+    }
 }
