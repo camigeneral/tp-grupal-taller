@@ -4,6 +4,9 @@ use std::io::{BufRead, BufReader};
 use std::net::TcpStream;
 use std::sync::mpsc::Receiver;
 use std::thread;
+use std::sync::mpsc;
+use std::net::TcpListener;
+use std::time::Duration;
 
 pub fn client_run(port: u16, rx: Receiver<String>) -> std::io::Result<()> {
     let address = format!("127.0.0.1:{}", port);
@@ -118,4 +121,90 @@ fn listen_to_subscriptions(socket: TcpStream) -> std::io::Result<()> {
     }
 
     Ok(())
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_resp_command() {
+        let parts = vec!["SET", "key", "value"];
+        let result = format_resp_command(&parts);
+        assert_eq!(result, "*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n");
+
+        let empty: Vec<&str> = vec![];
+        let result = format_resp_command(&empty);
+        assert_eq!(result, "*0\r\n");
+
+        let single = vec!["PING"];
+        let result = format_resp_command(&single);
+        assert_eq!(result, "*1\r\n$4\r\nPING\r\n");
+    }
+
+    #[test]
+    fn test_client_connection() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        
+        let (tx, rx) = mpsc::channel();
+        
+        // Spawn server thread
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buffer = [0; 1024];
+            stream.read(&mut buffer).unwrap();
+        });
+
+        // Run client in separate thread
+        let client_thread = thread::spawn(move || {
+            client_run(port, rx).unwrap();
+        });
+
+        // Give time for connection
+        thread::sleep(Duration::from_millis(100));
+        
+        assert!(client_thread.is_ok());
+    }
+
+    #[test]
+    fn test_client_exit_command() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        
+        let (tx, rx) = mpsc::channel();
+        
+        let handle = thread::spawn(move || {
+            client_run(port, rx).unwrap();
+        });
+
+        tx.send("salir".to_string()).unwrap();
+        
+        assert!(handle.join().is_ok());
+    }
+
+    #[test]
+    fn test_response_parsing() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        
+        let (tx, rx) = mpsc::channel();
+        
+        let server_thread = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream.write_all(b"+OK\r\n").unwrap();
+            stream.write_all(b"$5\r\nhello\r\n").unwrap();
+            stream.write_all(b"-Error message\r\n").unwrap();
+            stream.write_all(b":1000\r\n").unwrap();
+        });
+
+        let client_thread = thread::spawn(move || {
+            client_run(port, rx).unwrap();
+        });
+
+        thread::sleep(Duration::from_millis(100));
+        tx.send("salir".to_string()).unwrap();
+
+        assert!(server_thread.join().is_ok());
+        assert!(client_thread.join().is_ok());
+    }
 }
