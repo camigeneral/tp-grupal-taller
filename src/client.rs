@@ -1,11 +1,14 @@
+extern crate relm4;
 use std::io::Write;
 use std::io::Read;
 use std::io::{BufRead, BufReader};
 use std::net::TcpStream;
 use std::sync::mpsc::Receiver;
 use std::thread;
+use self::relm4::Sender;
+use crate::app::AppMsg; 
 
-pub fn client_run(port: u16, rx: Receiver<String>) -> std::io::Result<()> {
+pub fn client_run(port: u16, rx: Receiver<String>, ui_sender: Sender<AppMsg>) -> std::io::Result<()> {
     let address = format!("127.0.0.1:{}", port);
 
     println!("Conectándome a {:?}", address);
@@ -14,7 +17,7 @@ pub fn client_run(port: u16, rx: Receiver<String>) -> std::io::Result<()> {
     let cloned_socket = socket.try_clone()?;
 
     thread::spawn(move || {
-        if let Err(e) = listen_to_subscriptions(cloned_socket) {
+        if let Err(e) = listen_to_subscriptions(cloned_socket, ui_sender) {
             eprintln!("Error en la conexión con nodo: {}", e);
         }
     });
@@ -53,7 +56,7 @@ fn format_resp_command(parts: &[&str]) -> String {
 }
 
 
-fn listen_to_subscriptions(socket: TcpStream) -> std::io::Result<()> {
+fn listen_to_subscriptions(socket: TcpStream, ui_sender: Sender<AppMsg>) -> std::io::Result<()> {
     let mut reader = BufReader::new(socket);
 
     loop {
@@ -65,7 +68,6 @@ fn listen_to_subscriptions(socket: TcpStream) -> std::io::Result<()> {
         }
 
         println!("RESP recibido: {}", line.replace("\r\n", "\\r\\n"));
-
         match line.chars().next() {
             Some('$') => {
                 let size_str = line.trim_end();
@@ -111,10 +113,11 @@ fn listen_to_subscriptions(socket: TcpStream) -> std::io::Result<()> {
 
                 println!("Array de {} elementos:", array_size);
             }
-            _ => {
+            _ => {            
                 println!("{}", line.trim());
             }
         }
+        ui_sender.send(AppMsg::RefreshData).unwrap();
     }
 
     Ok(())

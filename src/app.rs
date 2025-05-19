@@ -2,13 +2,13 @@ extern crate gtk4;
 extern crate relm4;
 use self::gtk4::{
     prelude::{
-         BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, WidgetExt,
+         BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, WidgetExt
     },
     CssProvider,
 };
 use crate::components::login::{LoginForm, LoginOutput};
 use app::gtk4::glib::Propagation;
-use components::file_workspace::FileWorkspace;
+use components::file_workspace::{FileWorkspace, FileWorkspaceMsg};
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
 use std::collections::HashMap;
 
@@ -49,6 +49,7 @@ pub enum AppMsg {
     CommandChanged(String),
     ExecuteCommand,
     CloseApplication,
+    RefreshData
 }
 
 #[relm4::component(pub)]
@@ -175,7 +176,7 @@ impl SimpleComponent for AppModel {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
+    fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
             AppMsg::Connect => {
                 if self.is_logged_in {
@@ -191,14 +192,14 @@ impl SimpleComponent for AppModel {
                     .sender()
                     .send(NavbarMsg::SetLoggedInUser(username))
                     .unwrap();
+                let ui_sender = sender.input_sender().clone();        
 
-                //Conectar con el server   self.port
                 let (tx, rx) = channel::<String>();
                 self.command_sender = Some(tx.clone());
 
-                let port = self.port;
+                let port = self.port;                
                 thread::spawn(move || {
-                    if let Err(e) = client_run(port, rx) {
+                    if let Err(e) = client_run(port, rx, ui_sender) {
                         eprintln!("Error al iniciar el cliente: {:?}", e);
                     }
                 });
@@ -231,13 +232,18 @@ impl SimpleComponent for AppModel {
             AppMsg::ExecuteCommand => {
                 println!("Se ejecuto el siguiente comando: {}", self.command);
                 if let Some(channel_sender) = &self.command_sender {
-                    // channel_sender.send(self.command.clone()).unwrap();
                     if let Err(e) = channel_sender.send(self.command.clone()) {
                         println!("Error enviando comando: {}", e);
-                    }
+                    } else {
+                        self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
+                    }                    
                 } else {
                     println!("No hay un canal de comando disponible.");
                 }
+            },
+            AppMsg::RefreshData => {
+                println!("Actualizo archivos");
+                self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
             }
 
             AppMsg::CloseApplication => {
