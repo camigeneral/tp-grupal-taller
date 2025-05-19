@@ -3,6 +3,7 @@ extern crate relm4;
 
 use std::collections::HashMap;
 use std::fs::File;
+use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::time::Duration;
 
@@ -233,3 +234,4 @@ pub fn get_file_content_workspace(
 
     Ok(docs)
 }
+

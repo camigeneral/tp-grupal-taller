@@ -1,6 +1,9 @@
+use std::io::Cursor;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpListener, TcpStream};
 use std::str;
+use std::thread;
+
 
 /// Representa un valor de entrada en un comando RESP.
 ///
@@ -207,4 +210,139 @@ pub fn write_resp_null(mut stream: &TcpStream) -> std::io::Result<()> {
 /// Retorna `std::io::Error` si no puede escribir en el stream.
 pub fn write_resp_error(mut stream: &TcpStream, msg: &str) -> std::io::Result<()> {
     stream.write_all(format!("-ERR {}\r\n", msg).as_bytes())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn setup_tcp_server() -> (TcpStream, TcpStream) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = thread::spawn(move || listener.accept().unwrap().0);
+
+        let client = TcpStream::connect(addr).unwrap();
+        let server = server.join().unwrap();
+
+        (client, server)
+    }
+
+    #[test]
+    fn test_parse_command() {
+        let (mut client, server) = setup_tcp_server();
+
+        // Write RESP command to server
+        write!(client, "*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n").unwrap();
+
+        let mut reader = BufReader::new(server);
+        let request = parse_command(&mut reader).unwrap();
+
+        assert_eq!(request.command, "set");
+        assert_eq!(request.key, Some("key".to_string()));
+        assert_eq!(request.arguments.len(), 1);
+    }
+
+    #[test]
+    // fn test_write_response() {
+    //     let (client, server) = setup_tcp_server();
+
+    //     // Test different response types
+    //     let responses = vec![
+    //         CommandResponse::Ok,
+    //         CommandResponse::String("test".to_string()),
+    //         CommandResponse::Integer(42),
+    //         CommandResponse::Null,
+    //         CommandResponse::Error("error message".to_string())
+    //     ];
+
+    //     for response in responses {
+    //         write_response(&server, &response).unwrap();
+    //     }
+
+    //     let mut reader = BufReader::new(client);
+    //     let mut buffer = String::new();
+
+    //     // Verify OK response
+    //     reader.read_line(&mut buffer).unwrap();
+    //     assert!(buffer.contains("OK"));
+    //     buffer.clear();
+
+    //     // Verify String response
+    //     reader.read_line(&mut buffer).unwrap();
+    //     assert!(buffer.contains("test"));
+    //     buffer.clear();
+
+    //     // Verify Integer response
+    //     reader.read_line(&mut buffer).unwrap();
+    //     assert!(buffer.contains("42"));
+    //     buffer.clear();
+
+    //     // Verify Null response
+    //     reader.read_line(&mut buffer).unwrap();
+    //     assert!(buffer.contains("$-1"));
+    //     buffer.clear();
+
+    //     // Verify Error response
+    //     reader.read_line(&mut buffer).unwrap();
+    //     assert!(buffer.contains("error message"));
+    // }
+    #[test]
+    fn test_parse_resp_command_errors() {
+        let (mut client, server) = setup_tcp_server();
+
+        // Test invalid RESP format
+        write!(client, "invalid\r\n").unwrap();
+        let mut reader = BufReader::new(server);
+        let result = parse_resp_command(&mut reader);
+        assert!(result.is_err());
+
+        // Test invalid length
+        let (mut client, server) = setup_tcp_server();
+        write!(client, "*1\r\n$invalid\r\n").unwrap();
+        let mut reader = BufReader::new(server);
+        let result = parse_resp_command(&mut reader);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_write_resp_functions() {
+        let (client, server) = setup_tcp_server();
+
+        // Test write_resp_string
+        write_resp_string(&server, "test").unwrap();
+
+        let mut reader = BufReader::new(client);
+        let mut buffer = String::new();
+        reader.read_line(&mut buffer).unwrap();
+        reader.read_line(&mut buffer).unwrap();
+        assert_eq!(buffer, "$4\r\ntest\r\n");
+
+        // Test write_resp_integer
+        let (client, server) = setup_tcp_server();
+        write_resp_integer(&server, 42).unwrap();
+
+        let mut reader = BufReader::new(client);
+        let mut buffer = String::new();
+        reader.read_line(&mut buffer).unwrap();
+        assert_eq!(buffer, ":42\r\n");
+
+        // Test write_resp_null
+        let (client, server) = setup_tcp_server();
+        write_resp_null(&server).unwrap();
+
+        let mut reader = BufReader::new(client);
+        let mut buffer = String::new();
+        reader.read_line(&mut buffer).unwrap();
+        assert_eq!(buffer, "$-1\r\n");
+
+        // Test write_resp_error
+        let (client, server) = setup_tcp_server();
+        write_resp_error(&server, "test error").unwrap();
+
+        let mut reader = BufReader::new(client);
+        let mut buffer = String::new();
+        reader.read_line(&mut buffer).unwrap();
+        assert_eq!(buffer, "-ERR test error\r\n");
+    }
 }
