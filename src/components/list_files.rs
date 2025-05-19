@@ -92,7 +92,23 @@ impl SimpleComponent for FileListView {
                     set_orientation: gtk::Orientation::Vertical,
                     set_spacing: 5,
                     set_margin_top: 10
-                }
+                },
+                #[watch]
+                set_visible: model.all_filles.len() != 0
+            },
+
+            gtk::Box {
+                set_hexpand: true,
+                set_vexpand: true,
+                set_orientation: gtk::Orientation::Vertical,
+                set_halign: gtk::Align::Center,
+                set_valign: gtk::Align::Center,
+                gtk::Label {
+                    set_label: "No hay archivos cargados. Crea uno nuevo!"
+                },
+                
+                #[watch]
+                set_visible: model.all_filles.len() == 0
             }
         }
     }

@@ -33,9 +33,7 @@ fn connect_clients(address: &str) -> std::io::Result<()> {
     let docs = match get_file_content(&file_path) {
         Ok(docs) => docs,
         Err(_) => {
-            let mut new_docs: HashMap<String, Vec<String>> = HashMap::new();
-            new_docs.insert("doc1".to_string(), vec![]);
-            new_docs.insert("doc2".to_string(), vec![]);
+            let new_docs: HashMap<String, Vec<String>> = HashMap::new();            
             new_docs
         }
     };

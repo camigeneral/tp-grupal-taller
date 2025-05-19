@@ -144,7 +144,7 @@ impl SimpleComponent for FileWorkspace {
                 self.editor_visible = false;
             }
             FileWorkspaceMsg::ReloadFiles => {
-                let file_list_sender = self.file_list_ctrl.sender().clone();
+                let file_list_sender: relm4::Sender<FileFilterAction> = self.file_list_ctrl.sender().clone();
                 let file_editor_sender = self.file_editor_ctrl.sender().clone();
 
                 let current_file = self.current_file.clone();
