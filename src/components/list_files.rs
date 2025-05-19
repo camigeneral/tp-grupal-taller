@@ -43,7 +43,7 @@ pub enum FileFilterAction {
     SpreadsheetFiles,
     /// Selecciona un archivo específico.
     SelectFile(String, FileType, String, u8),
-    UpdateFiles(Vec<(String, FileType, String, u8)>)
+    UpdateFiles(Vec<(String, FileType, String, u8)>),
 }
 
 #[relm4::component(pub)]
@@ -144,9 +144,9 @@ impl SimpleComponent for FileListView {
                 .unwrap(),
 
             FileFilterAction::UpdateFiles(new_files) => {
-                self.all_filles = new_files;                
+                self.all_filles = new_files;
                 self.update_file_list_based_on_filter();
-            },
+            }
         }
     }
 }

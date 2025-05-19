@@ -1,8 +1,8 @@
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-use parse::{CommandRequest, CommandResponse};
-use super::redis_response::{RedisResponse};
 use super::redis;
+use super::redis_response::RedisResponse;
+use parse::{CommandRequest, CommandResponse};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 /// Maneja el comando GET para obtener el contenido de un documento.
 ///
@@ -29,7 +29,7 @@ pub fn handle_get(
                 "".to_string(),
                 "".to_string(),
             )
-        },
+        }
     };
 
     let docs = docs.lock().unwrap();
@@ -40,14 +40,8 @@ pub fn handle_get(
             "".to_string(),
             "".to_string(),
         ),
-        None => RedisResponse::new(
-            CommandResponse::Null,
-            false,
-            "".to_string(),
-            "".to_string(),
-        ),
+        None => RedisResponse::new(CommandResponse::Null, false, "".to_string(), "".to_string()),
     }
-
 }
 
 /// Maneja el comando SET para sobrescribir el contenido de un documento.
@@ -72,12 +66,14 @@ pub fn handle_set(
 ) -> RedisResponse {
     let doc_name = match &request.key {
         Some(k) => k.clone(),
-        None => return RedisResponse::new(
-            CommandResponse::Error("Wrong number of arguments for SET".to_string()),
-            false,
-            "".to_string(),
-            "".to_string(),
-        ),
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Wrong number of arguments for SET".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
     };
 
     if request.arguments.is_empty() {
@@ -107,12 +103,7 @@ pub fn handle_set(
         doc_name, notification
     );
 
-    RedisResponse::new(
-        CommandResponse::Ok,
-        true,
-        notification,
-        doc_name,
-    )
+    RedisResponse::new(CommandResponse::Ok, true, notification, doc_name)
 }
 
 /// Maneja el comando APPEND para agregar contenido a un documento línea por línea.
@@ -135,12 +126,14 @@ pub fn handle_append(
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
-        None => return RedisResponse::new(
-            CommandResponse::Error("Usage: APPEND <document> <text...>".to_string()),
-            false,
-            "".to_string(),
-            "".to_string(),
-        ),
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Usage: APPEND <document> <text...>".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
     };
 
     if request.arguments.is_empty() {
@@ -149,8 +142,7 @@ pub fn handle_append(
             false,
             "".to_string(),
             "".to_string(),
-        )
-        ;
+        );
     }
 
     let content = redis::extract_string_arguments(&request.arguments);

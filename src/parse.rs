@@ -26,7 +26,6 @@ pub enum ValueType {
     Array(Vec<ValueType>),
 }
 
-
 /// Representa una solicitud de comando recibida desde un cliente.
 ///
 /// Esta estructura contiene el comando base (como `"get"` o `"set"`),
@@ -193,7 +192,6 @@ pub fn write_resp_integer(mut stream: &TcpStream, value: i64) -> std::io::Result
     let response = format!(":{}\r\n", value);
     stream.write_all(response.as_bytes())
 }
-
 
 /// Escribe un valor nulo como RESP Null (`$-1\r\n`).
 ///

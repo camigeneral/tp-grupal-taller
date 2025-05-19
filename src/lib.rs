@@ -1,6 +1,5 @@
-pub mod parse;
 pub mod client_info;
-
+pub mod parse;
 
 /// Módulo principal de la aplicación.
 ///

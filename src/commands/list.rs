@@ -1,14 +1,14 @@
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
+use super::redis_response::RedisResponse;
 use parse::{CommandRequest, CommandResponse, ValueType};
-use super::redis_response::{RedisResponse};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 /// Maneja el comando LINSERT que inserta un elemento antes o después de un elemento pivote en una lista
-/// 
+///
 /// # Argumentos
 /// * `request` - La solicitud de comando que contiene el documento, flag (BEFORE|AFTER), elemento pivote y elemento a insertar
 /// * `docs` - Un mapa compartido y protegido que asocia documentos con listas de elementos
-/// 
+///
 /// # Retorno
 /// * `RedisResponse` - La respuesta al comando, que incluye la longitud actualizada de la lista
 pub fn handle_linsert(
@@ -19,7 +19,9 @@ pub fn handle_linsert(
         Some(k) => k.clone(),
         None => {
             return RedisResponse::new(
-                CommandResponse::Error("Usage: LINSERT <doc> BEFORE|AFTER <pivot> <element>".to_string()),
+                CommandResponse::Error(
+                    "Usage: LINSERT <doc> BEFORE|AFTER <pivot> <element>".to_string(),
+                ),
                 false,
                 "".to_string(),
                 "".to_string(),
@@ -97,11 +99,11 @@ pub fn handle_linsert(
 }
 
 /// Maneja el comando LSET que actualiza un elemento en una posición específica de una lista
-/// 
+///
 /// # Argumentos
 /// * `request` - La solicitud de comando que contiene el documento, índice y elemento a establecer
 /// * `docs` - Un mapa compartido y protegido que asocia documentos con listas de elementos
-/// 
+///
 /// # Retorno
 /// * `RedisResponse` - La respuesta al comando confirmando la actualización o un error
 pub fn handle_lset(
@@ -181,11 +183,11 @@ pub fn handle_lset(
 }
 
 /// Maneja el comando LLEN que devuelve la longitud de una lista
-/// 
+///
 /// # Argumentos
 /// * `request` - La solicitud de comando que contiene el documento a consultar
 /// * `docs` - Un mapa compartido y protegido que asocia documentos con listas de elementos
-/// 
+///
 /// # Retorno
 /// * `RedisResponse` - La respuesta al comando con la longitud de la lista
 pub fn handle_llen(
@@ -221,11 +223,11 @@ pub fn handle_llen(
 }
 
 /// Maneja el comando RPUSH que añade uno o más elementos al final de una lista
-/// 
+///
 /// # Argumentos
 /// * `request` - La solicitud de comando que contiene el documento y los elementos a añadir
 /// * `docs` - Un mapa compartido y protegido que asocia documentos con listas de elementos
-/// 
+///
 /// # Retorno
 /// * `RedisResponse` - La respuesta al comando con la longitud actualizada de la lista
 pub fn handle_rpush(
@@ -278,4 +280,3 @@ pub fn handle_rpush(
         doc,
     )
 }
-

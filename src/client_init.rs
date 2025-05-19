@@ -5,7 +5,6 @@ use rusty_docs::app::AppModel;
 extern crate rand;
 use rand::Rng;
 
-
 fn main() {
     let port = 4000;
     let id = format!("rusty.docs{}", rand::thread_rng().gen_range(0..100));

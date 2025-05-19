@@ -1,14 +1,18 @@
 extern crate relm4;
-use std::io::Write;
+use self::relm4::Sender;
+use crate::app::AppMsg;
 use std::io::Read;
+use std::io::Write;
 use std::io::{BufRead, BufReader};
 use std::net::TcpStream;
 use std::sync::mpsc::Receiver;
 use std::thread;
-use self::relm4::Sender;
-use crate::app::AppMsg; 
 
-pub fn client_run(port: u16, rx: Receiver<String>, ui_sender: Sender<AppMsg>) -> std::io::Result<()> {
+pub fn client_run(
+    port: u16,
+    rx: Receiver<String>,
+    ui_sender: Sender<AppMsg>,
+) -> std::io::Result<()> {
     let address = format!("127.0.0.1:{}", port);
 
     println!("Conectándome a {:?}", address);
@@ -23,13 +27,12 @@ pub fn client_run(port: u16, rx: Receiver<String>, ui_sender: Sender<AppMsg>) ->
     });
 
     for command in rx {
-
         let trimmed_command = command.trim().to_lowercase();
 
         if trimmed_command == "salir" {
             println!("Desconectando del servidor");
             break;
-        }else{
+        } else {
             println!("Enviando: {:?}", command);
 
             let parts: Vec<&str> = command.split_whitespace().collect();
@@ -40,10 +43,9 @@ pub fn client_run(port: u16, rx: Receiver<String>, ui_sender: Sender<AppMsg>) ->
             socket.write_all(resp_command.as_bytes())?;
         }
     }
-    
+
     Ok(())
 }
-
 
 fn format_resp_command(parts: &[&str]) -> String {
     let mut resp = format!("*{}\r\n", parts.len());
@@ -54,7 +56,6 @@ fn format_resp_command(parts: &[&str]) -> String {
 
     resp
 }
-
 
 fn listen_to_subscriptions(socket: TcpStream, ui_sender: Sender<AppMsg>) -> std::io::Result<()> {
     let mut reader = BufReader::new(socket);
@@ -113,7 +114,7 @@ fn listen_to_subscriptions(socket: TcpStream, ui_sender: Sender<AppMsg>) -> std:
 
                 println!("Array de {} elementos:", array_size);
             }
-            _ => {            
+            _ => {
                 println!("{}", line.trim());
             }
         }

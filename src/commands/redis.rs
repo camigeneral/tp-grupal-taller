@@ -1,13 +1,11 @@
-
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-use parse::{CommandRequest, CommandResponse, ValueType};
-use super::redis_response::{RedisResponse};
 use super::list;
+use super::pub_sub;
+use super::redis_response::RedisResponse;
 use super::set;
 use super::string;
-use super::pub_sub;
-
+use parse::{CommandRequest, CommandResponse, ValueType};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 pub fn execute_command(
     request: CommandRequest,
@@ -33,10 +31,9 @@ pub fn execute_command(
             false,
             "".to_string(),
             "".to_string(),
-        )
+        ),
     }
 }
-
 
 pub fn extract_string_arguments(arguments: &[ValueType]) -> String {
     arguments

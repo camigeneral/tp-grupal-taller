@@ -2,26 +2,22 @@ extern crate gtk4;
 extern crate relm4;
 
 use std::collections::HashMap;
-use std::fs::{File};
+use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::time::Duration;
 
-
-use crate::components::file_editor::FileEditorOutputMessage;
 use self::gtk4::glib;
-use self::gtk4::glib::ControlFlow::Continue;
 use self::gtk4::prelude::{OrientableExt, WidgetExt};
 use self::relm4::{
     gtk, Component, ComponentController, ComponentParts, ComponentSender, Controller,
     RelmWidgetExt, SimpleComponent,
 };
-use components::list_files::FileFilterAction;
 use super::file_editor::FileEditorModel;
 use super::list_files::FileListView;
+use crate::components::file_editor::FileEditorOutputMessage;
 use components::file_editor::FileEditorMessage;
+use components::list_files::FileFilterAction;
 use components::types::FileType;
-
-
 
 #[derive(Debug)]
 /// Estructura principal que gestiona el espacio de trabajo de archivos, que incluye una lista de archivos
@@ -34,7 +30,7 @@ pub struct FileWorkspace {
     /// Bandera que indica si el editor de archivos está visible.
     editor_visible: bool,
 
-    current_file: String
+    current_file: String,
 }
 
 /// Enum que define los diferentes mensajes que puede recibir el componente `FileWorkspace`.
@@ -47,7 +43,7 @@ pub enum FileWorkspaceMsg {
     Ignore,
     /// Mensaje para cerrar el editor de archivos.
     CloseEditor,
-    ReloadFiles
+    ReloadFiles,
 }
 
 #[relm4::component(pub)]
@@ -94,19 +90,20 @@ impl SimpleComponent for FileWorkspace {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let list_files_cont = FileListView::builder().
-        launch(get_files_list(&"docs.txt".to_string())).forward(
-            sender.input_sender(),
-            |msg: crate::components::list_files::FileFilterAction| match msg {
-                crate::components::list_files::FileFilterAction::SelectFile(
-                    file,
-                    _file_type,
-                    content,
-                    qty,
-                ) => FileWorkspaceMsg::OpenFile(file, content, qty),
-                _ => FileWorkspaceMsg::Ignore,
-            },
-        );
+        let list_files_cont = FileListView::builder()
+            .launch(get_files_list(&"docs.txt".to_string()))
+            .forward(
+                sender.input_sender(),
+                |msg: crate::components::list_files::FileFilterAction| match msg {
+                    crate::components::list_files::FileFilterAction::SelectFile(
+                        file,
+                        _file_type,
+                        content,
+                        qty,
+                    ) => FileWorkspaceMsg::OpenFile(file, content, qty),
+                    _ => FileWorkspaceMsg::Ignore,
+                },
+            );
         let editor_file_cont = FileEditorModel::builder()
             .launch(("".to_string(), 0, "".to_string()))
             .forward(
@@ -119,7 +116,7 @@ impl SimpleComponent for FileWorkspace {
             file_list_ctrl: list_files_cont,
             file_editor_ctrl: editor_file_cont,
             editor_visible: false,
-            current_file: "".to_string()
+            current_file: "".to_string(),
         };
 
         let list_box_widget = model.file_list_ctrl.widget();
@@ -129,7 +126,7 @@ impl SimpleComponent for FileWorkspace {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
+    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
         match message {
             FileWorkspaceMsg::OpenFile(file, content, qty) => {
                 self.current_file = file.clone();
@@ -146,37 +143,43 @@ impl SimpleComponent for FileWorkspace {
                     .unwrap();
                 self.editor_visible = false;
             }
-            FileWorkspaceMsg::ReloadFiles => {                                            
+            FileWorkspaceMsg::ReloadFiles => {
                 let file_list_sender = self.file_list_ctrl.sender().clone();
                 let file_editor_sender = self.file_editor_ctrl.sender().clone();
 
                 let current_file = self.current_file.clone();
-                
 
                 glib::timeout_add_local(Duration::from_millis(100), move || {
                     let new_files = get_files_list(&"docs.txt".to_string());
-                    file_list_sender.send(FileFilterAction::UpdateFiles(new_files.clone())).unwrap();
-                    
-                    if let Some((file_name, _, new_content, qty)) = new_files.iter()
-                        .find(|(name, _, _, _)| *name == current_file) {
-                            file_editor_sender.send(FileEditorMessage::UpdateFile(
+                    file_list_sender
+                        .send(FileFilterAction::UpdateFiles(new_files.clone()))
+                        .unwrap();
+
+                    if let Some((file_name, _, new_content, qty)) = new_files
+                        .iter()
+                        .find(|(name, _, _, _)| *name == current_file)
+                    {
+                        file_editor_sender
+                            .send(FileEditorMessage::UpdateFile(
                                 file_name.clone(),
                                 *qty,
                                 new_content.clone(),
-                        )).unwrap();
+                            ))
+                            .unwrap();
                     }
-                    
-                    glib::ControlFlow::Break 
+
+                    glib::ControlFlow::Break
                 });
-                
             }
-            
+
             _ => {}
         }
     }
 }
 
-fn get_files_list(file_path: &String) -> Vec<(std::string::String, FileType, std::string::String, u8)> {
+fn get_files_list(
+    file_path: &String,
+) -> Vec<(std::string::String, FileType, std::string::String, u8)> {
     let docs = get_file_content_workspace(file_path).unwrap_or_else(|_| HashMap::new());
     // Convierte el HashMap a la lista que espera FileListView
     let files_list: Vec<(String, FileType, String, u8)> = docs
@@ -196,7 +199,9 @@ fn get_files_list(file_path: &String) -> Vec<(std::string::String, FileType, std
     files_list
 }
 
-pub fn get_file_content_workspace(file_path: &String) -> Result<HashMap<String, Vec<String>>, String> {
+pub fn get_file_content_workspace(
+    file_path: &String,
+) -> Result<HashMap<String, Vec<String>>, String> {
     let file = File::open(file_path).map_err(|_| "file-not-found".to_string())?;
     let reader = BufReader::new(file);
     let lines = reader.lines();

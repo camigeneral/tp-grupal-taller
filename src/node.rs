@@ -1,18 +1,17 @@
 use std::collections::HashMap;
 mod commands;
+use commands::redis;
 use std::env::args;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write};
-use std::str;
 use std::net::{TcpListener, TcpStream};
+use std::str;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use commands::redis;
-mod parse;
 mod client_info;
+mod parse;
 
 static SERVER_ARGS: usize = 2;
-
 
 pub fn main() -> Result<(), ()> {
     let argv = args().collect::<Vec<String>>();
@@ -27,7 +26,6 @@ pub fn main() -> Result<(), ()> {
     connect_clients(&address).unwrap(); //por ahora
     Ok(())
 }
-
 
 fn connect_clients(address: &str) -> std::io::Result<()> {
     let file_path = "docs.txt".to_string();
@@ -52,7 +50,8 @@ fn connect_clients(address: &str) -> std::io::Result<()> {
     // guardo la informacion de los clientes
     let clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>> =
         Arc::new(Mutex::new(initial_clients_on_doc));
-    let clients: Arc<Mutex<HashMap<String, client_info::Client>>> = Arc::new(Mutex::new(HashMap::new()));
+    let clients: Arc<Mutex<HashMap<String, client_info::Client>>> =
+        Arc::new(Mutex::new(HashMap::new()));
 
     let listener = TcpListener::bind(address)?;
     println!("Server listening on {}", address);
@@ -106,7 +105,6 @@ fn connect_clients(address: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-
 fn handle_client(
     stream: &mut TcpStream,
     clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
@@ -141,8 +139,13 @@ fn handle_client(
             client_addr.clone(),
         );
 
-        if redis_response.publish { 
-            if let Err(e) = publish(clients.clone(), clients_on_docs.clone(), redis_response.message, redis_response.doc) {
+        if redis_response.publish {
+            if let Err(e) = publish(
+                clients.clone(),
+                clients_on_docs.clone(),
+                redis_response.message,
+                redis_response.doc,
+            ) {
                 eprintln!("Error publishing update: {}", e);
             }
         }
@@ -165,7 +168,6 @@ fn handle_client(
     Ok(())
 }
 
-
 fn cleanup_client(
     client_addr: &str,
     clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
@@ -178,7 +180,6 @@ fn cleanup_client(
         subscribers.retain(|addr| addr != client_addr);
     }
 }
-
 
 pub fn publish(
     clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
@@ -204,7 +205,6 @@ pub fn publish(
     Ok(())
 }
 
-
 pub fn write_to_file(docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Result<()> {
     let mut file = OpenOptions::new()
         .create(true)
@@ -227,7 +227,6 @@ pub fn write_to_file(docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Resu
 
     Ok(())
 }
-
 
 pub fn get_file_content(file_path: &String) -> Result<HashMap<String, Vec<String>>, String> {
     let file = File::open(file_path).map_err(|_| "file-not-found".to_string())?;

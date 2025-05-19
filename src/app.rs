@@ -1,9 +1,7 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::{
-    prelude::{
-         BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, WidgetExt
-    },
+    prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, WidgetExt},
     CssProvider,
 };
 use crate::components::login::{LoginForm, LoginOutput};
@@ -49,7 +47,7 @@ pub enum AppMsg {
     CommandChanged(String),
     ExecuteCommand,
     CloseApplication,
-    RefreshData
+    RefreshData,
 }
 
 #[relm4::component(pub)]
@@ -192,12 +190,12 @@ impl SimpleComponent for AppModel {
                     .sender()
                     .send(NavbarMsg::SetLoggedInUser(username))
                     .unwrap();
-                let ui_sender = sender.input_sender().clone();        
+                let ui_sender = sender.input_sender().clone();
 
                 let (tx, rx) = channel::<String>();
                 self.command_sender = Some(tx.clone());
 
-                let port = self.port;                
+                let port = self.port;
                 thread::spawn(move || {
                     if let Err(e) = client_run(port, rx, ui_sender) {
                         eprintln!("Error al iniciar el cliente: {:?}", e);
@@ -236,11 +234,11 @@ impl SimpleComponent for AppModel {
                         println!("Error enviando comando: {}", e);
                     } else {
                         self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
-                    }                    
+                    }
                 } else {
                     println!("No hay un canal de comando disponible.");
                 }
-            },
+            }
             AppMsg::RefreshData => {
                 println!("Actualizo archivos");
                 self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
