@@ -3,7 +3,15 @@ use std::collections::HashMap;
 use parse::{CommandRequest, CommandResponse};
 use super::redis_response::{RedisResponse};
 
-
+/// Maneja el comando SUBSCRIBE que permite a un cliente suscribirse a un documento
+/// 
+/// # Argumentos
+/// * `request` - La solicitud de comando que contiene el documento al que suscribirse
+/// * `clients_on_docs` - Un mapa compartido y protegido que asocia documentos con listas de clientes suscritos
+/// * `client_addr` - La dirección del cliente que solicita la suscripción
+/// 
+/// # Retorno
+/// * `RedisResponse` - La respuesta al comando, que incluye si la suscripción fue exitosa
 pub fn handle_subscribe(
     request: &CommandRequest,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
@@ -38,7 +46,15 @@ pub fn handle_subscribe(
     }
 }
 
-
+/// Maneja el comando UNSUBSCRIBE que permite a un cliente cancelar su suscripción a un documento
+/// 
+/// # Argumentos
+/// * `request` - La solicitud de comando que contiene el documento del cual cancelar la suscripción
+/// * `clients_on_docs` - Un mapa compartido y protegido que asocia documentos con listas de clientes suscritos
+/// * `client_addr` - La dirección del cliente que solicita cancelar la suscripción
+/// 
+/// # Retorno
+/// * `RedisResponse` - La respuesta al comando, que incluye si la cancelación de suscripción fue exitosa
 pub fn handle_unsubscribe(
     request: &CommandRequest,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,

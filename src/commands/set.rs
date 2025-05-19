@@ -3,7 +3,14 @@ use std::collections::HashMap;
 use parse::{CommandRequest, CommandResponse, ValueType};
 use super::redis_response::{RedisResponse};
 
-
+/// Maneja el comando SCARD que devuelve el número de suscriptores en un documento
+/// 
+/// # Argumentos
+/// * `request` - La solicitud de comando que contiene el documento a consultar
+/// * `clients_on_docs` - Un mapa compartido y protegido que asocia documentos con listas de clientes suscritos
+/// 
+/// # Retorno
+/// * `RedisResponse` - La respuesta al comando con el número de suscriptores en el documento
 pub fn handle_scard(
     request: &CommandRequest,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
@@ -36,7 +43,14 @@ pub fn handle_scard(
     }
 }
 
-
+/// Maneja el comando SMEMBERS que lista todos los suscriptores de un documento
+/// 
+/// # Argumentos
+/// * `request` - La solicitud de comando que contiene el documento a consultar
+/// * `clients_on_docs` - Un mapa compartido y protegido que asocia documentos con listas de clientes suscritos
+/// 
+/// # Retorno
+/// * `RedisResponse` - La respuesta al comando con la lista de suscriptores del documento
 pub fn handle_smembers(
     request: &CommandRequest,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
@@ -83,6 +97,14 @@ pub fn handle_smembers(
 }
 
 
+/// Maneja el comando SSCAN que busca suscriptores en un documento que coincidan con un patrón
+/// 
+/// # Argumentos
+/// * `request` - La solicitud de comando que contiene el documento a consultar y opcionalmente un patrón de búsqueda
+/// * `clients_on_docs` - Un mapa compartido y protegido que asocia documentos con listas de clientes suscritos
+/// 
+/// # Retorno
+/// * `RedisResponse` - La respuesta al comando con los suscriptores que coinciden con el patrón
 pub fn handle_sscan(
     request: &CommandRequest,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,

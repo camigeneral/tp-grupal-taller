@@ -3,7 +3,14 @@ use std::collections::HashMap;
 use parse::{CommandRequest, CommandResponse, ValueType};
 use super::redis_response::{RedisResponse};
 
-
+/// Maneja el comando LINSERT que inserta un elemento antes o después de un elemento pivote en una lista
+/// 
+/// # Argumentos
+/// * `request` - La solicitud de comando que contiene el documento, flag (BEFORE|AFTER), elemento pivote y elemento a insertar
+/// * `docs` - Un mapa compartido y protegido que asocia documentos con listas de elementos
+/// 
+/// # Retorno
+/// * `RedisResponse` - La respuesta al comando, que incluye la longitud actualizada de la lista
 pub fn handle_linsert(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
@@ -89,7 +96,14 @@ pub fn handle_linsert(
     }
 }
 
-
+/// Maneja el comando LSET que actualiza un elemento en una posición específica de una lista
+/// 
+/// # Argumentos
+/// * `request` - La solicitud de comando que contiene el documento, índice y elemento a establecer
+/// * `docs` - Un mapa compartido y protegido que asocia documentos con listas de elementos
+/// 
+/// # Retorno
+/// * `RedisResponse` - La respuesta al comando confirmando la actualización o un error
 pub fn handle_lset(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
@@ -166,7 +180,14 @@ pub fn handle_lset(
     )
 }
 
-
+/// Maneja el comando LLEN que devuelve la longitud de una lista
+/// 
+/// # Argumentos
+/// * `request` - La solicitud de comando que contiene el documento a consultar
+/// * `docs` - Un mapa compartido y protegido que asocia documentos con listas de elementos
+/// 
+/// # Retorno
+/// * `RedisResponse` - La respuesta al comando con la longitud de la lista
 pub fn handle_llen(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
@@ -199,7 +220,14 @@ pub fn handle_llen(
     )
 }
 
-
+/// Maneja el comando RPUSH que añade uno o más elementos al final de una lista
+/// 
+/// # Argumentos
+/// * `request` - La solicitud de comando que contiene el documento y los elementos a añadir
+/// * `docs` - Un mapa compartido y protegido que asocia documentos con listas de elementos
+/// 
+/// # Retorno
+/// * `RedisResponse` - La respuesta al comando con la longitud actualizada de la lista
 pub fn handle_rpush(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,

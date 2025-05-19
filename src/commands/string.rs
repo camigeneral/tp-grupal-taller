@@ -4,7 +4,18 @@ use parse::{CommandRequest, CommandResponse};
 use super::redis_response::{RedisResponse};
 use super::redis;
 
-
+/// Maneja el comando GET para obtener el contenido de un documento.
+///
+/// - Si no se especifica clave (documento), devuelve un error.
+/// - Si el documento existe, concatena sus líneas con `\n` y lo devuelve.
+/// - Si no existe, devuelve un valor nulo.
+///
+/// # Parámetros
+/// - `request`: comando recibido con clave y argumentos.
+/// - `docs`: referencia compartida a la estructura de documentos.
+///
+/// # Retorna
+/// - `RedisResponse` con el contenido (`String`), nulo (`Null`) o error.
 pub fn handle_get(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
@@ -39,7 +50,21 @@ pub fn handle_get(
 
 }
 
-
+/// Maneja el comando SET para sobrescribir el contenido de un documento.
+///
+/// - Si no se especifica documento o contenido, devuelve un error.
+/// - Si el documento existe, lo sobreescribe.
+/// - Si no existe, lo crea.
+/// - Registra el documento en el mapa de `clients_on_docs` para futuras suscripciones.
+/// - Publica una notificación para los clientes suscritos.
+///
+/// # Parámetros
+/// - `request`: contiene el documento y los argumentos (contenido).
+/// - `docs`: referencia a la base de documentos compartida.
+/// - `clients_on_docs`: referencia a la tabla de suscriptores.
+///
+/// # Retorna
+/// - `RedisResponse::Ok` con notificación activa y nombre del documento.
 pub fn handle_set(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
@@ -90,7 +115,20 @@ pub fn handle_set(
     )
 }
 
-
+/// Maneja el comando APPEND para agregar contenido a un documento línea por línea.
+///
+/// - Si no se especifica documento o contenido, devuelve un error.
+/// - Si el documento no existe, lo crea automáticamente.
+/// - Agrega una nueva línea de texto al final del documento.
+/// - Retorna el número de línea donde se agregó el contenido.
+/// - Publica una notificación para los clientes suscritos.
+///
+/// # Parámetros
+/// - `request`: contiene la clave del documento y el contenido a agregar.
+/// - `docs`: acceso a los documentos en memoria compartida.
+///
+/// # Retorna
+/// - `RedisResponse::Integer(line_number)` con notificación activa y nombre del documento.
 pub fn handle_append(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
