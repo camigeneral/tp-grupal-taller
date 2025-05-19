@@ -1,5 +1,6 @@
 use super::redis;
 use super::redis_response::RedisResponse;
+#[allow(unused_imports)]
 use parse::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

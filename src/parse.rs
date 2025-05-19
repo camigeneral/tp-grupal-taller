@@ -1,7 +1,10 @@
+#[allow(unused_imports)]
 use std::io::Cursor;
 use std::io::{BufRead, BufReader, Read, Write};
+#[allow(unused_imports)]
 use std::net::{TcpListener, TcpStream};
 use std::str;
+#[allow(unused_imports)]
 use std::thread;
 
 /// Representa un valor de entrada en un comando RESP.

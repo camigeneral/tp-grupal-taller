@@ -13,19 +13,20 @@ mod parse;
 
 static SERVER_ARGS: usize = 2;
 
-pub fn main() -> Result<(), ()> {
+pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let argv = args().collect::<Vec<String>>();
     if argv.len() != SERVER_ARGS {
-        println!("Cantidad de argumentos inválido");
+        eprintln!("Cantidad de argumentos inválida");
         let app_name = &argv[0];
-        println!("Usage:\n{:?} <puerto>", app_name);
-        return Err(());
+        eprintln!("Usage:\n{} <puerto>", app_name);
+        return Err("Cantidad de argumentos inválida".into());
     }
 
-    let address = "127.0.0.1:".to_owned() + &argv[1];
-    connect_clients(&address).unwrap(); //por ahora
+    let address = format!("127.0.0.1:{}", argv[1]);
+    connect_clients(&address)?; // Propaga error si ocurre
     Ok(())
 }
+
 
 fn connect_clients(address: &str) -> std::io::Result<()> {
     let file_path = "docs.txt".to_string();
