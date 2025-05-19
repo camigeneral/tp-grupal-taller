@@ -1,9 +1,8 @@
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
+use super::redis;
+use super::redis_response::RedisResponse;
 use parse::{CommandRequest, CommandResponse, ValueType};
-use crate::redis_response::{RedisResponse};
-use crate::redis_commands;
-
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 pub fn handle_get(
     request: &CommandRequest,
@@ -148,7 +147,6 @@ pub fn handle_append(
             "".to_string(),
             "".to_string(),
         );
-        );
     }
 
     let content = redis::extract_string_arguments(&request.arguments);
@@ -171,7 +169,6 @@ pub fn handle_append(
         doc,
     )
 }
-
 
 #[cfg(test)]
 mod tests {

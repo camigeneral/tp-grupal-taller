@@ -4,7 +4,6 @@ use std::net::{TcpListener, TcpStream};
 use std::str;
 use std::thread;
 
-
 /// Representa un valor de entrada en un comando RESP.
 ///
 /// Este enum permite modelar diferentes tipos de datos que pueden
@@ -54,7 +53,7 @@ pub struct CommandRequest {
 /// - Null: "$-1\r\n"
 /// - Error: "-ERR ...\r\n"
 /// - Array: arreglo de respuestas (no completamente soportado)
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 #[allow(dead_code)]
 pub enum CommandResponse {
     Ok,

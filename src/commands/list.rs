@@ -22,9 +22,6 @@ pub fn handle_linsert(
                 CommandResponse::Error(
                     "Usage: LINSERT <doc> BEFORE|AFTER <pivot> <element>".to_string(),
                 ),
-                CommandResponse::Error(
-                    "Usage: LINSERT <doc> BEFORE|AFTER <pivot> <element>".to_string(),
-                ),
                 false,
                 "".to_string(),
                 "".to_string(),

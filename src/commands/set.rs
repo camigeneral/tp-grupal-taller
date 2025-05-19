@@ -43,15 +43,9 @@ pub fn handle_scard(
                 doc,
                 subscribers.len()
             )),
-            CommandResponse::String(format!(
-                "Number of subscribers in channel {}: {}",
-                doc,
-                subscribers.len()
-            )),
             false,
             "".to_string(),
             "".to_string(),
-        )
         )
     } else {
         RedisResponse::new(
@@ -201,14 +195,9 @@ pub fn handle_sscan(
                     "No subscribers matching '{}' in document {}",
                     pattern, doc
                 )),
-                CommandResponse::String(format!(
-                    "No subscribers matching '{}' in document {}",
-                    pattern, doc
-                )),
                 false,
                 "".to_string(),
                 "".to_string(),
-            );
             );
         }
 

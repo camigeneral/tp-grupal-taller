@@ -27,6 +27,7 @@ use self::relm4::{
 /// - `files_manager_cont`: Controlador para el área de gestión de archivos
 /// - `login_form_cont`: Controlador para el formulario de login
 /// - `is_logged_in`: Indica si el usuario ha iniciado sesión
+#[derive(Debug)]
 pub struct AppModel {
     header_cont: Controller<NavbarModel>,
     files_manager_cont: Controller<FileWorkspace>,
@@ -197,7 +198,7 @@ impl SimpleComponent for AppModel {
 
                 let port = self.port;
                 thread::spawn(move || {
-                    if let Err(e) = client_run(port, rx, ui_sender) {
+                    if let Err(e) = client_run(port, rx, Some(ui_sender)) {
                         eprintln!("Error al iniciar el cliente: {:?}", e);
                     }
                 });

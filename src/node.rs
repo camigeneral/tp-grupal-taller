@@ -6,7 +6,6 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::str;
-use std::str;
 use std::sync::{Arc, Mutex};
 use std::thread;
 mod client_info;

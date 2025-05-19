@@ -14,7 +14,7 @@ use std::time::Duration;
 pub fn client_run(
     port: u16,
     rx: Receiver<String>,
-    ui_sender: Sender<AppMsg>,
+    ui_sender: Option<Sender<AppMsg>>,
 ) -> std::io::Result<()> {
     let address = format!("127.0.0.1:{}", port);
 
@@ -36,7 +36,6 @@ pub fn client_run(
             println!("Desconectando del servidor");
             break;
         } else {
-        } else {
             println!("Enviando: {:?}", command);
 
             let parts: Vec<&str> = command.split_whitespace().collect();
@@ -47,7 +46,6 @@ pub fn client_run(
             socket.write_all(resp_command.as_bytes())?;
         }
     }
-
 
     Ok(())
 }
@@ -62,7 +60,10 @@ fn format_resp_command(parts: &[&str]) -> String {
     resp
 }
 
-fn listen_to_subscriptions(socket: TcpStream, ui_sender: Sender<AppMsg>) -> std::io::Result<()> {
+fn listen_to_subscriptions(
+    socket: TcpStream,
+    ui_sender: Option<Sender<AppMsg>>,
+) -> std::io::Result<()> {
     let mut reader = BufReader::new(socket);
 
     loop {
@@ -123,7 +124,10 @@ fn listen_to_subscriptions(socket: TcpStream, ui_sender: Sender<AppMsg>) -> std:
                 println!("{}", line.trim());
             }
         }
-        ui_sender.send(AppMsg::RefreshData).unwrap();
+
+        if let Some(sender) = &ui_sender {
+            let _ = sender.send(AppMsg::RefreshData);
+        }
     }
 
     Ok(())
@@ -163,7 +167,7 @@ mod tests {
         });
 
         let client_thread = thread::spawn(move || {
-            client_run(port, rx).unwrap();
+            client_run(port, rx, None).unwrap();
         });
 
         thread::sleep(Duration::from_millis(100));
