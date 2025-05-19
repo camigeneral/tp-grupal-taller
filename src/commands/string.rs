@@ -62,14 +62,6 @@ pub fn handle_set(
                 "".to_string(),
             )
         }
-        None => {
-            return RedisResponse::new(
-                CommandResponse::Error("Wrong number of arguments for SET".to_string()),
-                false,
-                "".to_string(),
-                "".to_string(),
-            )
-        }
     };
 
     if request.arguments.is_empty() {
@@ -122,14 +114,6 @@ pub fn handle_append(
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
-        None => {
-            return RedisResponse::new(
-                CommandResponse::Error("Usage: APPEND <document> <text...>".to_string()),
-                false,
-                "".to_string(),
-                "".to_string(),
-            )
-        }
         None => {
             return RedisResponse::new(
                 CommandResponse::Error("Usage: APPEND <document> <text...>".to_string()),

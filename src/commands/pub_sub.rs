@@ -27,14 +27,6 @@ pub fn handle_subscribe(
                 "".to_string(),
             )
         }
-        None => {
-            return RedisResponse::new(
-                CommandResponse::Error("Usage: SUBSCRIBE <document>".to_string()),
-                false,
-                "".to_string(),
-                "".to_string(),
-            )
-        }
     };
 
     let mut map = clients_on_docs.lock().unwrap();

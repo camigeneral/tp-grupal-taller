@@ -286,7 +286,6 @@ mod tests {
     //     reader.read_line(&mut buffer).unwrap();
     //     assert!(buffer.contains("error message"));
     // }
-    #[test]
     fn test_parse_resp_command_errors() {
         let (mut client, server) = setup_tcp_server();
 

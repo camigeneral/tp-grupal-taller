@@ -25,14 +25,6 @@ pub fn handle_scard(
                 "".to_string(),
             )
         }
-        None => {
-            return RedisResponse::new(
-                CommandResponse::Error("Usage: SCARD <document>".to_string()),
-                false,
-                "".to_string(),
-                "".to_string(),
-            )
-        }
     };
 
     let lock_clients_on_docs = clients_on_docs.lock().unwrap();
@@ -71,14 +63,6 @@ pub fn handle_smembers(
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k,
-        None => {
-            return RedisResponse::new(
-                CommandResponse::Error("Usage: SMEMBERS <document>".to_string()),
-                false,
-                "".to_string(),
-                "".to_string(),
-            )
-        }
         None => {
             return RedisResponse::new(
                 CommandResponse::Error("Usage: SMEMBERS <document>".to_string()),
@@ -142,14 +126,6 @@ pub fn handle_sscan(
                 "".to_string(),
             )
         }
-        None => {
-            return RedisResponse::new(
-                CommandResponse::Error("Usage: SSCAN <document> [pattern]".to_string()),
-                false,
-                "".to_string(),
-                "".to_string(),
-            )
-        }
     };
 
     let pattern = if !request.arguments.is_empty() {
@@ -158,14 +134,6 @@ pub fn handle_sscan(
             ValueType::Integer(i) => {
                 return RedisResponse::new(
                     CommandResponse::Error(format!("Expected string pattern, got integer: {}", i)),
-                    false,
-                    "".to_string(),
-                    "".to_string(),
-                )
-            }
-            _ => {
-                return RedisResponse::new(
-                    CommandResponse::Error("Pattern must be a string".to_string()),
                     false,
                     "".to_string(),
                     "".to_string(),
