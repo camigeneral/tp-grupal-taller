@@ -49,9 +49,7 @@ fn connect_clients(address: &str) -> std::io::Result<()> {
 
     // guardo la informacion de los clientes
     let clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>> =
-        Arc::new(Mutex::new(initial_clients_on_doc));
-    let clients: Arc<Mutex<HashMap<String, client_info::Client>>> =
-        Arc::new(Mutex::new(HashMap::new()));
+        Arc::new(Mutex::new(initial_clients_on_doc));    
     let clients: Arc<Mutex<HashMap<String, client_info::Client>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
