@@ -2,6 +2,20 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::str;
 
+/// Representa un valor de entrada en un comando RESP.
+///
+/// Este enum permite modelar diferentes tipos de datos que pueden
+/// enviarse como argumentos, por ejemplo enteros, cadenas o arrays.
+///
+/// Algunas variantes podrían no estar en uso actualmente, pero están pensadas
+/// para soportar extensiones del protocolo RESP.
+///
+/// Variantes:
+/// - `Integer`: valor entero (RESP Integer)
+/// - `String`: valor de tipo bulk string
+/// - `Null`: representa un valor nulo (`$-1`)
+/// - `Error`: mensaje de error
+/// - `Array`: lista de valores anidados
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum ValueType {
@@ -12,6 +26,16 @@ pub enum ValueType {
     Array(Vec<ValueType>),
 }
 
+
+/// Representa una solicitud de comando recibida desde un cliente.
+///
+/// Esta estructura contiene el comando base (como `"get"` o `"set"`),
+/// una clave opcional, y una lista de argumentos.
+///
+/// Ejemplo: el comando `SET mykey myvalue` se modelaría como:
+/// - command: "set"
+/// - key: Some("mykey")
+/// - arguments: ["myvalue"]
 #[derive(Debug)]
 pub struct CommandRequest {
     pub command: String,
@@ -19,6 +43,15 @@ pub struct CommandRequest {
     pub arguments: Vec<ValueType>,
 }
 
+/// Representa una respuesta que puede enviarse a un cliente en formato RESP.
+///
+/// El enum abarca las respuestas típicas del protocolo, como:
+/// - Ok: "+OK"
+/// - String: "$n\r\n..."\r\n
+/// - Integer: ":n\r\n"
+/// - Null: "$-1\r\n"
+/// - Error: "-ERR ...\r\n"
+/// - Array: arreglo de respuestas (no completamente soportado)
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum CommandResponse {
@@ -30,6 +63,13 @@ pub enum CommandResponse {
     Array(Vec<CommandResponse>),
 }
 
+/// Parsea un comando en formato RESP recibido desde un `BufReader<TcpStream>`.
+///
+/// Devuelve una estructura `CommandRequest` con el comando base, una clave opcional,
+/// y argumentos adicionales como `ValueType::String`.
+///
+/// # Errores
+/// Retorna `std::io::Error` si el formato RESP es inválido o si el comando está vacío
 pub fn parse_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<CommandRequest> {
     let command_parts = parse_resp_command(reader)?;
 
@@ -59,6 +99,13 @@ pub fn parse_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<Comma
     Ok(request)
 }
 
+/// Escribe una respuesta en formato RESP hacia un `TcpStream`.
+///
+/// Soporta múltiples tipos de respuesta definidos en `CommandResponse`, como cadenas,
+/// enteros, errores, nulos y arrays. En caso de `Array`, responde solo el primer elemento.
+///
+/// # Errores
+/// Retorna `std::io::Error` si hay fallas al escribir en el stream.
 pub fn write_response(stream: &TcpStream, response: &CommandResponse) -> std::io::Result<()> {
     match response {
         CommandResponse::Ok => write_resp_string(stream, "OK"),
@@ -76,6 +123,12 @@ pub fn write_response(stream: &TcpStream, response: &CommandResponse) -> std::io
     }
 }
 
+/// Parsea una línea en formato RESP que representa un array de cadenas (`Vec<String>`).
+///
+/// Lee el número de elementos del array (`*<n>`), seguido por `n` cadenas tipo bulk (`$<len>\r\n<value>\r\n`).
+///
+/// # Errores
+/// Retorna `std::io::Error` si el formato RESP no es válido o si ocurre un error de lectura.
 pub fn parse_resp_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<Vec<String>> {
     let mut line = String::new();
     reader.read_line(&mut line)?;
@@ -123,20 +176,37 @@ pub fn parse_resp_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<
     Ok(result)
 }
 
+/// Escribe una cadena como bulk string en formato RESP (`$<len>\r\n<value>\r\n`).
+///
+/// # Errores
+/// Retorna `std::io::Error` si no puede escribir en el stream.
 pub fn write_resp_string(mut stream: &TcpStream, value: &str) -> std::io::Result<()> {
     let response = format!("${}\r\n{}\r\n", value.len(), value);
     stream.write_all(response.as_bytes())
 }
 
+/// Escribe un entero como RESP Integer (`:<value>\r\n`).
+///
+/// # Errores
+/// Retorna `std::io::Error` si no puede escribir en el stream.
 pub fn write_resp_integer(mut stream: &TcpStream, value: i64) -> std::io::Result<()> {
     let response = format!(":{}\r\n", value);
     stream.write_all(response.as_bytes())
 }
 
+
+/// Escribe un valor nulo como RESP Null (`$-1\r\n`).
+///
+/// # Errores
+/// Retorna `std::io::Error` si no puede escribir en el stream.
 pub fn write_resp_null(mut stream: &TcpStream) -> std::io::Result<()> {
     stream.write_all(b"$-1\r\n")
 }
 
+/// Escribe un mensaje de error como RESP Error (`-ERR <msg>\r\n`).
+///
+/// # Errores
+/// Retorna `std::io::Error` si no puede escribir en el stream.
 pub fn write_resp_error(mut stream: &TcpStream, msg: &str) -> std::io::Result<()> {
     stream.write_all(format!("-ERR {}\r\n", msg).as_bytes())
 }
