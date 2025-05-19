@@ -82,19 +82,19 @@ pub fn handle_linsert(
         }
 
         let message = format!("Inserted '{}' {} '{}'", element_str, flag_str, pivot_str);
-        return RedisResponse::new(
+        RedisResponse::new(
             CommandResponse::Integer(entry_doc.len() as i64),
             true,
             message,
             doc,
-        );
+        )
     } else {
-        return RedisResponse::new(
+         RedisResponse::new(
             CommandResponse::Error("Invalid pivot argument".to_string()),
             false,
             "".to_string(),
             doc,
-        );
+        )
     }
 }
 
