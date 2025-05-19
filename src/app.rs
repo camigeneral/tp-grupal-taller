@@ -197,12 +197,15 @@ impl SimpleComponent for AppModel {
                 self.command_sender = Some(tx.clone());
 
                 let port = self.port;
+                let files_manager_cont_sender = self.files_manager_cont.sender().clone();
+
                 thread::spawn(move || {
                     if let Err(e) = client_run(port, rx, Some(ui_sender)) {
                         eprintln!("Error al iniciar el cliente: {:?}", e);
                     }
                 });
-
+                
+                files_manager_cont_sender.send(FileWorkspaceMsg::ReloadFiles).unwrap();
                 self.header_cont
                     .sender()
                     .send(NavbarMsg::SetConnectionStatus(true))
@@ -240,8 +243,7 @@ impl SimpleComponent for AppModel {
                     println!("No hay un canal de comando disponible.");
                 }
             }
-            AppMsg::RefreshData => {
-                println!("Actualizo archivos");
+            AppMsg::RefreshData => {                
                 self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
             }
 
