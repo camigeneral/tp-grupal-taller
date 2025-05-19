@@ -36,6 +36,10 @@ Y en otra terminal
 ```bash
 cargo run --bin client
 ```
-
+Para generar varios clientes a la vez, solo basta con correr en diferentes terminales el comando anterior.
 
 ## Como testear
+Ejecutando el siguiente comando se correran los tests unitarios
+```bash
+cargo test
+```
