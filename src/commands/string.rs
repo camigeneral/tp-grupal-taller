@@ -1,5 +1,5 @@
-use crate::redis_commands;
-use crate::redis_response::RedisResponse;
+use super::redis;
+use super::redis_response::RedisResponse;
 use parse::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -32,6 +32,21 @@ pub fn handle_get(
     }
 }
 
+/// Maneja el comando SET para sobrescribir el contenido de un documento.
+///
+/// - Si no se especifica documento o contenido, devuelve un error.
+/// - Si el documento existe, lo sobreescribe.
+/// - Si no existe, lo crea.
+/// - Registra el documento en el mapa de `clients_on_docs` para futuras suscripciones.
+/// - Publica una notificación para los clientes suscritos.
+///
+/// # Parámetros
+/// - `request`: contiene el documento y los argumentos (contenido).
+/// - `docs`: referencia a la base de documentos compartida.
+/// - `clients_on_docs`: referencia a la tabla de suscriptores.
+///
+/// # Retorna
+/// - `RedisResponse::Ok` con notificación activa y nombre del documento.
 pub fn handle_set(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
@@ -39,6 +54,14 @@ pub fn handle_set(
 ) -> RedisResponse {
     let doc_name = match &request.key {
         Some(k) => k.clone(),
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Wrong number of arguments for SET".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
         None => {
             return RedisResponse::new(
                 CommandResponse::Error("Wrong number of arguments for SET".to_string()),
@@ -58,7 +81,7 @@ pub fn handle_set(
         );
     }
 
-    let content = redis_commands::extract_string_arguments(&request.arguments);
+    let content = redis::extract_string_arguments(&request.arguments);
 
     {
         let mut docs_lock = docs.lock().unwrap();
@@ -79,12 +102,34 @@ pub fn handle_set(
     RedisResponse::new(CommandResponse::Ok, true, notification, doc_name)
 }
 
+/// Maneja el comando APPEND para agregar contenido a un documento línea por línea.
+///
+/// - Si no se especifica documento o contenido, devuelve un error.
+/// - Si el documento no existe, lo crea automáticamente.
+/// - Agrega una nueva línea de texto al final del documento.
+/// - Retorna el número de línea donde se agregó el contenido.
+/// - Publica una notificación para los clientes suscritos.
+///
+/// # Parámetros
+/// - `request`: contiene la clave del documento y el contenido a agregar.
+/// - `docs`: acceso a los documentos en memoria compartida.
+///
+/// # Retorna
+/// - `RedisResponse::Integer(line_number)` con notificación activa y nombre del documento.
 pub fn handle_append(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Usage: APPEND <document> <text...>".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
         None => {
             return RedisResponse::new(
                 CommandResponse::Error("Usage: APPEND <document> <text...>".to_string()),
@@ -104,7 +149,7 @@ pub fn handle_append(
         );
     }
 
-    let content = redis_commands::extract_string_arguments(&request.arguments);
+    let content = redis::extract_string_arguments(&request.arguments);
     let line_number;
 
     {

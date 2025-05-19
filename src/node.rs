@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+mod commands;
+use commands::redis;
 use std::env::args;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write};
@@ -6,25 +8,8 @@ use std::net::{TcpListener, TcpStream};
 use std::str;
 use std::sync::{Arc, Mutex};
 use std::thread;
-
-// use parse;
-// use redis_commands;
-mod list_commands;
-mod parse;
-mod pub_sub_commands;
-mod redis_commands;
-mod redis_response;
-mod set_commands;
-mod string_commands;
-// use redis_response;
-// use list_commands;
-// use set_commands;
-// use string_commands;
-// use pub_sub_commands;
-
-// use client_info;
 mod client_info;
-// use client_info::Client;
+mod parse;
 
 static SERVER_ARGS: usize = 2;
 
@@ -64,7 +49,7 @@ fn connect_clients(address: &str) -> std::io::Result<()> {
 
     // guardo la informacion de los clientes
     let clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>> =
-        Arc::new(Mutex::new(initial_clients_on_doc));
+        Arc::new(Mutex::new(initial_clients_on_doc));    
     let clients: Arc<Mutex<HashMap<String, client_info::Client>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
@@ -147,7 +132,7 @@ fn handle_client(
 
         println!("Received command: {:?}", command_request);
 
-        let redis_response = redis_commands::execute_command(
+        let redis_response = redis::execute_command(
             command_request,
             docs.clone(),
             clients_on_docs.clone(),
@@ -171,7 +156,6 @@ fn handle_client(
             break;
         }
 
-        println!("escribiendo en el archivo !!!!!");
         if let Err(e) = write_to_file(docs.clone()) {
             eprintln!("Error writing to file: {}", e);
         }

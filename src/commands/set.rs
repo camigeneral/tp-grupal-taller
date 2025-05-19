@@ -1,14 +1,30 @@
-use crate::redis_response::RedisResponse;
+use super::redis_response::RedisResponse;
 use parse::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+/// Maneja el comando SCARD que devuelve el número de suscriptores en un documento
+///
+/// # Argumentos
+/// * `request` - La solicitud de comando que contiene el documento a consultar
+/// * `clients_on_docs` - Un mapa compartido y protegido que asocia documentos con listas de clientes suscritos
+///
+/// # Retorno
+/// * `RedisResponse` - La respuesta al comando con el número de suscriptores en el documento
 pub fn handle_scard(
     request: &CommandRequest,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k,
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Usage: SCARD <document>".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
         None => {
             return RedisResponse::new(
                 CommandResponse::Error("Usage: SCARD <document>".to_string()),
@@ -41,12 +57,28 @@ pub fn handle_scard(
     }
 }
 
+/// Maneja el comando SMEMBERS que lista todos los suscriptores de un documento
+///
+/// # Argumentos
+/// * `request` - La solicitud de comando que contiene el documento a consultar
+/// * `clients_on_docs` - Un mapa compartido y protegido que asocia documentos con listas de clientes suscritos
+///
+/// # Retorno
+/// * `RedisResponse` - La respuesta al comando con la lista de suscriptores del documento
 pub fn handle_smembers(
     request: &CommandRequest,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k,
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Usage: SMEMBERS <document>".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
         None => {
             return RedisResponse::new(
                 CommandResponse::Error("Usage: SMEMBERS <document>".to_string()),
@@ -88,12 +120,28 @@ pub fn handle_smembers(
     }
 }
 
+/// Maneja el comando SSCAN que busca suscriptores en un documento que coincidan con un patrón
+///
+/// # Argumentos
+/// * `request` - La solicitud de comando que contiene el documento a consultar y opcionalmente un patrón de búsqueda
+/// * `clients_on_docs` - Un mapa compartido y protegido que asocia documentos con listas de clientes suscritos
+///
+/// # Retorno
+/// * `RedisResponse` - La respuesta al comando con los suscriptores que coinciden con el patrón
 pub fn handle_sscan(
     request: &CommandRequest,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k,
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Usage: SSCAN <document> [pattern]".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
         None => {
             return RedisResponse::new(
                 CommandResponse::Error("Usage: SSCAN <document> [pattern]".to_string()),
@@ -110,6 +158,14 @@ pub fn handle_sscan(
             ValueType::Integer(i) => {
                 return RedisResponse::new(
                     CommandResponse::Error(format!("Expected string pattern, got integer: {}", i)),
+                    false,
+                    "".to_string(),
+                    "".to_string(),
+                )
+            }
+            _ => {
+                return RedisResponse::new(
+                    CommandResponse::Error("Pattern must be a string".to_string()),
                     false,
                     "".to_string(),
                     "".to_string(),

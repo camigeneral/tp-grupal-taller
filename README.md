@@ -26,4 +26,16 @@ sudo apt-get install -y \
 
 ### Como correr
 
+Para generar un nodo y un cliente, por un lado hay que ejecutar
+
+
+```bash
+cargo run --bin node 4000
+```
+Y en otra terminal 
+```bash
+cargo run --bin client
+```
+
+
 ## Como testear
