@@ -89,7 +89,7 @@ pub fn handle_linsert(
             doc,
         )
     } else {
-         RedisResponse::new(
+        RedisResponse::new(
             CommandResponse::Error("Invalid pivot argument".to_string()),
             false,
             "".to_string(),

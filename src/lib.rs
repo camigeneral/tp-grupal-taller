@@ -1,25 +1,36 @@
+/// Módulo que contiene la información y estructura del cliente.
+///
+/// Define la estructura `Client`, que encapsula el socket TCP utilizado
+/// para la comunicación con el servidor.
 pub mod client_info;
+
+/// Módulo encargado de parsear comandos y respuestas en formato RESP.
+///
+/// Implementa funciones y tipos para interpretar comandos entrantes,
+/// construir respuestas y manipular el protocolo RESP usado por Redis.
 pub mod parse;
 
 /// Módulo principal de la aplicación.
 ///
-/// Este módulo define la estructura de la aplicación, incluyendo los componentes principales como
-/// la barra de navegación y el área de gestión de archivos. También maneja la comunicación entre
-/// los componentes a través de los controladores y los mensajes.
+/// Define la estructura y lógica principal de la app, incluyendo los controladores
+/// de componentes UI y la comunicación mediante mensajes.
 ///
-/// # Componentes principales:
-/// - `AppModel`: Modelo principal que contiene los controladores para los componentes.
-/// - `AppMsg`: Enum de mensajes que controla las interacciones de la aplicación, como la conexión.
+/// # Componentes principales
+/// - `AppModel`: modelo principal que contiene controladores de componentes.
+/// - `AppMsg`: enum de mensajes para controlar interacciones y eventos.
 pub mod app;
 
-/// Módulo de componentes que contiene las definiciones de los diferentes elementos UI.
+/// Módulo de componentes UI.
 ///
-/// Este módulo incluye todos los submódulos relacionados con la interfaz de usuario, como la gestión
-/// de archivos, el encabezado, y la edición de archivos. Cada submódulo define un componente y su lógica.
-/// Algunos de los componentes definidos en este módulo son:
-/// - `file_workspace`: Gestiona el área de trabajo de los archivos.
-/// - `header`: Define el componente de la barra de navegación superior.
-/// - `file_editor`: Define el componente de edición de archivos.
+/// Contiene definiciones y lógicas de los componentes visuales de la aplicación.
+/// Entre ellos, la gestión de archivos, la barra de navegación y el editor.
+/// Cada submódulo gestiona un componente específico y su comportamiento.
 pub mod components;
 
+/// Módulo cliente que maneja la conexión TCP con el servidor.
+///
+/// Implementa la lógica para enviar comandos, recibir respuestas y escuchar
+/// notificaciones del servidor, actualizando la interfaz mediante mensajes.
+///
+/// Usa hilos para manejar comunicación asíncrona sin bloquear la UI.
 pub mod client;
