@@ -1,6 +1,5 @@
 name: ci
 
-
 on:
   push:
     branches: [ "main" ]
@@ -15,10 +14,28 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # Checkout el código fuente
     - uses: actions/checkout@v4
+
+      # Instalar las dependencias necesarias
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libglib2.0-dev \
+          pkg-config \
+          libpango1.0-dev \
+          libgdk-pixbuf2.0-dev \
+          libgtk-4-dev
+
+      # Compilar el proyecto
     - name: Build
       run: cargo build --verbose
+
+      # Ejecutar las pruebas
     - name: Run tests
       run: cargo test --verbose
+
+      # Ejecutar clippy
     - name: Run clippy
       run: cargo clippy --all-targets --all-features
