@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use parse::{CommandRequest, CommandResponse};
-use crate::redis_response::{RedisResponse};
-use crate::redis_commands;
+use super::redis_response::{RedisResponse};
+use super::redis;
 
 
 pub fn handle_get(
@@ -64,7 +64,7 @@ pub fn handle_set(
         );
     }
 
-    let content = redis_commands::extract_string_arguments(&request.arguments);
+    let content = redis::extract_string_arguments(&request.arguments);
 
     {
         let mut docs_lock = docs.lock().unwrap();
@@ -115,7 +115,7 @@ pub fn handle_append(
         ;
     }
 
-    let content = redis_commands::extract_string_arguments(&request.arguments);
+    let content = redis::extract_string_arguments(&request.arguments);
     let line_number;
 
     {
