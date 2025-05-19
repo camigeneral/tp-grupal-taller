@@ -1,4 +1,4 @@
-use parse::{CommandResponse};
+use parse::CommandResponse;
 
 pub struct RedisResponse {
     pub response: CommandResponse,
@@ -9,6 +9,11 @@ pub struct RedisResponse {
 
 impl RedisResponse {
     pub fn new(response: CommandResponse, publish: bool, message: String, doc: String) -> Self {
-        RedisResponse {response, publish, message, doc} 
+        RedisResponse {
+            response,
+            publish,
+            message,
+            doc,
+        }
     }
 }

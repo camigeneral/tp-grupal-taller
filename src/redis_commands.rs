@@ -1,13 +1,11 @@
-
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-use parse::{CommandRequest, CommandResponse, ValueType};
-use crate::redis_response::{RedisResponse};
 use crate::list_commands;
+use crate::pub_sub_commands;
+use crate::redis_response::RedisResponse;
 use crate::set_commands;
 use crate::string_commands;
-use crate::pub_sub_commands;
-
+use parse::{CommandRequest, CommandResponse, ValueType};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 pub fn execute_command(
     request: CommandRequest,
@@ -19,7 +17,9 @@ pub fn execute_command(
         "get" => string_commands::handle_get(&request, docs),
         "set" => string_commands::handle_set(&request, docs, clients_on_docs),
         "subscribe" => pub_sub_commands::handle_subscribe(&request, clients_on_docs, client_addr),
-        "unsubscribe" => pub_sub_commands::handle_unsubscribe(&request, clients_on_docs, client_addr),
+        "unsubscribe" => {
+            pub_sub_commands::handle_unsubscribe(&request, clients_on_docs, client_addr)
+        }
         "append" => string_commands::handle_append(&request, docs),
         "scard" => set_commands::handle_scard(&request, clients_on_docs),
         "smembers" => set_commands::handle_smembers(&request, clients_on_docs),
@@ -33,10 +33,9 @@ pub fn execute_command(
             false,
             "".to_string(),
             "".to_string(),
-        )
+        ),
     }
 }
-
 
 pub fn extract_string_arguments(arguments: &[ValueType]) -> String {
     arguments
