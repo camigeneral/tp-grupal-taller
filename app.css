@@ -1,46 +1,94 @@
-/* Estilos generales para todas las cards */
-.card {    
-    border-radius: 8px;
-    background-color: #ffffff;
+/* Estilo general de la ventana */
+window {
+    background-color: #f5f5f5;
+    color: #333333;
+    font-family: sans-serif;
 }
 
-/* Estilos específicos para el header */
-.header {    
-    border-bottom: 2px solid #000000;
-    padding: 5px;        
+/* Cards */
+.card {
+    border-radius: 12px;
+    background-color: white;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+/* Header */
+.header {
+    border-bottom: 1px solid #dddddd;
+    padding: 10px 16px;
+    background-color: #f5f5f5;
 }
 
 .header-filter {
-    border-bottom: 2px solid #000000;
+    background-color: #dddddd;
+    border-bottom: none;
+    background-color: transparent;
+
+    padding-bottom: 20px;
 }
 
-/* Estilos para la barra lateral */
-.sidebar-card {    
-    min-width: 200px;    
+/* Sidebar */
+.sidebar-card {
+    min-width: 220px;
+    background-color: white;
+    border-right: 1px solid #dddddd;
 }
 
-/* Estilos para el contenido principal */
+/* Contenido principal */
 .content-card {
-    padding: 15px;
+    padding: 20px;
+    background-color: white;
+    border-radius: 8px;
 }
 
-/* Estilos para los botones */
-.button {    
-    border-radius: 0;
-    color: black;
-    border: 0;
-    border-bottom: 1px black solid;    
+/* Botones generales */
+.button {
+    border-radius: 6px;
+    padding: 8px 14px;
+    color: #ffffff;
+    background-color: #444444;
     font-weight: bold;
-    background-image: none;    
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    transition: background-color 0.8s ease;
+    border: none;
+    background-image: none;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    transition: background-color 200ms ease;
 }
 
 .button:hover {
-    background-color: #575757;    
+    background-color: #2f2f2f;
     color: white;
 }
 
+/* Botón "Nuevo Archivo" */
+.button.new-file {
+    background-color: #2FA1FF;
+    color: white;
+    border-radius: 6px;
+    font-weight: bold;
+}
+
+.button.new-file:hover {
+    background-color: #0072cc;
+}
+
+/* Botón "Desuscribirse" */
+.unsubscribe {
+    background-color: #dc3545;
+    color: white;
+    font-weight: bold;
+    border-radius: 6px;
+    padding: 8px 14px;
+    border: none;
+    transition: background-color 200ms ease;
+}
+
+.unsubscribe:hover {
+    background-color: #a71d2a;
+}
+
+/* Nombre de usuario */
 .username {
     text-transform: uppercase;
     color: white;
@@ -48,52 +96,40 @@
     margin-left: 10px;
 }
 
-.button.filter {
-    border-bottom: 0;
-    border: 1px solid #000000;
-    padding: 10px ;    
-}
-
-.button.new-file {
-    background-color: #2FA1FF;
-    border-bottom: 0;
+/* Área de texto */
+.file-text-area {
+    padding: 16px;
+    background-color: #1e1e1e;
+    border: 1px solid #444444;
     color: white;
-    border-radius: 6px;
-
+    font-family: monospace;
+    border-radius: 8px;
+    min-height: 300px;
 }
 
-/* Estilo para las etiquetas */
-/* label {
-    font-size: 16px ;
-    color: white ;
-} */
-
+/* Etiquetas */
 .content {
     color: #000000;
 }
 
+/* Botones de archivo */
 .file_button {
     background-color: white;
-    background-image: none;    
-    color: black;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    transition: background-color 0.8s ease;
+    border: 1px solid #dddddd;
+    border-radius: 8px;
+    padding: 10px 16px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+    transition: background-color 200ms ease;
 }
 
 .file_button:hover {
-    background-color: rgb(179, 179, 179);
-
+    background-color: #f0f0f0;
 }
-.file-text-area {
+
+/* Filtros */
+.button.filter {
+    border-bottom: 0;
+    border: 1px solid #000000;
     padding: 10px;
-    background-color: rgb(33, 33, 33);
-    border: 1px solid white;
-    color: white;
-    border-radius: 8px;
-}
-
-/* Estilos para la ventana principal */
-window {
-    background-color: #ffffff;
-    color: black;    
 }

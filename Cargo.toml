@@ -1,18 +1,18 @@
 [package]
 name = "rusty-docs"
 version = "0.1.0"
-
+edition = "2015"
 
 [dependencies]
 gtk4 = { version = "0.9.6", package = "gtk4" }
 relm4 = { version = "0.9.1" }
 gdk4 = { version = "0.9.6" }
-
-
-[[bin]]
-name = "client"
-path = "src/client.rs"
+rand = "0.8"
 
 [[bin]]
 name = "node"
 path = "src/node.rs"
+
+[[bin]]
+name = "client"
+path = "src/client_init.rs"
