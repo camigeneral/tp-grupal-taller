@@ -42,38 +42,29 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    if port == 4000 {
-        let node_address_to_connect = format!("127.0.0.1:{}", 14001);
-        let node_address_to_connect_clone = format!("127.0.0.1:{}", 14001);
-        match TcpStream::connect(node_address_to_connect) {
-            Ok(stream) => {
-                let mut cloned_stream = stream.try_clone()?;
-                let node_client = client_info::Client {
-                    stream: stream,
-                };
-                let mut lock_nodes: std::sync::MutexGuard<'_, HashMap<String, client_info::Client>> = nodes.lock().unwrap();
-                lock_nodes.insert(node_address_to_connect_clone.to_string(), node_client);
+    let node_ports = vec![14000, 14001, 14002];
 
-                writeln!(cloned_stream, "id {}", 14000)?;
-            },
-            Err(_) => {}
-        };
-    } else {
-        let node_address_to_connect = format!("127.0.0.1:{}", 14000);
-        let node_address_to_connect_clone = format!("127.0.0.1:{}", 14000);
-        match TcpStream::connect(node_address_to_connect) {
-            Ok(stream) => {
-                let mut cloned_stream = stream.try_clone()?;
-                let node_client = client_info::Client {
-                    stream: stream,
-                };
-                let mut lock_nodes = nodes.lock().unwrap();
-                lock_nodes.insert(node_address_to_connect_clone.to_string(), node_client);
+    {
+        let mut lock_nodes: std::sync::MutexGuard<'_, HashMap<String, client_info::Client>> = nodes.lock().unwrap();
 
-                writeln!(cloned_stream, "id {}", 14001)?;
-            },
-            Err(_) => {}
-        };
+        for connection_port in node_ports {
+            if connection_port != port + 10000 {
+                let node_address_to_connect = format!("127.0.0.1:{}", connection_port);
+                let node_address_to_connect_clone = format!("127.0.0.1:{}", connection_port);
+                match TcpStream::connect(node_address_to_connect) {
+                    Ok(stream) => {
+                        let mut cloned_stream = stream.try_clone()?;
+                        let node_client = client_info::Client {
+                            stream: stream,
+                        };
+                        lock_nodes.insert(node_address_to_connect_clone.to_string(), node_client);
+        
+                        writeln!(cloned_stream, "id {}", port)?;
+                    },
+                    Err(_) => {}
+                };
+            }
+        }
     }
 
     connect_clients(&client_address)?; // Propaga error si ocurre
@@ -366,7 +357,7 @@ fn handle_node(
             .map(|s| s.to_string().to_lowercase())
             .collect();
         let command = &input[0];
-        println!("Recibido: {}", command);
+        println!("Recibido: {:?}", input);
 
         match command.as_str() {
             "id" => {
@@ -386,6 +377,8 @@ fn handle_node(
                         lock_nodes.insert(node_address_to_connect.to_string(), node_client);
                     }
                 }
+
+                println!("cliente conectado correctamente");
 
             }
 
