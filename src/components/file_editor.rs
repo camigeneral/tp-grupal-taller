@@ -67,7 +67,7 @@ impl SimpleComponent for FileEditorModel {
                 #[name="file_label"]
                 gtk::Label {
                     #[watch]
-                    set_label: &format!("Editando archivo: {} ({} colaboradores)", model.file_name, model.num_contributors),
+                    set_label: &format!("Editando archivo: {}", model.file_name),
                     set_xalign: 0.0,
                 },
                 gtk::Button {
@@ -137,21 +137,12 @@ impl SimpleComponent for FileEditorModel {
 
     fn update(&mut self, message: FileEditorMessage, _sender: ComponentSender<Self>) {
         match message {
-            FileEditorMessage::ContentAdded(new_text, offset) => {
-                println!("Nuevo caracter: {}, en offset: {}", new_text, offset)
+            FileEditorMessage::ContentAdded(_new_text, _offset) => {
                 //Llamado a la api para insertar caracter
             }
-            FileEditorMessage::ContentRemoved(start_offset, end_offset) => {
-                println!(
-                    "Caracter eliminado en start: {}, en end offset: {}",
-                    start_offset, end_offset
-                )
+            FileEditorMessage::ContentRemoved(_start_offset, _end_offset) => {
             }
             FileEditorMessage::UpdateFile(file_name, contributors, content) => {
-                println!(
-                    "Actualizando editor con archivo: {} contribuidos: {}",
-                    file_name, contributors
-                );
                 self.file_name = file_name;
                 self.num_contributors = contributors;
                 self.content = content;
