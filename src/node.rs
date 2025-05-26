@@ -22,8 +22,61 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("Cantidad de argumentos inválida".into());
     }
 
-    let address = format!("127.0.0.1:{}", argv[1]);
-    connect_clients(&address)?; // Propaga error si ocurre
+    let port = match argv[1].parse::<usize>() {
+        Ok(n) => n,
+        Err(_e) => return Err("Failed to parse arguments".into()),
+    };
+
+    let node_address = format!("127.0.0.1:{}", port+10000);
+    let client_address = format!("127.0.0.1:{}", port);
+
+    let nodes: Arc<Mutex<HashMap<String, client_info::Client>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+
+    let cloned_nodes = Arc::clone(&nodes);
+
+    thread::spawn(move || {
+        match connect_nodes(&node_address, cloned_nodes) {
+            Ok(_) => {}
+            Err(_e) => {}
+        }
+    });
+
+    if port == 4000 {
+        let node_address_to_connect = format!("127.0.0.1:{}", 14001);
+        let node_address_to_connect_clone = format!("127.0.0.1:{}", 14001);
+        match TcpStream::connect(node_address_to_connect) {
+            Ok(stream) => {
+                let mut cloned_stream = stream.try_clone()?;
+                let node_client = client_info::Client {
+                    stream: stream,
+                };
+                let mut lock_nodes: std::sync::MutexGuard<'_, HashMap<String, client_info::Client>> = nodes.lock().unwrap();
+                lock_nodes.insert(node_address_to_connect_clone.to_string(), node_client);
+
+                writeln!(cloned_stream, "id {}", 14000)?;
+            },
+            Err(_) => {}
+        };
+    } else {
+        let node_address_to_connect = format!("127.0.0.1:{}", 14000);
+        let node_address_to_connect_clone = format!("127.0.0.1:{}", 14000);
+        match TcpStream::connect(node_address_to_connect) {
+            Ok(stream) => {
+                let mut cloned_stream = stream.try_clone()?;
+                let node_client = client_info::Client {
+                    stream: stream,
+                };
+                let mut lock_nodes = nodes.lock().unwrap();
+                lock_nodes.insert(node_address_to_connect_clone.to_string(), node_client);
+
+                writeln!(cloned_stream, "id {}", 14001)?;
+            },
+            Err(_) => {}
+        };
+    }
+
+    connect_clients(&client_address)?; // Propaga error si ocurre
     Ok(())
 }
 
@@ -106,6 +159,7 @@ fn connect_clients(address: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+
 fn handle_client(
     stream: &mut TcpStream,
     clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
@@ -169,6 +223,7 @@ fn handle_client(
     Ok(())
 }
 
+
 fn cleanup_client(
     client_addr: &str,
     clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
@@ -181,6 +236,7 @@ fn cleanup_client(
         subscribers.retain(|addr| addr != client_addr);
     }
 }
+
 
 pub fn publish(
     clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
@@ -206,6 +262,7 @@ pub fn publish(
     Ok(())
 }
 
+
 pub fn write_to_file(docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Result<()> {
     let mut file = OpenOptions::new()
         .create(true)
@@ -228,6 +285,7 @@ pub fn write_to_file(docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Resu
 
     Ok(())
 }
+
 
 pub fn get_file_content(file_path: &String) -> Result<HashMap<String, Vec<String>>, String> {
     let file = File::open(file_path).map_err(|_| "file-not-found".to_string())?;
@@ -260,4 +318,88 @@ pub fn get_file_content(file_path: &String) -> Result<HashMap<String, Vec<String
     }
 
     Ok(docs)
+}
+
+
+fn connect_nodes(address: &str, nodes: Arc<Mutex<HashMap<String, client_info::Client>>>) -> std::io::Result<()> {
+    let listener = TcpListener::bind(address)?;
+    println!("Server listening nodes on {}", address);
+
+    for stream in listener.incoming() {
+        match stream {
+            Ok(mut node_stream) => {
+                let client_addr = node_stream.peer_addr()?;
+                println!("New node connected: {}", client_addr);
+
+                let cloned_nodes = Arc::clone(&nodes);
+
+                thread::spawn(move || {
+                    match handle_node(
+                        &mut node_stream,
+                        cloned_nodes
+                    ) {
+                        Ok(_) => {
+                            println!("Node {} disconnected.", client_addr);
+                        }
+                        Err(e) => {
+                            eprintln!("Error in connection with {}: {}", client_addr, e);
+                        }
+                    }
+                });
+            }
+            Err(e) => {
+                eprintln!("Error accepting connection: {}", e);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn handle_node(
+    stream: &mut TcpStream,
+    nodes: Arc<Mutex<HashMap<String, client_info::Client>>>
+) -> std::io::Result<()> {
+    let reader = BufReader::new(stream.try_clone()?);
+
+    for command in reader.lines().map_while(Result::ok) {
+        let input: Vec<String> = command
+            .split_whitespace()
+            .map(|s| s.to_string().to_lowercase())
+            .collect();
+        let command = &input[0];
+        println!("Recibido: {}", command);
+
+        match command.as_str() {
+            "id" => {
+                let node_listening_port = &input[1];
+
+               {
+                    let mut lock_nodes = nodes.lock().unwrap();
+                    if !lock_nodes.contains_key(&node_listening_port.to_string()) {
+                        let node_address_to_connect = format!("127.0.0.1:{}", node_listening_port);
+                        let new_stream = TcpStream::connect(node_address_to_connect)?;
+
+                        let node_client = client_info::Client {
+                            stream: new_stream,
+                        };
+                        let node_address_to_connect = format!("127.0.0.1:{}", node_listening_port);
+    
+                        lock_nodes.insert(node_address_to_connect.to_string(), node_client);
+                    }
+                }
+
+            }
+
+            _ => {
+                writeln!(stream, "Comando no reconocido")?;
+            }
+        };
+        
+    }
+
+    println!("cerramos");
+
+
+    Ok(())
 }
