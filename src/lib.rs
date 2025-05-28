@@ -4,6 +4,12 @@
 /// para la comunicación con el servidor.
 pub mod client_info;
 
+/// Módulo que contiene la información y estructura del nodo.
+///
+/// Define la estructura `Node`, que encapsula el socket TCP utilizado
+/// para la comunicación enttre los nodos.
+pub mod node_info;
+
 /// Módulo encargado de parsear comandos y respuestas en formato RESP.
 ///
 /// Implementa funciones y tipos para interpretar comandos entrantes,

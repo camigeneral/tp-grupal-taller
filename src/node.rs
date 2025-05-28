@@ -9,6 +9,7 @@ use std::str;
 use std::sync::{Arc, Mutex};
 use std::thread;
 mod client_info;
+mod node_info;
 mod parse;
 
 static SERVER_ARGS: usize = 2;
@@ -30,7 +31,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let node_address = format!("127.0.0.1:{}", port+10000);
     let client_address = format!("127.0.0.1:{}", port);
 
-    let nodes: Arc<Mutex<HashMap<String, client_info::Client>>> =
+    let nodes: Arc<Mutex<HashMap<String, node_info::Node>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
     let cloned_nodes = Arc::clone(&nodes);
@@ -45,7 +46,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let node_ports = vec![14000, 14001, 14002];
 
     {
-        let mut lock_nodes: std::sync::MutexGuard<'_, HashMap<String, client_info::Client>> = nodes.lock().unwrap();
+        let mut lock_nodes: std::sync::MutexGuard<'_, HashMap<String, node_info::Node>> = nodes.lock().unwrap();
 
         for connection_port in node_ports {
             if connection_port != port + 10000 {
@@ -54,7 +55,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match TcpStream::connect(node_address_to_connect) {
                     Ok(stream) => {
                         let mut cloned_stream = stream.try_clone()?;
-                        let node_client = client_info::Client {
+                        let node_client = node_info::Node {
                             stream: stream,
                         };
                         lock_nodes.insert(node_address_to_connect_clone.to_string(), node_client);
@@ -310,7 +311,7 @@ pub fn get_file_content(file_path: &String) -> Result<HashMap<String, Vec<String
 }
 
 
-fn connect_nodes(address: &str, nodes: Arc<Mutex<HashMap<String, client_info::Client>>>) -> std::io::Result<()> {
+fn connect_nodes(address: &str, nodes: Arc<Mutex<HashMap<String, node_info::Node>>>) -> std::io::Result<()> {
     let listener = TcpListener::bind(address)?;
     println!("Server listening nodes on {}", address);
 
@@ -347,7 +348,7 @@ fn connect_nodes(address: &str, nodes: Arc<Mutex<HashMap<String, client_info::Cl
 
 fn handle_node(
     stream: &mut TcpStream,
-    nodes: Arc<Mutex<HashMap<String, client_info::Client>>>
+    nodes: Arc<Mutex<HashMap<String, node_info::Node>>>
 ) -> std::io::Result<()> {
     let reader = BufReader::new(stream.try_clone()?);
 
@@ -369,7 +370,7 @@ fn handle_node(
                         let node_address_to_connect = format!("127.0.0.1:{}", node_listening_port);
                         let new_stream = TcpStream::connect(node_address_to_connect)?;
 
-                        let node_client = client_info::Client {
+                        let node_client = node_info::Node {
                             stream: new_stream,
                         };
                         let node_address_to_connect = format!("127.0.0.1:{}", node_listening_port);
@@ -377,8 +378,6 @@ fn handle_node(
                         lock_nodes.insert(node_address_to_connect.to_string(), node_client);
                     }
                 }
-
-                println!("cliente conectado correctamente");
 
             }
 
@@ -388,9 +387,6 @@ fn handle_node(
         };
         
     }
-
-    println!("cerramos");
-
 
     Ok(())
 }
