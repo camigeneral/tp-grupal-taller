@@ -16,3 +16,7 @@ path = "src/redis_server.rs"
 [[bin]]
 name = "client"
 path = "src/client_init.rs"
+
+[[bin]]
+name = "microservice"
+path = "src/microservice.rs"
