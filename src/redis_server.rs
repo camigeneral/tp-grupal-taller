@@ -20,10 +20,6 @@ static REQUIRED_ARGS: usize = 2;
 /// Espera recibir el puerto en el que escuchará el servidor como argumento
 /// en la línea de comandos.
 /// 
-/// # Errores
-/// Retorna un error si:
-/// - No se proporciona el número correcto de argumentos
-/// - No se puede iniciar el servidor en el puerto especificado
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli_args: Vec<String> = args().collect();
     if cli_args.len() != REQUIRED_ARGS {
@@ -70,7 +66,6 @@ fn start_server(bind_address: &str) -> std::io::Result<()> {
     let tcp_listener = TcpListener::bind(bind_address)?;
     println!("Servidor Redis escuchando en {}", bind_address);
 
-    // Manejar conexiones entrantes
     for incoming_connection in tcp_listener.incoming() {
         match incoming_connection {
             Ok(client_stream) => {
@@ -165,15 +160,6 @@ fn handle_new_microservice_connection(
 /// 3. Envía respuestas al cliente
 /// 4. Publica actualizaciones a otros clientes suscritos
 /// 
-/// # Argumentos
-/// * `stream` - Stream TCP del cliente
-/// * `active_clients` - Mapa compartido de clientes activos
-/// * `document_subscribers` - Mapa de suscriptores por documento
-/// * `shared_documents` - Base de datos compartida de documentos
-/// * `client_id` - Identificador único del cliente
-/// 
-/// # Errores
-/// Retorna un error si hay problemas de lectura/escritura en el stream
 fn handle_client(
     stream: &mut TcpStream,
     active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
@@ -236,12 +222,6 @@ fn handle_client(
 
 /// Publica una actualización a todos los clientes suscritos a un documento.
 /// 
-/// # Argumentos
-/// * `active_clients` - Mapa de clientes activos
-/// * `document_subscribers` - Mapa de suscriptores por documento
-/// * `update_message` - Mensaje a enviar a los suscriptores
-/// * `document_id` - ID del documento actualizado
-/// 
 /// # Errores
 /// Retorna un error si hay problemas al escribir en algún stream de cliente
 pub fn publish_update(
@@ -274,10 +254,6 @@ pub fn publish_update(
 /// - La lista de clientes activos
 /// - Las listas de suscriptores de documentos
 /// 
-/// # Argumentos
-/// * `client_id` - ID del cliente a limpiar
-/// * `active_clients` - Mapa de clientes activos
-/// * `document_subscribers` - Mapa de suscriptores por documento
 fn cleanup_client_resources(
     client_id: &str,
     active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
@@ -292,9 +268,6 @@ fn cleanup_client_resources(
 }
 
 /// Persiste el estado actual de los documentos en el archivo.
-/// 
-/// # Argumentos
-/// * `documents` - Estado actual de los documentos a persistir
 /// 
 /// # Errores
 /// Retorna un error si hay problemas al escribir en el archivo
@@ -326,9 +299,6 @@ pub fn persist_documents(documents: Arc<Mutex<HashMap<String, Vec<String>>>>) ->
 }
 
 /// Carga los documentos persistidos desde el archivo.
-/// 
-/// # Argumentos
-/// * `file_path` - Ruta al archivo de persistencia
 /// 
 /// # Retorna
 /// HashMap con los documentos y sus mensajes, o un error si hay problemas

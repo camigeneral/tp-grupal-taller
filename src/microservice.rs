@@ -5,9 +5,6 @@
 //! - Comunicación con el servidor Redis
 //! - Procesamiento de comandos
 //! - Distribución de actualizaciones
-
-extern crate relm4;
-//use crate::app::AppMsg;
 use std::io::Read;
 use std::io::Write;
 use std::io::{BufRead, BufReader};
@@ -29,11 +26,6 @@ use std::io::BufWriter;
 /// - Las conexiones con los clientes
 /// - El socket de escucha para nuevas conexiones
 /// 
-/// # Ejemplo
-/// ```
-/// let microservice = Microservice::new(5000);
-/// microservice.connect_to_redis()?;
-/// ```
 #[derive(Debug)]
 pub struct Microservice {    
     /// Socket TCP que escucha nuevas conexiones entrantes de clientes
@@ -48,13 +40,6 @@ pub struct Microservice {
 }
 
 impl Microservice {
-    /// Crea una nueva instancia del microservicio escuchando en el puerto especificado.
-    /// 
-    /// # Argumentos
-    /// * `port` - Puerto en el que escuchará nuevas conexiones
-    /// 
-    /// # Retorna
-    /// Una nueva instancia de Microservice configurada y lista para usar
     pub fn new(port: u16) -> Self {
         let bind_address = format!("127.0.0.1:{}", port);
         let tcp_listener = TcpListener::bind(bind_address.clone()).unwrap();
@@ -98,14 +83,19 @@ impl Microservice {
     }
 
     /// Cierra la conexión con el servidor Redis.
-    /// 
-    /// Libera la conexión TCP existente y la marca como None.
+    ///     
     pub fn disconnect_from_redis(&self) -> std::io::Result<()> {
         let mut redis_connection_guard = self.redis_connection.lock().unwrap();
         *redis_connection_guard = None;
         Ok(())
     }
 
+    /// Maneja el comando del cliente.
+    /// 
+    /// Traduce el comando del cliente al formato RESP de Redis y lo envía al servidor Redis.
+    /// 
+    /// # Errores
+    /// Retorna un error si hay problemas de lectura/escritura en el stream
     fn handle_client_command(&self, client_command: ClientCommand, client_writer: &mut TcpStream) -> std::io::Result<()> {
         let redis_command = self.parse_client_command_to_redis_command(client_command);                                            
         if let Ok(()) = self.send_resp_command(redis_command) {
@@ -121,9 +111,6 @@ impl Microservice {
     /// Procesa los comandos recibidos del cliente y los envía a Redis.
     /// Mantiene un bucle de lectura hasta que el cliente se desconecte o
     /// envíe un comando de cierre.
-    /// 
-    /// # Argumentos
-    /// * `client_stream` - Stream TCP del cliente conectado
     /// 
     /// # Errores
     /// Retorna un error si hay problemas de lectura/escritura en el stream
@@ -158,18 +145,8 @@ impl Microservice {
 
     /// Formatea un comando en el protocolo RESP (Redis Serialization Protocol).
     /// 
-    /// # Argumentos
-    /// * `command_parts` - Array de strings que representan las partes del comando
-    /// 
     /// # Retorna
     /// String formateada según el protocolo RESP
-    /// 
-    /// # Ejemplo
-    /// ```
-    /// let command_parts = ["SET", "key", "value"];
-    /// let resp_command = format_resp_command(&command_parts);
-    /// assert_eq!(resp_command, "*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n");
-    /// ```
     pub fn format_resp_command(&self, command_parts: &[&str]) -> String {
         let mut resp_message = format!("*{}\r\n", command_parts.len());
     
@@ -198,6 +175,17 @@ impl Microservice {
                 println!("Comando traducido a RESP: {}", resp_command);
                 resp_command
             },
+            ClientCommand::Subscribe { file_id } => {
+                let resp_command = self.format_resp_command(&["subscribe", &file_id]);
+                println!("Comando traducido a RESP: {}", resp_command);
+                resp_command
+            },
+            ClientCommand::Unsubscribe { file_id } => {
+                let resp_command = self.format_resp_command(&["unsubscribe", &file_id]);
+                println!("Comando traducido a RESP: {}", resp_command);
+                resp_command
+            },
+            
             _ => client_command.to_string(),
         }
     }
