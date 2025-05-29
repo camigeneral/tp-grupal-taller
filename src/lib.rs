@@ -34,3 +34,11 @@ pub mod components;
 ///
 /// Usa hilos para manejar comunicación asíncrona sin bloquear la UI.
 pub mod client;
+
+/// Módulo microservicio que maneja la conexión TCP con el servidor.
+///
+/// Implementa la lógica para enviar comandos, recibir respuestas y escuchar
+/// notificaciones del servidor, actualizando la interfaz mediante mensajes.
+///
+/// Usa hilos para manejar comunicación asíncrona sin bloquear la UI.
+pub mod microservice;
