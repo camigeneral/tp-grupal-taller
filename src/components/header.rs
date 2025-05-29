@@ -90,7 +90,7 @@ impl SimpleComponent for NavbarModel {
 
             pack_end = &gtk::Button {
                 #[watch]
-                set_label: &(if model.is_connected { "Conectado" } else { "Desconectado" }),
+                set_label: &(if model.is_connected { "Cerrar sesión" } else { "Conectarse" }),
                 connect_clicked[sender] => move |_| {
                     sender.output(NavbarOutput::ToggleConnectionRequested).unwrap();
                 },
