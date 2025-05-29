@@ -35,20 +35,12 @@ pub fn client_run(
 
     for command in rx {
         let trimmed_command = command.to_string().trim().to_lowercase();
+        socket.write_all(command.to_string().as_bytes())?;  
 
         if trimmed_command == "salir" {
             println!("Desconectando del servidor");
             break;
-        } else {
-            /* println!("Enviando: {:?}", command);
-
-            let parts: Vec<&str> = command.split_whitespace().collect();
-            let resp_command = format_resp_command(&parts);
-
-            println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
- */
-            socket.write_all(command.to_string().as_bytes())?;  
-      }
+        }
     }
 
     Ok(())
@@ -59,7 +51,15 @@ fn listen_to_microservice_response(
     ui_sender: Option<Sender<AppMsg>>,
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(microservice_socket);
+    loop {
+        let mut line = String::new();
+        let bytes_read = reader.read_line(&mut line)?;
 
+        if bytes_read == 0 {
+            break;
+        }
+        println!("Respuesta del microservicio: {}", line);
+    }
     Ok(())
 }
 /* fn format_resp_command(parts: &[&str]) -> String {

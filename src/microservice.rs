@@ -7,7 +7,6 @@
 //! - Distribución de actualizaciones
 
 extern crate relm4;
-use self::relm4::Sender;
 //use crate::app::AppMsg;
 use std::io::Read;
 use std::io::Write;
@@ -17,11 +16,8 @@ use std::net::TcpListener;
 use std::net::TcpStream;
 #[allow(unused_imports)]
 use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
-use std::thread;
 #[allow(unused_imports)]
 use std::time::Duration;
-use std::sync::Arc;
 use std::sync::Mutex;
 use crate::commands::client::ClientCommand;
 
@@ -56,10 +52,17 @@ impl Microservice {
         Ok(())
     }
 
+    pub fn disconnect_from_redis(&self) -> std::io::Result<()> {
+        let mut redis_server = self.redis_server.lock().unwrap();
+        *redis_server = None;
+        Ok(())
+    }
+
     /// Maneja la comunicación con un cliente conectado.
     ///
     /// Lee comandos del cliente, los procesa y envía respuestas apropiadas.
     pub fn listen_to_client(&self, client_stream: TcpStream) -> std::io::Result<()> {
+        let mut client_stream_clone = client_stream.try_clone()?;
         let mut reader = BufReader::new(client_stream);
         
         loop {
@@ -71,10 +74,21 @@ impl Microservice {
                 break;
             }
 
-            if let Ok(command) = ClientCommand::from_string(&buffer) {
-                println!("Comando: {:?}", command);
-            } else {
-                println!("Error al parsear el comando: {:?}", buffer);
+            match ClientCommand::from_string(&buffer) {
+                Ok(command) => {
+                    match command {
+                        ClientCommand::Login { username, password } => {
+                            println!("Login: username: {:?}, password: {:?}", username, password);
+                            client_stream_clone.write_all(b"OK\r\n")?;
+                        }
+                        _ => {
+                            println!("Comando: {:?}", command);
+                        }
+                    }                    
+                }
+                Err(e) => {
+                    println!("Error al parsear el comando: {:?}", e);
+                }
             }
         }
         Ok(())
