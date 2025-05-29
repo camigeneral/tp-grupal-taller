@@ -2,6 +2,7 @@ extern crate relm4;
 use self::relm4::Sender;
 //use crate::app::AppMsg;
 use std::io::Read;
+use crate::commands::client::ClientCommand;
 use std::io::Write;
 use std::io::{BufRead, BufReader};
 #[allow(unused_imports)]
@@ -16,11 +17,11 @@ use std::time::Duration;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-
 #[derive(Debug)]
 pub struct Microservice {    
     stream: TcpListener,    
-    redis_server: Mutex<Option<TcpStream>>
+    redis_server: Mutex<Option<TcpStream>>,
+    clients: Mutex<Vec<TcpStream>>
 }
 
 impl Microservice {
@@ -30,7 +31,8 @@ impl Microservice {
         println!("Microservice levantado en: {:?}", address);
         Self {            
             stream,
-            redis_server: Mutex::new(None)
+            redis_server: Mutex::new(None),
+            clients: Mutex::new(Vec::new())
         }
     }
 
@@ -42,13 +44,25 @@ impl Microservice {
 
     pub fn listen_to_client(&self, client_stream: TcpStream) -> std::io::Result<()> {
         let mut reader = BufReader::new(client_stream);
-        let mut buffer = String::new();
+        
 
         loop {
-            reader.read_line(&mut buffer)?;
+            let mut buffer = String::new();
+            let bytes_read = reader.read_line(&mut buffer)?;
             println!("Recibido: {:?}", buffer);
+
+            if bytes_read == 0 {
+                break;
+            }
+
+            if let Ok(command) = ClientCommand::from_string(&buffer) {
+                println!("Comando: {:?}", command);
+            } else {
+                println!("Error al parsear el comando: {:?}", buffer);
+            }
+
         }
-        //Ok(())
+        Ok(())
     }
 }
 
@@ -68,8 +82,9 @@ pub fn main() -> std::io::Result<()> {
                         eprintln!("Error en la conexión con nodo: {}", e);
                     }
                 });
-
                 println!("Nuevo cliente conectado: {:?}", client_stream.peer_addr());
+                let mut clients = microservice.clients.lock().unwrap();
+                clients.push(client_stream);
             }
             Err(e) => {
                 println!("Error: {:?}", e);
