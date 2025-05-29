@@ -52,14 +52,14 @@ fn connect_clients(address: &str) -> std::io::Result<()> {
     let clients: Arc<Mutex<HashMap<String, client_info::Client>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
-    let listener = TcpListener::bind(address)?;
+    let listener: TcpListener = TcpListener::bind(address)?;
     println!("Server listening on {}", address);
 
     for stream in listener.incoming() {
         match stream {
             Ok(mut client_stream) => {
                 let client_addr = client_stream.peer_addr()?;
-                println!("New client connected: {}", client_addr);
+                println!("Microservice conectado: {}", client_addr);
 
                 let cloned_stream = client_stream.try_clone()?;
 
