@@ -9,6 +9,10 @@ relm4 = { version = "0.9.1" }
 gdk4 = { version = "0.9.6" }
 rand = "0.8"
 
+[lib]
+name = "rusty_docs"
+path = "src/lib.rs"
+
 [[bin]]
 name = "redis_server"
 path = "src/redis_server.rs"
@@ -19,4 +23,4 @@ path = "src/client_init.rs"
 
 [[bin]]
 name = "microservice"
-path = "src/microservice.rs"
+path = "src/bin/run_microservice.rs"
