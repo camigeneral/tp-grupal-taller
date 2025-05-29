@@ -1,5 +1,7 @@
 # Taller de Programación - A Todo Rust
 
+Editor de documentos colaborativo implementado en Rust.
+
 ## Integrantes
 
 - Camila General  
@@ -24,19 +26,70 @@ sudo apt-get install -y \
     libgtk-4-dev
 ```
 
-### Como correr
+## Arquitectura
 
-Para generar un nodo y un cliente, por un lado hay que ejecutar
+El proyecto está estructurado en tres componentes principales que se comunican entre sí:
 
-
-```bash
-cargo run --bin node 4000
+```mermaid
+graph LR
+    Client[Client GUI] -->|Commands| Microservice
+    Microservice -->|RESP Protocol| Redis[Redis Server]
+    Redis -->|Updates| Microservice
+    Microservice -->|Notifications| Client
 ```
-Y en otra terminal 
-```bash
-cargo run --bin client
+
+### Componentes
+
+1. **Cliente (GUI)**
+   - Interfaz gráfica usando GTK4
+   - Permite edición de documentos
+   - Envía comandos al microservicio
+   - Recibe actualizaciones en tiempo real
+
+2. **Microservicio**
+   - Actúa como intermediario entre clientes y servidor Redis
+   - Maneja conexiones de múltiples clientes
+   - Traduce comandos del cliente al protocolo RESP
+   - Distribuye actualizaciones a los clientes suscritos
+
+3. **Servidor Redis**
+   - Almacena los documentos y su contenido
+   - Maneja la persistencia de datos
+   - Implementa el protocolo RESP
+   - Gestiona las suscripciones
+
+## Estructura del Proyecto
+
 ```
-Para generar varios clientes a la vez, solo basta con correr en diferentes terminales el comando anterior.
+src/
+├── bin/                    # Binarios ejecutables
+│   └── run_microservice.rs # Punto de entrada del microservicio
+├── lib.rs                  # Biblioteca principal
+├── client.rs              # Implementación del cliente
+├── microservice.rs        # Lógica del microservicio
+├── redis_server.rs        # Servidor Redis
+└── commands/              # Comandos y tipos compartidos
+    └── client.rs         # Definición de comandos del cliente
+```
+
+## Ejecución
+
+Para ejecutar el proyecto completo necesitas iniciar los tres componentes:
+
+1. Servidor Redis:
+```bash
+make redis
+```
+
+2. Microservicio:
+```bash
+make microservice
+```
+
+3. Cliente:
+```bash
+make client
+```
 
 ## Como testear
 Ejecutando el siguiente comando se correran los tests unitarios
