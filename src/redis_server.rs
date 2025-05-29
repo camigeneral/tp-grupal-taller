@@ -11,92 +11,78 @@ use std::thread;
 mod client_info;
 mod parse;
 
-static SERVER_ARGS: usize = 2;
+/// Número de argumentos esperados para iniciar el servidor
+static REQUIRED_ARGS: usize = 2;
 
+/// Inicia el servidor Redis.
+/// 
+/// # Argumentos
+/// Espera recibir el puerto en el que escuchará el servidor como argumento
+/// en la línea de comandos.
+/// 
+/// # Errores
+/// Retorna un error si:
+/// - No se proporciona el número correcto de argumentos
+/// - No se puede iniciar el servidor en el puerto especificado
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let argv = args().collect::<Vec<String>>();
-    if argv.len() != SERVER_ARGS {
-        eprintln!("Cantidad de argumentos inválida");
-        let app_name = &argv[0];
-        eprintln!("Usage:\n{} <puerto>", app_name);
-        return Err("Cantidad de argumentos inválida".into());
+    let cli_args: Vec<String> = args().collect();
+    if cli_args.len() != REQUIRED_ARGS {
+        eprintln!("Error: Cantidad de argumentos inválida");
+        eprintln!("Uso: {} <puerto>", cli_args[0]);
+        return Err("Error: Cantidad de argumentos inválida".into());
     }
 
-    let address = format!("127.0.0.1:{}", argv[1]);
-    connect_clients(&address)?; // Propaga error si ocurre
+    let bind_address = format!("127.0.0.1:{}", cli_args[1]);
+    start_server(&bind_address)?;
     Ok(())
 }
 
-
-fn connect_clients(address: &str) -> std::io::Result<()> {
-    let file_path = "docs.txt".to_string();
-    let docs = match get_file_content(&file_path) {
+/// Inicia el servidor Redis y maneja las conexiones de clientes.
+/// 
+/// Esta función:
+/// 1. Carga el estado inicial desde el archivo de persistencia
+/// 2. Inicializa las estructuras de datos compartidas
+/// 3. Acepta y maneja conexiones de clientes
+/// 
+/// # Argumentos
+/// * `bind_address` - Dirección IP y puerto donde escuchará el servidor
+/// 
+/// # Errores
+/// Retorna un error si:
+/// - No se puede crear el socket TCP
+/// - Hay problemas al leer el archivo de persistencia
+fn start_server(bind_address: &str) -> std::io::Result<()> {
+    let persistence_file = "docs.txt".to_string();
+    let stored_documents = match load_persisted_data(&persistence_file) {
         Ok(docs) => docs,
         Err(_) => {
-            let new_docs: HashMap<String, Vec<String>> = HashMap::new();            
-            new_docs
+            println!("Iniciando con base de datos vacía");
+            HashMap::new()
         }
     };
 
-    let shared_docs = Arc::new(Mutex::new(docs.clone()));
+    // Inicializar estructuras de datos compartidas
+    let shared_documents = Arc::new(Mutex::new(stored_documents.clone()));
+    let document_subscribers = initialize_document_subscribers(&stored_documents);
+    let active_clients = Arc::new(Mutex::new(HashMap::new()));
 
-    let mut initial_clients_on_doc = HashMap::new();
+    // Iniciar servidor TCP
+    let tcp_listener = TcpListener::bind(bind_address)?;
+    println!("Servidor Redis escuchando en {}", bind_address);
 
-    for document in docs.keys() {
-        initial_clients_on_doc.insert(document.to_string(), Vec::new());
-    }
-
-    // guardo la informacion de los clientes
-    let clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>> =
-        Arc::new(Mutex::new(initial_clients_on_doc));    
-    let clients: Arc<Mutex<HashMap<String, client_info::Client>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-
-    let listener: TcpListener = TcpListener::bind(address)?;
-    println!("Server listening on {}", address);
-
-    for stream in listener.incoming() {
-        match stream {
-            Ok(mut client_stream) => {
-                let client_addr = client_stream.peer_addr()?;
-                println!("Microservice conectado: {}", client_addr);
-
-                let cloned_stream = client_stream.try_clone()?;
-
-                {
-                    let client_addr = cloned_stream.peer_addr()?;
-                    let client_key = client_addr.to_string();
-                    let client = client_info::Client {
-                        stream: cloned_stream,
-                    };
-                    let mut lock_clients = clients.lock().unwrap();
-                    lock_clients.insert(client_key, client);
-                }
-
-                let cloned_clients = Arc::clone(&clients);
-                let cloned_clients_on_docs = Arc::clone(&clients_on_docs);
-                let cloned_docs = Arc::clone(&shared_docs);
-                let client_addr_str = client_addr.to_string();
-
-                thread::spawn(move || {
-                    match handle_client(
-                        &mut client_stream,
-                        cloned_clients,
-                        cloned_clients_on_docs,
-                        cloned_docs,
-                        client_addr_str,
-                    ) {
-                        Ok(_) => {
-                            println!("Client {} disconnected.", client_addr);
-                        }
-                        Err(e) => {
-                            eprintln!("Error in connection with {}: {}", client_addr, e);
-                        }
-                    }
-                });
+    // Manejar conexiones entrantes
+    for incoming_connection in tcp_listener.incoming() {
+        match incoming_connection {
+            Ok(client_stream) => {
+                handle_new_microservice_connection(
+                    client_stream,
+                    &active_clients,
+                    &document_subscribers,
+                    &shared_documents
+                )?;
             }
             Err(e) => {
-                eprintln!("Error accepting connection: {}", e);
+                eprintln!("Error al aceptar conexión: {}", e);
             }
         }
     }
@@ -104,12 +90,96 @@ fn connect_clients(address: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Inicializa el mapa de suscriptores para cada documento.
+/// 
+/// Crea una entrada vacía en el mapa de suscriptores para cada documento
+/// existente en la base de datos.
+/// 
+/// # Argumentos
+/// * `documents` - HashMap con los documentos existentes
+/// 
+/// # Retorna
+/// Arc<Mutex<HashMap>> con las listas de suscriptores inicializadas
+fn initialize_document_subscribers(
+    documents: &HashMap<String, Vec<String>>
+) -> Arc<Mutex<HashMap<String, Vec<String>>>> {
+    let mut subscriber_map = HashMap::new();
+    
+    for document_id in documents.keys() {
+        subscriber_map.insert(document_id.clone(), Vec::new());
+    }
+    
+    Arc::new(Mutex::new(subscriber_map))
+}
+
+fn handle_new_microservice_connection(
+    mut client_stream: TcpStream,
+    active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
+    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+) -> std::io::Result<()> {
+    let client_addr = client_stream.peer_addr()?;
+    println!("Microservice conectado: {}", client_addr);
+
+    let client_stream_clone = client_stream.try_clone()?;
+    
+    {
+        let client_addr = client_addr.to_string();
+        let client = client_info::Client {
+            stream: client_stream_clone,
+        };
+        let mut lock_clients = active_clients.lock().unwrap();
+        lock_clients.insert(client_addr, client);
+    }
+
+    let cloned_clients = Arc::clone(active_clients);
+    let cloned_clients_on_docs = Arc::clone(document_subscribers);
+    let cloned_docs = Arc::clone(shared_documents);
+    let client_addr_str = client_addr.to_string();
+
+    thread::spawn(move || {
+        match handle_client(
+            &mut client_stream,
+            cloned_clients,
+            cloned_clients_on_docs,
+            cloned_docs,
+            client_addr_str,
+        ) {
+            Ok(_) => {
+                println!("Client {} disconnected.", client_addr);
+            }
+            Err(e) => {
+                eprintln!("Error in connection with {}: {}", client_addr, e);
+            }
+        }
+    });
+
+    Ok(())
+}
+
+/// Maneja la comunicación con un cliente conectado.
+/// 
+/// Esta función:
+/// 1. Lee comandos del cliente
+/// 2. Procesa los comandos recibidos
+/// 3. Envía respuestas al cliente
+/// 4. Publica actualizaciones a otros clientes suscritos
+/// 
+/// # Argumentos
+/// * `stream` - Stream TCP del cliente
+/// * `active_clients` - Mapa compartido de clientes activos
+/// * `document_subscribers` - Mapa de suscriptores por documento
+/// * `shared_documents` - Base de datos compartida de documentos
+/// * `client_id` - Identificador único del cliente
+/// 
+/// # Errores
+/// Retorna un error si hay problemas de lectura/escritura en el stream
 fn handle_client(
     stream: &mut TcpStream,
-    clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
-    clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    client_addr: String,
+    active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
+    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_documents: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    client_id: String,
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
 
@@ -120,142 +190,178 @@ fn handle_client(
                 if e.kind() == std::io::ErrorKind::UnexpectedEof {
                     break;
                 }
-                println!("Error parsing command: {}", e);
+                println!("Error al parsear comando: {}", e);
                 parse::write_response(
                     stream,
-                    &parse::CommandResponse::Error("Invalid command".to_string()),
+                    &parse::CommandResponse::Error("Comando inválido".to_string()),
                 )?;
                 continue;
             }
         };
 
-        println!("Received command: {:?}", command_request);
+        println!("Comando recibido: {:?}", command_request);
 
         let redis_response = redis::execute_command(
             command_request,
-            docs.clone(),
-            clients_on_docs.clone(),
-            client_addr.clone(),
+            shared_documents.clone(),
+            document_subscribers.clone(),
+            client_id.clone(),
         );
 
         if redis_response.publish {
-            if let Err(e) = publish(
-                clients.clone(),
-                clients_on_docs.clone(),
+            if let Err(e) = publish_update(
+                active_clients.clone(),
+                document_subscribers.clone(),
                 redis_response.message,
                 redis_response.doc,
             ) {
-                eprintln!("Error publishing update: {}", e);
+                eprintln!("Error al publicar actualización: {}", e);
             }
         }
 
         let response = redis_response.response;
         if let Err(e) = parse::write_response(stream, &response) {
-            println!("Error writing response: {}", e);
+            println!("Error al escribir respuesta: {}", e);
             break;
         }
 
-        if let Err(e) = write_to_file(docs.clone()) {
-            eprintln!("Error writing to file: {}", e);
+        if let Err(e) = persist_documents(shared_documents.clone()) {
+            eprintln!("Error al persistir documentos: {}", e);
         }
-        let _ = write_to_file(docs.clone());
     }
 
-    cleanup_client(&client_addr, &clients, &clients_on_docs);
-    // to do: agregar comando para salir, esto nunca se ejecuta porque nunca termina el loop
-
+    cleanup_client_resources(&client_id, &active_clients, &document_subscribers);
     Ok(())
 }
 
-fn cleanup_client(
-    client_addr: &str,
-    clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
-    clients_on_docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
-) {
-    clients.lock().unwrap().remove(client_addr);
-
-    let mut docs_lock = clients_on_docs.lock().unwrap();
-    for subscribers in docs_lock.values_mut() {
-        subscribers.retain(|addr| addr != client_addr);
-    }
-}
-
-pub fn publish(
-    clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
-    clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    message: String,
-    doc: String,
+/// Publica una actualización a todos los clientes suscritos a un documento.
+/// 
+/// # Argumentos
+/// * `active_clients` - Mapa de clientes activos
+/// * `document_subscribers` - Mapa de suscriptores por documento
+/// * `update_message` - Mensaje a enviar a los suscriptores
+/// * `document_id` - ID del documento actualizado
+/// 
+/// # Errores
+/// Retorna un error si hay problemas al escribir en algún stream de cliente
+pub fn publish_update(
+    active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
+    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    update_message: String,
+    document_id: String,
 ) -> std::io::Result<()> {
-    let mut lock_clients = clients.lock().unwrap();
-    let mut lock_clients_on_docs = clients_on_docs.lock().unwrap();
+    let mut clients_guard = active_clients.lock().unwrap();
+    let subscribers_guard = document_subscribers.lock().unwrap();
 
-    if let Some(clients_on_current_doc) = lock_clients_on_docs.get_mut(&doc) {
-        for subscriber_addr in clients_on_current_doc {
-            if let Some(client) = lock_clients.get_mut(subscriber_addr) {
-                writeln!(client.stream, "{}", message.trim())?;
+    if let Some(document_subscribers) = subscribers_guard.get(&document_id) {
+        for subscriber_id in document_subscribers {
+            if let Some(client) = clients_guard.get_mut(subscriber_id) {
+                writeln!(client.stream, "{}", update_message.trim())?;
             } else {
-                println!("Cliente no encontrado: {}", subscriber_addr);
+                println!("Cliente no encontrado: {}", subscriber_id);
             }
         }
     } else {
-        println!("Documento no encontrado");
+        println!("Documento no encontrado: {}", document_id);
     }
 
     Ok(())
 }
 
-pub fn write_to_file(docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Result<()> {
-    let mut file = OpenOptions::new()
+/// Limpia los recursos asociados a un cliente cuando se desconecta.
+/// 
+/// Elimina al cliente de:
+/// - La lista de clientes activos
+/// - Las listas de suscriptores de documentos
+/// 
+/// # Argumentos
+/// * `client_id` - ID del cliente a limpiar
+/// * `active_clients` - Mapa de clientes activos
+/// * `document_subscribers` - Mapa de suscriptores por documento
+fn cleanup_client_resources(
+    client_id: &str,
+    active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
+    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+) {
+    active_clients.lock().unwrap().remove(client_id);
+
+    let mut subscribers_guard = document_subscribers.lock().unwrap();
+    for subscriber_list in subscribers_guard.values_mut() {
+        subscriber_list.retain(|id| id != client_id);
+    }
+}
+
+/// Persiste el estado actual de los documentos en el archivo.
+/// 
+/// # Argumentos
+/// * `documents` - Estado actual de los documentos a persistir
+/// 
+/// # Errores
+/// Retorna un error si hay problemas al escribir en el archivo
+pub fn persist_documents(documents: Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Result<()> {
+    let mut persistence_file = OpenOptions::new()
         .create(true)
         .truncate(true)
         .write(true)
         .open("docs.txt")?;
 
-    let locked_docs: std::sync::MutexGuard<'_, HashMap<String, Vec<String>>> = docs.lock().unwrap();
-    let documents: Vec<&String> = locked_docs.keys().collect();
-    for document in documents {
-        let mut base_string = document.to_string();
-        base_string.push_str("/++/");
-        let messages = locked_docs.get(document).unwrap();
-        for message in messages {
-            base_string.push_str(message);
-            base_string.push_str("/--/");
+    let documents_guard = documents.lock().unwrap();
+    let document_ids: Vec<&String> = documents_guard.keys().collect();
+    
+    for document_id in document_ids {
+        let mut document_data = document_id.to_string();
+        document_data.push_str("/++/");
+        
+        if let Some(messages) = documents_guard.get(document_id) {
+            for message in messages {
+                document_data.push_str(message);
+                document_data.push_str("/--/");
+            }
         }
-        writeln!(file, "{}", base_string)?;
+        
+        writeln!(persistence_file, "{}", document_data)?;
     }
 
     Ok(())
 }
 
-pub fn get_file_content(file_path: &String) -> Result<HashMap<String, Vec<String>>, String> {
-    let file = File::open(file_path).map_err(|_| "file-not-found".to_string())?;
+/// Carga los documentos persistidos desde el archivo.
+/// 
+/// # Argumentos
+/// * `file_path` - Ruta al archivo de persistencia
+/// 
+/// # Retorna
+/// HashMap con los documentos y sus mensajes, o un error si hay problemas
+/// al leer el archivo
+pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Vec<String>>, String> {
+    let file = File::open(file_path).map_err(|_| "archivo-no-encontrado".to_string())?;
     let reader = BufReader::new(file);
     let lines = reader.lines();
 
-    let mut docs: HashMap<String, Vec<String>> = HashMap::new();
+    let mut documents: HashMap<String, Vec<String>> = HashMap::new();
 
     for line in lines {
         match line {
-            Ok(read_line) => {
-                let parts: Vec<&str> = read_line.split("/++/").collect();
+            Ok(content) => {
+                let parts: Vec<&str> = content.split("/++/").collect();
                 if parts.len() != 2 {
                     continue;
                 }
 
-                let doc_name = parts[0].to_string();
-                let messages_str = parts[1];
+                let document_id = parts[0].to_string();
+                let messages_data = parts[1];
 
-                let messages: Vec<String> = messages_str
+                let messages: Vec<String> = messages_data
                     .split("/--/")
                     .filter(|s| !s.is_empty())
                     .map(|s| s.to_string())
                     .collect();
 
-                docs.insert(doc_name, messages);
+                documents.insert(document_id, messages);
             }
-            Err(_) => return Err("unable-to-read-file".to_string()),
+            Err(_) => return Err("error-al-leer-archivo".to_string()),
         }
     }
 
-    Ok(docs)
+    Ok(documents)
 }
