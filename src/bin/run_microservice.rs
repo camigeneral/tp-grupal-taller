@@ -22,13 +22,24 @@
 extern crate rusty_docs;
 use rusty_docs::microservice::Microservice;
 use std::sync::Arc;
+use std::thread;
 
 fn main() -> std::io::Result<()> {
     let microservice = Arc::new(Microservice::new(5000));
 
     microservice.connect_to_redis()?;
-    println!("Microservicio conectado al server de redis en: {:?}", microservice.redis_server.lock().unwrap().as_ref().unwrap().peer_addr());    
-    let microservice_stream_clone = microservice.stream.try_clone()?;
+    println!("Microservicio conectado al server de redis...");
+    let microservice_clone = Arc::clone(&microservice);
+    thread::spawn(move || {
+        println!("Escuchando a Redis");
+        if let Err(e) = microservice_clone.listen_to_redis() {
+            eprintln!("Error escuchando a Redis: {}", e);
+        }
+    });
+
+    thread::sleep(std::time::Duration::from_millis(100));
+   
+    let microservice_stream_clone: std::net::TcpListener = microservice.tcp_listener.try_clone()?;
     
     for stream in microservice_stream_clone.incoming() {
         match stream {
@@ -41,7 +52,7 @@ fn main() -> std::io::Result<()> {
                     }
                 });
                 println!("Nuevo cliente conectado: {:?}", client_stream.peer_addr());
-                let mut clients = microservice.clients.lock().unwrap();
+                let mut clients = microservice.active_clients.lock().unwrap();
                 clients.push(client_stream);
             }
             Err(e) => {
