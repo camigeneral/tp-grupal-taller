@@ -228,7 +228,7 @@ impl SimpleComponent for AppModel {
             AppMsg::ExecuteCommand => {
                 println!("Se ejecuto el siguiente comando: {:#?}", self.command);
                 if let Some(channel_sender) = &self.command_sender {
-                    if let Err(e) = channel_sender.send(self.command.clone()) {
+                    if let Err(e) = channel_sender.send(ClientCommand::Login { username: "fran".to_string(), password: "fran".to_string() }) {
                         println!("Error enviando comando: {}", e);
                     } else {
                         self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
