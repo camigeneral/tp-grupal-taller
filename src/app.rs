@@ -49,6 +49,7 @@ pub enum AppMsg {
     ExecuteCommand,
     CloseApplication,
     RefreshData,
+    CreateFile(String, String),
 }
 
 #[relm4::component(pub)]
@@ -133,6 +134,7 @@ impl SimpleComponent for AppModel {
             sender.input_sender(),
             |output| match output {
                 NavbarOutput::ToggleConnectionRequested => AppMsg::Connect,
+                NavbarOutput::CreateFileRequested(file_id, content) => AppMsg::CreateFile(file_id, content),
             },
         );
 
@@ -224,6 +226,17 @@ impl SimpleComponent for AppModel {
                 self.is_logged_in = false;
             }
             AppMsg::CommandChanged(command) => self.command = ClientCommand::Close,
+
+            AppMsg::CreateFile(file_id, content) => {
+                println!("Se ejecuto el siguiente comando: {:#?}", self.command);
+                if let Some(channel_sender) = &self.command_sender {
+                    if let Err(e) = channel_sender.send(ClientCommand::CreateFile{ file_id, content }) {
+                        println!("Error enviando comando: {}", e);
+                    } else {
+                        self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
+                    }
+                }
+            }
 
             AppMsg::ExecuteCommand => {
                 println!("Se ejecuto el siguiente comando: {:#?}", self.command);
