@@ -1,3 +1,6 @@
+extern crate relm4;
+use self::relm4::Sender;
+//use crate::app::AppMsg;
 use std::io::Read;
 use std::io::Write;
 use std::io::{BufRead, BufReader};
@@ -10,12 +13,14 @@ use std::sync::mpsc::Receiver;
 use std::thread;
 #[allow(unused_imports)]
 use std::time::Duration;
+use std::sync::Arc;
+use std::sync::Mutex;
+
 
 #[derive(Debug)]
 pub struct Microservice {    
-    stream: TcpListener,
-    address: String,
-    redis_server: Option<TcpStream>
+    stream: TcpListener,    
+    redis_server: Mutex<Option<TcpStream>>
 }
 
 impl Microservice {
@@ -24,28 +29,47 @@ impl Microservice {
         let stream = TcpListener::bind(address.clone()).unwrap();
         println!("Microservice levantado en: {:?}", address);
         Self {            
-            address,
             stream,
-            redis_server: None
+            redis_server: Mutex::new(None)
         }
     }
 
-    pub fn connect_to_redis(&mut self) -> std::io::Result<()> {
-        self.redis_server = Some(TcpStream::connect(format!("127.0.0.1:{}", 4000))?);
+    pub fn connect_to_redis(&self) -> std::io::Result<()> {
+        let mut redis_server = self.redis_server.lock().unwrap();
+        *redis_server = Some(TcpStream::connect(format!("127.0.0.1:{}", 4000))?);
         Ok(())
+    }
+
+    pub fn listen_to_client(&self, client_stream: TcpStream) -> std::io::Result<()> {
+        let mut reader = BufReader::new(client_stream);
+        let mut buffer = String::new();
+
+        loop {
+            reader.read_line(&mut buffer)?;
+            println!("Recibido: {:?}", buffer);
+        }
+        //Ok(())
     }
 }
 
 pub fn main() -> std::io::Result<()> {
-    let mut microservice = Microservice::new(5000);
+    let microservice = Arc::new(Microservice::new(5000));
 
     microservice.connect_to_redis()?;
-    println!("Microservicio conectado al server de redis en: {:?}", microservice.redis_server.as_ref().unwrap().peer_addr());
-
-    for stream in microservice.stream.incoming() {
+    println!("Microservicio conectado al server de redis en: {:?}", microservice.redis_server.lock().unwrap().as_ref().unwrap().peer_addr());    
+    let microservice_stream_clone = microservice.stream.try_clone()?;
+    for stream in microservice_stream_clone.incoming() {
         match stream {
             Ok(client_stream) => {
-                println!("New client connected: {:?}", client_stream.peer_addr());
+                let client_stream_clone = client_stream.try_clone()?;
+                let microservice_clone = Arc::clone(&microservice);
+                thread::spawn(move || {
+                    if let Err(e) = microservice_clone.listen_to_client(client_stream_clone) {
+                        eprintln!("Error en la conexión con nodo: {}", e);
+                    }
+                });
+
+                println!("Nuevo cliente conectado: {:?}", client_stream.peer_addr());
             }
             Err(e) => {
                 println!("Error: {:?}", e);
