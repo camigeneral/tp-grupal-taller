@@ -1,12 +1,12 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::{
-    prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, WidgetExt},
+    prelude::{BoxExt, ButtonExt, GtkWindowExt, OrientableExt, WidgetExt},
     CssProvider,
 };
 use crate::components::login::{LoginForm, LoginOutput};
 use app::gtk4::glib::Propagation;
-use components::file_workspace::{FileWorkspace, FileWorkspaceMsg};
+use components::file_workspace::{FileWorkspace, FileWorkspaceMsg, FileWorkspaceOutputMessage};
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
 use std::{collections::HashMap};
 use commands::client::ClientCommand;
@@ -50,6 +50,7 @@ pub enum AppMsg {
     CloseApplication,
     RefreshData,
     CreateFile(String, String),
+    SubscribeFile(String)
 }
 
 #[relm4::component(pub)]
@@ -140,7 +141,10 @@ impl SimpleComponent for AppModel {
 
         let files_manager_model = FileWorkspace::builder()
             .launch(())
-            .forward(sender.input_sender(), |_: ()| AppMsg::Ignore);
+            .forward(sender.input_sender(), |command: FileWorkspaceOutputMessage| match command {
+                FileWorkspaceOutputMessage::SubscribeFile(file) => AppMsg::SubscribeFile(file)
+                
+            });
 
         let login_form_model = LoginForm::builder().launch(users).forward(
             sender.input_sender(),
@@ -234,6 +238,16 @@ impl SimpleComponent for AppModel {
                         println!("Error enviando comando: {}", e);
                     } else {
                         self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
+                    }
+                }
+            }
+
+            AppMsg::SubscribeFile(file) => {
+                if let Some(channel_sender) = &self.command_sender {
+                    if let Err(e) = channel_sender.send(ClientCommand::Subscribe { file_id: file.clone() }) {
+                        println!("Error enviando comando: {}", e);
+                    } else {
+                        self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(file.clone(), "".to_string(), 1));
                     }
                 }
             }

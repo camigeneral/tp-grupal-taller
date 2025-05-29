@@ -43,12 +43,19 @@ pub enum FileWorkspaceMsg {
     Ignore,
     /// Mensaje para cerrar el editor de archivos.
     CloseEditor,
+    SubscribeFile(String, String, u8),
     ReloadFiles,
 }
 
+#[derive(Debug)]
+pub enum FileWorkspaceOutputMessage {
+    SubscribeFile(String)
+}
+
+
 #[relm4::component(pub)]
 impl SimpleComponent for FileWorkspace {
-    type Output = ();
+    type Output = FileWorkspaceOutputMessage;
     type Init = ();
     type Input = FileWorkspaceMsg;
 
@@ -100,7 +107,7 @@ impl SimpleComponent for FileWorkspace {
                         _file_type,
                         content,
                         qty,
-                    ) => FileWorkspaceMsg::OpenFile(file, content, qty),
+                    ) => FileWorkspaceMsg::SubscribeFile(file, content, qty),
                     _ => FileWorkspaceMsg::Ignore,
                 },
             );
@@ -126,8 +133,13 @@ impl SimpleComponent for FileWorkspace {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
+    fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
+
+            FileWorkspaceMsg::SubscribeFile(file, content, qty) => {
+                sender.output(FileWorkspaceOutputMessage::SubscribeFile(file)).unwrap();
+            }
+
             FileWorkspaceMsg::OpenFile(file, content, qty) => {
                 self.current_file = file.clone();
                 self.file_editor_ctrl
