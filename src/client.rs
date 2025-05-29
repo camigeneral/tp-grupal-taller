@@ -13,47 +13,56 @@ use std::sync::mpsc::Receiver;
 use std::thread;
 #[allow(unused_imports)]
 use std::time::Duration;
+use commands::client::ClientCommand;
 
 pub fn client_run(
     port: u16,
-    rx: Receiver<String>,
+    rx: Receiver<ClientCommand>,
     ui_sender: Option<Sender<AppMsg>>,
 ) -> std::io::Result<()> {
     let address = format!("127.0.0.1:{}", port);
 
-    println!("Conectándome a {:?}", address);
-    let mut socket = TcpStream::connect(address)?;
+    println!("Conectándome al microservicio en {:?}", address);
+    let mut socket: TcpStream = TcpStream::connect(address)?;
 
-    let cloned_socket = socket.try_clone()?;
+    let microservice_socket = socket.try_clone()?;
 
     thread::spawn(move || {
-        if let Err(e) = listen_to_subscriptions(cloned_socket, ui_sender) {
+        if let Err(e) = listen_to_microservice_response(microservice_socket, ui_sender) {
             eprintln!("Error en la conexión con nodo: {}", e);
         }
     });
 
     for command in rx {
-        let trimmed_command = command.trim().to_lowercase();
+        let trimmed_command = command.to_string().trim().to_lowercase();
 
         if trimmed_command == "salir" {
             println!("Desconectando del servidor");
             break;
         } else {
-            println!("Enviando: {:?}", command);
+            /* println!("Enviando: {:?}", command);
 
             let parts: Vec<&str> = command.split_whitespace().collect();
             let resp_command = format_resp_command(&parts);
 
             println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
-
-            socket.write_all(resp_command.as_bytes())?;
-        }
+ */
+            socket.write_all(command.to_string().as_bytes())?;  
+      }
     }
 
     Ok(())
 }
 
-fn format_resp_command(parts: &[&str]) -> String {
+fn listen_to_microservice_response(
+    microservice_socket: TcpStream,
+    ui_sender: Option<Sender<AppMsg>>,
+) -> std::io::Result<()> {
+    let mut reader = BufReader::new(microservice_socket);
+
+    Ok(())
+}
+/* fn format_resp_command(parts: &[&str]) -> String {
     let mut resp = format!("*{}\r\n", parts.len());
 
     for part in parts {
@@ -180,3 +189,4 @@ mod tests {
         assert!(client_thread.join().is_ok());
     }
 }
+ */

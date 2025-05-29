@@ -8,8 +8,8 @@ use crate::components::login::{LoginForm, LoginOutput};
 use app::gtk4::glib::Propagation;
 use components::file_workspace::{FileWorkspace, FileWorkspaceMsg};
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
-use std::collections::HashMap;
-
+use std::{collections::HashMap};
+use commands::client::ClientCommand;
 use client::client_run;
 use std::thread;
 
@@ -33,9 +33,9 @@ pub struct AppModel {
     files_manager_cont: Controller<FileWorkspace>,
     login_form_cont: Controller<LoginForm>,
     is_logged_in: bool,
-    command: String,
+    command: ClientCommand,
     port: u16,
-    command_sender: Option<Sender<String>>,
+    command_sender: Option<Sender<ClientCommand>>,
 }
 
 #[derive(Debug)]
@@ -45,7 +45,7 @@ pub enum AppMsg {
     LoginSuccess(String),
     LoginFailure(String),
     Logout,
-    CommandChanged(String),
+    CommandChanged(ClientCommand),
     ExecuteCommand,
     CloseApplication,
     RefreshData,
@@ -78,13 +78,7 @@ impl SimpleComponent for AppModel {
                     set_spacing: 15,
                     gtk::Label {
                         set_label: "Comandos:",
-                    },
-                    #[name = "command_entry"]
-                    gtk::Entry {
-                        connect_changed[sender] => move |entry| {
-                            sender.input(AppMsg::CommandChanged(entry.text().to_string()));
-                        }
-                    },
+                    },                    
 
                     gtk::Button {
                         set_label: "Ejecutar",
@@ -158,7 +152,7 @@ impl SimpleComponent for AppModel {
             files_manager_cont: files_manager_model,
             login_form_cont: login_form_model,
             is_logged_in: false,
-            command: "".to_string(),
+            command: ClientCommand::Close,
             port,
             command_sender: None,
         };
@@ -166,7 +160,7 @@ impl SimpleComponent for AppModel {
         let sender_clone = sender.clone();
 
         root.connect_close_request(move |_| {
-            sender_clone.input(AppMsg::CommandChanged("cerrar".to_string()));
+            sender_clone.input(AppMsg::CommandChanged(ClientCommand::Close));
             sender_clone.input(AppMsg::ExecuteCommand);
             Propagation::Proceed
         });
@@ -193,7 +187,7 @@ impl SimpleComponent for AppModel {
                     .unwrap();
                 let ui_sender = sender.input_sender().clone();
 
-                let (tx, rx) = channel::<String>();
+                let (tx, rx) = channel::<ClientCommand>();
                 self.command_sender = Some(tx.clone());
 
                 let port = self.port;
@@ -229,10 +223,10 @@ impl SimpleComponent for AppModel {
 
                 self.is_logged_in = false;
             }
-            AppMsg::CommandChanged(command) => self.command = command,
+            AppMsg::CommandChanged(command) => self.command = ClientCommand::Close,
 
             AppMsg::ExecuteCommand => {
-                println!("Se ejecuto el siguiente comando: {}", self.command);
+                println!("Se ejecuto el siguiente comando: {:#?}", self.command);
                 if let Some(channel_sender) = &self.command_sender {
                     if let Err(e) = channel_sender.send(self.command.clone()) {
                         println!("Error enviando comando: {}", e);
@@ -250,7 +244,7 @@ impl SimpleComponent for AppModel {
             AppMsg::CloseApplication => {
                 if let Some(channel_sender) = &self.command_sender {
                     println!("Enviando comando de cierre al servidor");
-                    if let Err(e) = channel_sender.send("cerrar".to_string()) {
+                    if let Err(e) = channel_sender.send(ClientCommand::Close) {
                         eprintln!("Error al enviar comando de cierre: {:?}", e);
                     }
                 }

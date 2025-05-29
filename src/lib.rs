@@ -42,3 +42,6 @@ pub mod client;
 ///
 /// Usa hilos para manejar comunicación asíncrona sin bloquear la UI.
 pub mod microservice;
+
+/// Módulo que contiene los diferentes tipos de comandos y sus implementaciones.
+pub mod commands;
