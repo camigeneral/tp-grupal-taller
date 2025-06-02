@@ -2,6 +2,7 @@ use std::collections::HashMap;
 mod commands;
 use commands::redis;
 use std::env::args;
+use std::path::Path;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
@@ -11,6 +12,7 @@ use std::thread;
 mod client_info;
 mod node_info;
 mod parse;
+mod hashing;
 
 static SERVER_ARGS: usize = 2;
 
@@ -43,7 +45,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let node_ports = vec![14000, 14001, 14002];
+    let node_ports = read_node_ports("node_ports.txt")?;
 
     {
         let mut lock_nodes: std::sync::MutexGuard<'_, HashMap<String, node_info::Node>> = nodes.lock().unwrap();
@@ -389,4 +391,22 @@ fn handle_node(
     }
 
     Ok(())
+}
+
+
+fn read_node_ports<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<usize>> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+    let mut ports = Vec::new();
+
+    for line_result in reader.lines() {
+        let line = line_result?;
+        if let Ok(port) = line.trim().parse::<usize>() {
+            ports.push(port);
+        } else {
+            println!("Invalid port number: {}", line);
+        }
+    }
+
+    Ok(ports)
 }

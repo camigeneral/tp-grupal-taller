@@ -16,6 +16,9 @@ pub mod node_info;
 /// construir respuestas y manipular el protocolo RESP usado por Redis.
 pub mod parse;
 
+// to do: completar
+pub mod hashing;
+
 /// Módulo principal de la aplicación.
 ///
 /// Define la estructura y lógica principal de la app, incluyendo los controladores
