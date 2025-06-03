@@ -2,21 +2,20 @@ use std::fs::{File};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
-pub enum NodeType {
-    M,
-    R,
+pub enum NodeRole {
+    Master,
+    Replica,
 }
 
 #[allow(dead_code)]
 pub struct LocalNode {
     pub port: usize,
-    pub hash_range_start: usize,
-    pub hash_range_end: usize,
-    pub node_type: NodeType,
+    pub role: NodeRole,
+    pub hash_range: (usize, usize),
 }
 
 impl LocalNode {
-    pub fn new_node_from_file<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
+    pub fn new_from_config<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
 
@@ -24,42 +23,41 @@ impl LocalNode {
         reader.read_line(&mut buf)?;
         let split_line: Vec<&str> = buf.split(",").collect();
 
-        let mut port = 0;
-        if let Ok(p) = split_line[0].trim().parse::<usize>() {
-            port = p;
-        } else {
-            println!("Invalid port number: {}", split_line[0].trim());
+        if split_line.len() != 4 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Invalid arguments",
+            ));
         }
 
-        let mut hash_range_start = 0;
-        if let Ok(s) = split_line[1].trim().parse::<usize>() {
-            hash_range_start = s;
-        } else {
-            println!("Invalid port number: {}", split_line[0].trim());
-        }
+        let port = split_line[0].trim().parse::<usize>().map_err(|_| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid port number")
+        })?;
 
-        let mut hash_range_end = 0;
-        if let Ok(e) = split_line[2].trim().parse::<usize>() {
-            hash_range_end = e;
-        } else {
-            println!("Invalid port number: {}", split_line[0].trim());
-        }
+        let hash_range_start = split_line[1].trim().parse::<usize>().map_err(|_| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid start range")
+        })?;
 
-        let r = "R".to_string();
+        let hash_range_end = split_line[2].trim().parse::<usize>().map_err(|_| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid end range")
+        })?;
 
-        let node_type_string = split_line[3].trim().to_string();
-
-        let mut node_type: NodeType = NodeType::M;
-        if node_type_string == r {
-            node_type = NodeType::R;
-        }
+        let role = match split_line[3].trim().to_lowercase().as_str() {
+            "master" => NodeRole::Master,
+            "replica" => NodeRole::Replica,
+            _ => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Invalid role",
+                ));
+            }
+        };
 
         Ok(
             LocalNode {
                 port,
-                hash_range_start,
-                hash_range_end,
-                node_type,
+                role,
+                hash_range: (hash_range_start, hash_range_end,)
             }
         )
 

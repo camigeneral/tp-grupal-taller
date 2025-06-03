@@ -4,4 +4,3 @@ use std::net::TcpStream;
 pub struct PeerNode {
     pub stream: TcpStream,
 }
-

@@ -49,9 +49,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let node_ports = read_node_ports("redis0.conf")?;
 
     let local_node = match port {
-        4000 => local_node::LocalNode::new_node_from_file("redis0.conf"),
-        4001 => local_node::LocalNode::new_node_from_file("redis1.conf"),
-        4002 => local_node::LocalNode::new_node_from_file("redis2.conf"),
+        4000 => local_node::LocalNode::new_from_config("redis0.conf"),
+        4001 => local_node::LocalNode::new_from_config("redis1.conf"),
+        4002 => local_node::LocalNode::new_from_config("redis2.conf"),
         _ => return Err("Failed to parse node".into()),
     };
 
