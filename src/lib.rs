@@ -19,6 +19,9 @@ pub mod parse;
 // to do: completar
 pub mod hashing;
 
+// to do: completar
+pub mod self_node_info;
+
 /// Módulo principal de la aplicación.
 ///
 /// Define la estructura y lógica principal de la app, incluyendo los controladores

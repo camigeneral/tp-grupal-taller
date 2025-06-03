@@ -13,6 +13,7 @@ mod client_info;
 mod node_info;
 mod parse;
 mod hashing;
+mod self_node_info;
 
 static SERVER_ARGS: usize = 2;
 
@@ -45,7 +46,14 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let node_ports = read_node_ports("node_ports.txt")?;
+    let node_ports = read_node_ports("redis0.conf")?;
+
+    let self_node = match port {
+        4000 => self_node_info::SelfNode::new_node_from_file("redis0.conf"),
+        4001 => self_node_info::SelfNode::new_node_from_file("redis1.conf"),
+        4002 => self_node_info::SelfNode::new_node_from_file("redis2.conf"),
+        _ => return Err("Failed to parse node".into()),
+    };
 
     {
         let mut lock_nodes: std::sync::MutexGuard<'_, HashMap<String, node_info::Node>> = nodes.lock().unwrap();
@@ -348,6 +356,7 @@ fn connect_nodes(address: &str, nodes: Arc<Mutex<HashMap<String, node_info::Node
     Ok(())
 }
 
+
 fn handle_node(
     stream: &mut TcpStream,
     nodes: Arc<Mutex<HashMap<String, node_info::Node>>>
@@ -401,7 +410,8 @@ fn read_node_ports<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<usize>> {
 
     for line_result in reader.lines() {
         let line = line_result?;
-        if let Ok(port) = line.trim().parse::<usize>() {
+        let split_line: Vec<&str> = line.split(",").collect();
+        if let Ok(port) = split_line[0].trim().parse::<usize>() {
             ports.push(port);
         } else {
             println!("Invalid port number: {}", line);

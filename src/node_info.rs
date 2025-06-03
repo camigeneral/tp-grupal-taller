@@ -4,3 +4,4 @@ use std::net::TcpStream;
 pub struct Node {
     pub stream: TcpStream,
 }
+
