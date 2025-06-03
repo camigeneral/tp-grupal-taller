@@ -10,10 +10,10 @@ use std::str;
 use std::sync::{Arc, Mutex};
 use std::thread;
 mod client_info;
-mod node_info;
+mod peer_node;
 mod parse;
 mod hashing;
-mod self_node_info;
+mod local_node;
 
 static SERVER_ARGS: usize = 2;
 
@@ -34,7 +34,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let node_address = format!("127.0.0.1:{}", port+10000);
     let client_address = format!("127.0.0.1:{}", port);
 
-    let nodes: Arc<Mutex<HashMap<String, node_info::Node>>> =
+    let nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
     let cloned_nodes = Arc::clone(&nodes);
@@ -48,15 +48,15 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let node_ports = read_node_ports("redis0.conf")?;
 
-    let self_node = match port {
-        4000 => self_node_info::SelfNode::new_node_from_file("redis0.conf"),
-        4001 => self_node_info::SelfNode::new_node_from_file("redis1.conf"),
-        4002 => self_node_info::SelfNode::new_node_from_file("redis2.conf"),
+    let local_node = match port {
+        4000 => local_node::LocalNode::new_node_from_file("redis0.conf"),
+        4001 => local_node::LocalNode::new_node_from_file("redis1.conf"),
+        4002 => local_node::LocalNode::new_node_from_file("redis2.conf"),
         _ => return Err("Failed to parse node".into()),
     };
 
     {
-        let mut lock_nodes: std::sync::MutexGuard<'_, HashMap<String, node_info::Node>> = nodes.lock().unwrap();
+        let mut lock_nodes: std::sync::MutexGuard<'_, HashMap<String, peer_node::PeerNode>> = nodes.lock().unwrap();
 
         for connection_port in node_ports {
             if connection_port != port + 10000 {
@@ -65,7 +65,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match TcpStream::connect(node_address_to_connect) {
                     Ok(stream) => {
                         let mut cloned_stream = stream.try_clone()?;
-                        let node_client = node_info::Node {
+                        let node_client: peer_node::PeerNode = peer_node::PeerNode {
                             stream: stream,
                         };
                         lock_nodes.insert(node_address_to_connect_clone.to_string(), node_client);
@@ -321,7 +321,7 @@ pub fn get_file_content(file_path: &String) -> Result<HashMap<String, Vec<String
 }
 
 
-fn connect_nodes(address: &str, nodes: Arc<Mutex<HashMap<String, node_info::Node>>>) -> std::io::Result<()> {
+fn connect_nodes(address: &str, nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>) -> std::io::Result<()> {
     let listener = TcpListener::bind(address)?;
     println!("Server listening nodes on {}", address);
 
@@ -359,7 +359,7 @@ fn connect_nodes(address: &str, nodes: Arc<Mutex<HashMap<String, node_info::Node
 
 fn handle_node(
     stream: &mut TcpStream,
-    nodes: Arc<Mutex<HashMap<String, node_info::Node>>>
+    nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>
 ) -> std::io::Result<()> {
     let reader = BufReader::new(stream.try_clone()?);
 
@@ -381,7 +381,7 @@ fn handle_node(
                         let node_address_to_connect = format!("127.0.0.1:{}", node_listening_port);
                         let new_stream = TcpStream::connect(node_address_to_connect)?;
 
-                        let node_client = node_info::Node {
+                        let node_client = peer_node::PeerNode {
                             stream: new_stream,
                         };
                         let node_address_to_connect = format!("127.0.0.1:{}", node_listening_port);

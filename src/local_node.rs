@@ -8,14 +8,14 @@ pub enum NodeType {
 }
 
 #[allow(dead_code)]
-pub struct SelfNode {
+pub struct LocalNode {
     pub port: usize,
     pub hash_range_start: usize,
     pub hash_range_end: usize,
     pub node_type: NodeType,
 }
 
-impl SelfNode {
+impl LocalNode {
     pub fn new_node_from_file<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
@@ -55,7 +55,7 @@ impl SelfNode {
         }
 
         Ok(
-            SelfNode {
+            LocalNode {
                 port,
                 hash_range_start,
                 hash_range_end,

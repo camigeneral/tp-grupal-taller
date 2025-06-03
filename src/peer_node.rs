@@ -1,7 +1,7 @@
 use std::net::TcpStream;
 
 #[allow(dead_code)]
-pub struct Node {
+pub struct PeerNode {
     pub stream: TcpStream,
 }
 

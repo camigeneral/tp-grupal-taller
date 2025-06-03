@@ -8,7 +8,7 @@ pub mod client_info;
 ///
 /// Define la estructura `Node`, que encapsula el socket TCP utilizado
 /// para la comunicación enttre los nodos.
-pub mod node_info;
+pub mod peer_node;
 
 /// Módulo encargado de parsear comandos y respuestas en formato RESP.
 ///
@@ -20,7 +20,7 @@ pub mod parse;
 pub mod hashing;
 
 // to do: completar
-pub mod self_node_info;
+pub mod local_node;
 
 /// Módulo principal de la aplicación.
 ///
