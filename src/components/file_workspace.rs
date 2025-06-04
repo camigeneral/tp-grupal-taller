@@ -107,7 +107,7 @@ impl SimpleComponent for FileWorkspace {
                         _file_type,
                         content,
                         qty,
-                    ) => FileWorkspaceMsg::SubscribeFile(file, content, qty),
+                    ) => FileWorkspaceMsg::OpenFile(file, content, qty),
                     _ => FileWorkspaceMsg::Ignore,
                 },
             );

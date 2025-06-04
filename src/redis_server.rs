@@ -115,7 +115,7 @@ fn handle_new_microservice_connection(
     shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) -> std::io::Result<()> {
     let client_addr = client_stream.peer_addr()?;
-    println!("Microservice conectado: {}", client_addr);
+    println!("cliente conectado: {}", client_addr);
 
     let client_stream_clone = client_stream.try_clone()?;
     

@@ -1,7 +1,7 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::{
-    prelude::{BoxExt, ButtonExt, GtkWindowExt, OrientableExt, WidgetExt},
+    prelude::{BoxExt, ButtonExt, GtkWindowExt, OrientableExt, WidgetExt, EditableExt},
     CssProvider,
 };
 use crate::components::login::{LoginForm, LoginOutput};
@@ -33,7 +33,7 @@ pub struct AppModel {
     files_manager_cont: Controller<FileWorkspace>,
     login_form_cont: Controller<LoginForm>,
     is_logged_in: bool,
-    command: ClientCommand,
+    command: String,
     port: u16,
     command_sender: Option<Sender<String>>,
 }
@@ -45,7 +45,7 @@ pub enum AppMsg {
     LoginSuccess(String),
     LoginFailure(String),
     Logout,
-    CommandChanged(ClientCommand),
+    CommandChanged(String),
     ExecuteCommand,
     CloseApplication,
     RefreshData,
@@ -81,7 +81,12 @@ impl SimpleComponent for AppModel {
                     gtk::Label {
                         set_label: "Comandos:",
                     },                    
-
+                    #[name = "command_entry"]
+                    gtk::Entry {
+                        connect_changed[sender] => move |entry| {
+                            sender.input(AppMsg::CommandChanged(entry.text().to_string()));
+                        }
+                    },
                     gtk::Button {
                         set_label: "Ejecutar",
                         add_css_class: "execute-command",
@@ -158,7 +163,7 @@ impl SimpleComponent for AppModel {
             files_manager_cont: files_manager_model,
             login_form_cont: login_form_model,
             is_logged_in: false,
-            command: ClientCommand::Close,
+            command: "".to_string(),
             port,
             command_sender: None,
         };
@@ -166,7 +171,7 @@ impl SimpleComponent for AppModel {
         let sender_clone = sender.clone();
 
         root.connect_close_request(move |_| {
-            sender_clone.input(AppMsg::CommandChanged(ClientCommand::Close));
+            sender_clone.input(AppMsg::CommandChanged("CLOSE".to_string()));
             sender_clone.input(AppMsg::ExecuteCommand);
             Propagation::Proceed
         });
@@ -243,13 +248,13 @@ impl SimpleComponent for AppModel {
             }
 
             AppMsg::SubscribeFile(file) => {
-                if let Some(channel_sender) = &self.command_sender {
+                /* if let Some(channel_sender) = &self.command_sender {
                     if let Err(e) = channel_sender.send("SUBSCRIBE ".to_string() + &file) {
                         println!("Error enviando comando: {}", e);
                     } else {
-                        self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(file.clone(), "".to_string(), 1));
                     }
-                }
+                } */
+                /* self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(file.clone(), "".to_string(), 1)); */
             }
 
             AppMsg::ExecuteCommand => {

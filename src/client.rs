@@ -35,10 +35,7 @@ pub fn client_run(
     });
 
     for command in rx {
-        let trimmed_command = command.to_string().trim().to_lowercase();
-        println!("Enviando comando: {}", trimmed_command);
-        socket.write_all(command.to_string().as_bytes())?;  
-
+        let trimmed_command = command.to_string().trim().to_lowercase();        
         if trimmed_command == "close" {
             println!("Desconectando del servidor");
             break;
