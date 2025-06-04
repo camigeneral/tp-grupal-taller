@@ -376,7 +376,7 @@ mod tests {
         });
 
         thread::sleep(Duration::from_millis(100));
-        tx.send(ClientCommand::Close).unwrap();
+        tx.send("CLOSE".to_string()).unwrap();
 
         assert!(server_thread.join().is_ok());
         assert!(client_thread.join().is_ok());

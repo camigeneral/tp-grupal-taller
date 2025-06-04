@@ -133,3 +133,9 @@ window {
     border: 1px solid #000000;
     padding: 10px;
 }
+
+/* Spinner de carga */
+spinner {
+    color: #2FA1FF;
+    opacity: 0.8;
+}

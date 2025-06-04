@@ -14,21 +14,22 @@ use std::thread;
 #[allow(unused_imports)]
 use std::time::Duration;
 use commands::client::ClientCommand;
+use utils::redis_parser::format_resp_command;
 
 pub fn client_run(
     port: u16,
-    rx: Receiver<ClientCommand>,
+    rx: Receiver<String>,
     ui_sender: Option<Sender<AppMsg>>,
 ) -> std::io::Result<()> {
     let address = format!("127.0.0.1:{}", port);
 
-    println!("Conectándome al microservicio en {:?}", address);
+    println!("Conectándome al server de redis en {:?}", address);
     let mut socket: TcpStream = TcpStream::connect(address)?;
 
-    let microservice_socket = socket.try_clone()?;
+    let redis_socket = socket.try_clone()?;
 
     thread::spawn(move || {
-        if let Err(e) = listen_to_microservice_response(microservice_socket, ui_sender) {
+        if let Err(e) = listen_to_redis_response(redis_socket, ui_sender) {
             eprintln!("Error en la conexión con nodo: {}", e);
         }
     });
@@ -38,18 +39,27 @@ pub fn client_run(
         println!("Enviando comando: {}", trimmed_command);
         socket.write_all(command.to_string().as_bytes())?;  
 
-        if trimmed_command == "salir" {
+        if trimmed_command == "close" {
             println!("Desconectando del servidor");
             break;
+        } else {
+            println!("Enviando: {:?}", command);
+
+            let parts: Vec<&str> = command.split_whitespace().collect();
+            let resp_command = format_resp_command(&parts);
+
+            println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
+
+            socket.write_all(resp_command.as_bytes())?;
         }
     }
 
     Ok(())
 }
 
-fn listen_to_microservice_response(
+fn listen_to_redis_response(
     microservice_socket: TcpStream,
-    ui_sender: Option<Sender<AppMsg>>,
+    _ui_sender: Option<Sender<AppMsg>>,
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(microservice_socket);
     loop {
@@ -59,7 +69,7 @@ fn listen_to_microservice_response(
         if bytes_read == 0 {
             break;
         }
-        println!("Respuesta del microservicio: {}", line);
+        println!("Respuesta de redis: {}", line);
     }
     Ok(())
 }

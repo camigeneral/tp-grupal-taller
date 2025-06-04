@@ -9,7 +9,8 @@ use std::str;
 use std::sync::{Arc, Mutex};
 use std::thread;
 mod client_info;
-mod parse;
+mod utils;
+
 
 /// Número de argumentos esperados para iniciar el servidor
 static REQUIRED_ARGS: usize = 2;
@@ -170,16 +171,16 @@ fn handle_client(
     let mut reader = BufReader::new(stream.try_clone()?);
 
     loop {
-        let command_request = match parse::parse_command(&mut reader) {
+        let command_request = match utils::redis_parser::parse_command(&mut reader) {
             Ok(req) => req,
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::UnexpectedEof {
                     break;
                 }
                 println!("Error al parsear comando: {}", e);
-                parse::write_response(
+                utils::redis_parser::write_response(
                     stream,
-                    &parse::CommandResponse::Error("Comando inválido".to_string()),
+                    &utils::redis_parser::CommandResponse::Error("Comando inválido".to_string()),
                 )?;
                 continue;
             }
@@ -206,7 +207,7 @@ fn handle_client(
         }
 
         let response = redis_response.response;
-        if let Err(e) = parse::write_response(stream, &response) {
+        if let Err(e) = utils::redis_parser::write_response(stream, &response) {
             println!("Error al escribir respuesta: {}", e);
             break;
         }

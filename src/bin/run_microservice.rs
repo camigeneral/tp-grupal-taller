@@ -37,11 +37,12 @@ fn main() -> std::io::Result<()> {
         }
     });
 
-    thread::sleep(std::time::Duration::from_millis(100));
+    /* thread::sleep(std::time::Duration::from_millis(100));
    
     let microservice_stream_clone: std::net::TcpListener = microservice.tcp_listener.try_clone()?;
-    
-    for stream in microservice_stream_clone.incoming() {
+     */
+    //TODO: Aca puede estar la conexion con los canales de los archivos 
+   /*  for stream in microservice_stream_clone.incoming() {
         match stream {
             Ok(client_stream) => {
                 let client_stream_clone = client_stream.try_clone()?;
@@ -59,6 +60,6 @@ fn main() -> std::io::Result<()> {
                 println!("Error: {:?}", e);
             }
         }
-    }
+    } */
     Ok(())
 } 

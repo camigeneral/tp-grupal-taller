@@ -35,7 +35,7 @@ pub struct AppModel {
     is_logged_in: bool,
     command: ClientCommand,
     port: u16,
-    command_sender: Option<Sender<ClientCommand>>,
+    command_sender: Option<Sender<String>>,
 }
 
 #[derive(Debug)]
@@ -193,7 +193,7 @@ impl SimpleComponent for AppModel {
                     .unwrap();
                 let ui_sender = sender.input_sender().clone();
 
-                let (tx, rx) = channel::<ClientCommand>();
+                let (tx, rx) = channel::<String>();
                 self.command_sender = Some(tx.clone());
 
                 let port = self.port;
@@ -229,22 +229,22 @@ impl SimpleComponent for AppModel {
 
                 self.is_logged_in = false;
             }
-            AppMsg::CommandChanged(command) => self.command = ClientCommand::Close,
+            AppMsg::CommandChanged(command) => self.command = command,
 
             AppMsg::CreateFile(file_id, content) => {
-                println!("Se ejecuto el siguiente comando: {:#?}", self.command);
+                /* println!("Se ejecuto el siguiente comando: {:#?}", self.command);
                 if let Some(channel_sender) = &self.command_sender {
                     if let Err(e) = channel_sender.send(ClientCommand::CreateFile{ file_id, content }) {
                         println!("Error enviando comando: {}", e);
                     } else {
                         self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
                     }
-                }
+                } */
             }
 
             AppMsg::SubscribeFile(file) => {
                 if let Some(channel_sender) = &self.command_sender {
-                    if let Err(e) = channel_sender.send(ClientCommand::Subscribe { file_id: file.clone() }) {
+                    if let Err(e) = channel_sender.send("SUBSCRIBE ".to_string() + &file) {
                         println!("Error enviando comando: {}", e);
                     } else {
                         self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(file.clone(), "".to_string(), 1));
@@ -255,7 +255,7 @@ impl SimpleComponent for AppModel {
             AppMsg::ExecuteCommand => {
                 println!("Se ejecuto el siguiente comando: {:#?}", self.command);
                 if let Some(channel_sender) = &self.command_sender {
-                    if let Err(e) = channel_sender.send(ClientCommand::Login { username: "fran".to_string(), password: "fran".to_string() }) {
+                    if let Err(e) = channel_sender.send(self.command.to_string()) {
                         println!("Error enviando comando: {}", e);
                     } else {
                         self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
@@ -271,7 +271,7 @@ impl SimpleComponent for AppModel {
             AppMsg::CloseApplication => {
                 if let Some(channel_sender) = &self.command_sender {
                     println!("Enviando comando de cierre al servidor");
-                    if let Err(e) = channel_sender.send(ClientCommand::Close) {
+                    if let Err(e) = channel_sender.send("CLOSE".to_string()) {
                         eprintln!("Error al enviar comando de cierre: {:?}", e);
                     }
                 }
