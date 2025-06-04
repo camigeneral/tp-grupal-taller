@@ -1,4 +1,4 @@
-use parse::CommandResponse;
+use crate::utils::redis_parser::CommandResponse;
 
 pub struct RedisResponse {
     pub response: CommandResponse,

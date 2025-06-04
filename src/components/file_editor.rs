@@ -1,8 +1,7 @@
 extern crate gtk4;
 extern crate relm4;
-
 use self::gtk4::prelude::{
-    BoxExt, ButtonExt, OrientableExt, TextBufferExt, TextBufferExtManual, TextViewExt, WidgetExt,
+    BoxExt, ButtonExt, OrientableExt, TextBufferExt, TextViewExt, WidgetExt,TextBufferExtManual
 };
 
 use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};

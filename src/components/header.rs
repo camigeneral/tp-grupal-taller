@@ -1,7 +1,9 @@
 extern crate gtk4;
+extern crate rand;
 extern crate relm4;
 use self::gtk4::prelude::{BoxExt, ButtonExt, OrientableExt, PopoverExt, WidgetExt};
 use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
+use self::rand::Rng;
 
 /// Modelo que representa la barra de navegación (navbar). Gestiona el estado de la conexión y
 /// el popover que permite crear nuevos documentos.
@@ -37,6 +39,7 @@ pub enum NavbarMsg {
 pub enum NavbarOutput {
     /// Solicita alternar el estado de conexión.
     ToggleConnectionRequested,
+    CreateFileRequested(String, String),
 }
 
 #[relm4::component(pub)]
@@ -56,7 +59,7 @@ impl SimpleComponent for NavbarModel {
                 set_label: &(model.username),
                 add_css_class: "username"
             },
-            #[wrap(Some)]
+            /* #[wrap(Some)]
             set_title_widget = &gtk::Box {
                 #[name="new_file_button"]
                 gtk::Button {
@@ -86,11 +89,11 @@ impl SimpleComponent for NavbarModel {
                 },
                 #[watch]
                 set_visible: model.is_connected,
-            },
+            }, */
 
             pack_end = &gtk::Button {
                 #[watch]
-                set_label: &(if model.is_connected { "Conectado" } else { "Desconectado" }),
+                set_label: &(if model.is_connected { "Cerrar sesión" } else { "Conectarse" }),
                 connect_clicked[sender] => move |_| {
                     sender.output(NavbarOutput::ToggleConnectionRequested).unwrap();
                 },
@@ -112,11 +115,11 @@ impl SimpleComponent for NavbarModel {
         };
 
         let widgets = view_output!();
-        model.new_file_popover = Some(widgets.new_file_popover.clone());
+        model.new_file_popover = None;
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
+    fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
             NavbarMsg::SetConnectionStatus(status) => {
                 self.is_connected = status;
@@ -131,6 +134,8 @@ impl SimpleComponent for NavbarModel {
                     popover.popdown();
                 }
                 println!("Crear hoja de texto");
+                let file_id = "text".to_string() + &rand::thread_rng().gen_range(1..1000000).to_string();
+                sender.output(NavbarOutput::CreateFileRequested(file_id, "nuevo contenido".to_string())).unwrap();
             }
             NavbarMsg::CreateSpreadsheetDocument => {
                 if let Some(popover) = &self.new_file_popover {
