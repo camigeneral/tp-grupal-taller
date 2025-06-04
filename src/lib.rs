@@ -4,12 +4,6 @@
 /// para la comunicación con el servidor.
 pub mod client_info;
 
-/// Módulo encargado de parsear comandos y respuestas en formato RESP.
-///
-/// Implementa funciones y tipos para interpretar comandos entrantes,
-/// construir respuestas y manipular el protocolo RESP usado por Redis.
-pub mod parse;
-
 /// Módulo principal de la aplicación.
 ///
 /// Define la estructura y lógica principal de la app, incluyendo los controladores
@@ -45,3 +39,8 @@ pub mod microservice;
 
 /// Módulo que contiene los diferentes tipos de comandos y sus implementaciones.
 pub mod commands;
+
+/// Módulo de utilidades que contiene funciones y tipos comunes.
+///
+/// Incluye el parser de comandos RESP y otras utilidades compartidas.
+pub mod utils;

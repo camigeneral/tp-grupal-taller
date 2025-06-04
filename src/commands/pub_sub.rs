@@ -1,5 +1,5 @@
 use super::redis_response::RedisResponse;
-use parse::{CommandRequest, CommandResponse};
+use crate::utils::redis_parser::{CommandRequest, CommandResponse};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 

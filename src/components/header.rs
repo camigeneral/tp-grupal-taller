@@ -59,7 +59,7 @@ impl SimpleComponent for NavbarModel {
                 set_label: &(model.username),
                 add_css_class: "username"
             },
-            #[wrap(Some)]
+            /* #[wrap(Some)]
             set_title_widget = &gtk::Box {
                 #[name="new_file_button"]
                 gtk::Button {
@@ -89,7 +89,7 @@ impl SimpleComponent for NavbarModel {
                 },
                 #[watch]
                 set_visible: model.is_connected,
-            },
+            }, */
 
             pack_end = &gtk::Button {
                 #[watch]
@@ -115,7 +115,7 @@ impl SimpleComponent for NavbarModel {
         };
 
         let widgets = view_output!();
-        model.new_file_popover = Some(widgets.new_file_popover.clone());
+        model.new_file_popover = None;
         ComponentParts { model, widgets }
     }
 
