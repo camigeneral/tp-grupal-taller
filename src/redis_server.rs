@@ -14,6 +14,12 @@ mod hashing;
 mod local_node;
 use crate::local_node::NodeRole;
 mod peer_node;
+use std::path::Path;
+
+#[derive(Debug)]
+pub enum RedisMessage {
+    Node,
+}
 
 
 /// Número de argumentos esperados para iniciar el servidor
