@@ -9,6 +9,8 @@ pub enum NodeRole {
     Unknown,
 }
 
+/// Estructura que representa la instancia de nodo levantada en la consola. Contiene el puerto en el que 
+/// escucha nodos entrantes, el tipo (master o replica), y su hash range.
 pub struct LocalNode {
     pub port: usize,
     pub role: NodeRole,

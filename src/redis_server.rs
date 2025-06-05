@@ -416,7 +416,7 @@ pub fn start_node_connection(port: usize, node_address: String) -> Result<(), st
                             peer_addr,
                             peer_node::PeerNode::new(
                                 stream,
-                                connection_port - 10000,
+                                connection_port,
                                 local_node::NodeRole::Unknown,
                                 None,
                             ),
