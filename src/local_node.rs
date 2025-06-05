@@ -2,9 +2,11 @@ use std::fs::{File};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
+#[derive(Debug)]
 pub enum NodeRole {
     Master,
     Replica,
+    Unknown,
 }
 
 #[allow(dead_code)]
