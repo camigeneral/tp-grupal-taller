@@ -131,6 +131,7 @@ pub fn write_response(stream: &TcpStream, response: &CommandResponse) -> std::io
 /// 
 /// # Retorna
 /// String formateada según el protocolo RESP
+#[allow(dead_code)]
 pub fn format_resp_command(command_parts: &[&str]) -> String {
     let mut resp_message = format!("*{}\r\n", command_parts.len());
 

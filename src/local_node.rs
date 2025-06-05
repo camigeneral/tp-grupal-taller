@@ -9,7 +9,6 @@ pub enum NodeRole {
     Unknown,
 }
 
-#[allow(dead_code)]
 pub struct LocalNode {
     pub port: usize,
     pub role: NodeRole,

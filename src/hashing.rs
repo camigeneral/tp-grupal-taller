@@ -1,8 +1,10 @@
+#[allow(dead_code)]
 pub fn get_hash_slots(key: String) -> usize {
     let key_bytes = key.as_bytes();
     crc16(key_bytes) % 16384
 }
 
+#[allow(dead_code)]
 fn crc16(data: &[u8]) -> usize {
     let mut crc: u16 = 0x0000;
     let poly: u16 = 0x1021;

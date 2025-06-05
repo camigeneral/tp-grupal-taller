@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-mod commands;
 use commands::redis;
 use std::env::args;
 use std::fs::{File, OpenOptions};
@@ -8,19 +7,18 @@ use std::net::{TcpListener, TcpStream};
 use std::str;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::path::Path;
+mod commands;
 mod client_info;
 mod utils;
 mod hashing;
 mod local_node;
-use crate::local_node::NodeRole;
 mod peer_node;
-use std::path::Path;
 
 #[derive(Debug)]
 pub enum RedisMessage {
     Node,
 }
-
 
 /// Número de argumentos esperados para iniciar el servidor
 static REQUIRED_ARGS: usize = 2;
@@ -47,73 +45,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let node_address = format!("127.0.0.1:{}", port + 10000);
     let client_address = format!("127.0.0.1:{}", port);
 
-    let peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>> = Arc::new(Mutex::new(HashMap::new()));
-    let cloned_nodes = Arc::clone(&peer_nodes);
-
-    thread::spawn(move || {
-        match connect_nodes(&node_address, cloned_nodes) {
-            Ok(_) => {}
-            Err(_e) => {}
-        }
-    });
-
-    let config_path = match port {
-        4000 => "redis0.conf",
-        4001 => "redis1.conf",
-        4002 => "redis2.conf",
-        4003 => "redis3.conf",
-        4004 => "redis4.conf",
-        4005 => "redis5.conf",
-        4006 => "redis6.conf",
-        4007 => "redis7.conf",
-        4008 => "redis8.conf",
-        _ => return Err("Port not recognized".into()),
-    };
-
-    let local_node = local_node::LocalNode::new_from_config(config_path)?;
-    let node_ports = read_node_ports(config_path)?;
-
-    {
-        let mut lock_peer_nodes: std::sync::MutexGuard<'_, HashMap<String, peer_node::PeerNode>> = peer_nodes.lock().unwrap();
-
-        for connection_port in node_ports {
-            if connection_port != port + 10000 {
-                let node_address_to_connect = format!("127.0.0.1:{}", connection_port);
-                let peer_addr = format!("127.0.0.1:{}", connection_port);
-                match TcpStream::connect(node_address_to_connect) {
-                    Ok(stream) => {
-                        let mut cloned_stream = stream.try_clone()?;
-
-                        let message = format!(
-                            "{:?} {} {:?} {} {}\n",
-                            RedisMessage::Node,
-                            local_node.port,
-                            local_node.role,
-                            local_node.hash_range.0,
-                            local_node.hash_range.1
-                        );
-
-                        cloned_stream.write_all(message.as_bytes())?;
-
-                        lock_peer_nodes.insert(
-                            peer_addr,
-                            peer_node::PeerNode::new(
-                                stream,
-                                connection_port - 10000,
-                                local_node::NodeRole::Unknown,
-                                None,
-                            ),
-                        );
-
-                        ()
-                    },
-                    Err(_) => {}
-                };
-            }
-        }
-    }
-
+    start_node_connection(port, node_address)?;
     start_server(&client_address)?;
+
     Ok(())
 }
 
@@ -422,7 +356,91 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Vec<Str
     Ok(documents)
 }
 
+/// Intenta establecer una primera conexion con los otros nodos del servidor
+/// 
+/// # Errores
+/// Retorna un error si el puerto no corresponde a uno definido en los archivos de configuracion.
+pub fn start_node_connection(port: usize, node_address: String) -> Result<(), std::io::Error>{
+    let peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>> = Arc::new(Mutex::new(HashMap::new()));
+    let cloned_nodes = Arc::clone(&peer_nodes);
 
+    thread::spawn(move || {
+        match connect_nodes(&node_address, cloned_nodes) {
+            Ok(_) => {}
+            Err(_e) => {}
+        }
+    });
+
+    let config_path = match port {
+        4000 => "redis0.conf",
+        4001 => "redis1.conf",
+        4002 => "redis2.conf",
+        4003 => "redis3.conf",
+        4004 => "redis4.conf",
+        4005 => "redis5.conf",
+        4006 => "redis6.conf",
+        4007 => "redis7.conf",
+        4008 => "redis8.conf",
+        _ => return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Port not recognized",
+        )),
+    };
+
+    let local_node = local_node::LocalNode::new_from_config(config_path)?;
+    let node_ports = read_node_ports(config_path)?;
+
+    {
+        let mut lock_peer_nodes: std::sync::MutexGuard<'_, HashMap<String, peer_node::PeerNode>> = peer_nodes.lock().unwrap();
+
+        for connection_port in node_ports {
+            if connection_port != port + 10000 {
+                let node_address_to_connect = format!("127.0.0.1:{}", connection_port);
+                let peer_addr = format!("127.0.0.1:{}", connection_port);
+                match TcpStream::connect(node_address_to_connect) {
+                    Ok(stream) => {
+                        let mut cloned_stream = stream.try_clone()?;
+
+                        let message = format!(
+                            "{:?} {} {:?} {} {}\n",
+                            RedisMessage::Node,
+                            local_node.port,
+                            local_node.role,
+                            local_node.hash_range.0,
+                            local_node.hash_range.1
+                        );
+
+                        cloned_stream.write_all(message.as_bytes())?;
+
+                        lock_peer_nodes.insert(
+                            peer_addr,
+                            peer_node::PeerNode::new(
+                                stream,
+                                connection_port - 10000,
+                                local_node::NodeRole::Unknown,
+                                None,
+                            ),
+                        );
+
+                        ()
+                    },
+                    Err(_) => {}
+                };
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Permite que un nodo esuche mensajes, y maneja las conexiones con los otros nodos.
+/// 
+/// # Argumentos
+/// * `address` - Dirección IP y puerto donde escuchará el servidor
+/// * `nodes` - HashMap que guarda la informacion de los nodos usando el struct 'PeerNode'
+/// 
+/// # Errores
+/// Retorna un error si no se puede crear el socket TCP
 fn connect_nodes(address: &str, nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>) -> std::io::Result<()> {
     let listener = TcpListener::bind(address)?;
     println!("Server listening nodes on {}", address);
@@ -458,7 +476,9 @@ fn connect_nodes(address: &str, nodes: Arc<Mutex<HashMap<String, peer_node::Peer
     Ok(())
 }
 
-
+/// Maneja la comunicación con otro nodo.
+/// 
+/// Por el momento solo lee el comando "node", y con eso se guarda la informacion del nodo.
 fn handle_node(
     stream: &mut TcpStream,
     nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>
@@ -481,9 +501,9 @@ fn handle_node(
                 })?;
 
                 let node_role = match input[2].trim().to_lowercase().as_str() {
-                    "master" => NodeRole::Master,
-                    "replica" => NodeRole::Replica,
-                    _ => NodeRole::Unknown,
+                    "master" => local_node::NodeRole::Master,
+                    "replica" => local_node::NodeRole::Replica,
+                    _ => local_node::NodeRole::Unknown,
                 };
 
                 let hash_range_start = &input[3].trim().parse::<usize>().map_err(|_| {
@@ -522,7 +542,10 @@ fn handle_node(
     Ok(())
 }
 
-
+/// Lee un archivo de configuracion y genera una lista de los puertos a los que un nodo se debe conectar
+/// 
+/// # Errores
+/// Retorna un error si alguna linea no corresponde a un puerto
 fn read_node_ports<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<usize>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
