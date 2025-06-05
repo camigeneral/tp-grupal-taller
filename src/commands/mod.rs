@@ -15,3 +15,6 @@ pub mod set;
 
 /// Módulo para el manejo de operaciones con cadenas de texto (strings) en Redis.
 pub mod string;
+
+/// Módulo que define los comandos que pueden ser enviados por los clientes.
+pub mod client;

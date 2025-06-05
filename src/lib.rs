@@ -17,12 +17,6 @@ pub mod local_node;
 /// TCP utilizado.
 pub mod peer_node;
 
-/// Módulo encargado de parsear comandos y respuestas en formato RESP.
-///
-/// Implementa funciones y tipos para interpretar comandos entrantes,
-/// construir respuestas y manipular el protocolo RESP usado por Redis.
-pub mod parse;
-
 /// Módulo de hashing de claves.
 ///
 /// Implementa la lógica para calcular el hash de una clave utilizando el algoritmo CRC16
@@ -53,3 +47,19 @@ pub mod components;
 ///
 /// Usa hilos para manejar comunicación asíncrona sin bloquear la UI.
 pub mod client;
+
+/// Módulo microservicio que maneja la conexión TCP con el servidor.
+///
+/// Implementa la lógica para enviar comandos, recibir respuestas y escuchar
+/// notificaciones del servidor, actualizando la interfaz mediante mensajes.
+///
+/// Usa hilos para manejar comunicación asíncrona sin bloquear la UI.
+pub mod microservice;
+
+/// Módulo que contiene los diferentes tipos de comandos y sus implementaciones.
+pub mod commands;
+
+/// Módulo de utilidades que contiene funciones y tipos comunes.
+///
+/// Incluye el parser de comandos RESP y otras utilidades compartidas.
+pub mod utils;

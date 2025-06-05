@@ -6,8 +6,8 @@ extern crate rand;
 use rand::Rng;
 
 fn main() {
-    let port = 4000;
     let id = format!("rusty.docs{}", rand::thread_rng().gen_range(0..100));
     let app = RelmApp::new(&id);
-    app.run::<AppModel>(port);
+    let redis_port = 4000;
+    app.run::<AppModel>(redis_port);
 }
