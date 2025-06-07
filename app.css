@@ -1,11 +1,9 @@
-/* Estilo general de la ventana */
 window {
     background-color: #f5f5f5;
     color: #333333;
     font-family: sans-serif;
 }
 
-/* Cards */
 .card {
     border-radius: 12px;
     background-color: white;
@@ -14,7 +12,6 @@ window {
     margin-bottom: 12px;
 }
 
-/* Header */
 .header {
     border-bottom: 1px solid #dddddd;
     padding: 10px 16px;
@@ -29,21 +26,18 @@ window {
     padding-bottom: 20px;
 }
 
-/* Sidebar */
 .sidebar-card {
     min-width: 220px;
     background-color: white;
     border-right: 1px solid #dddddd;
 }
 
-/* Contenido principal */
 .content-card {
     padding: 20px;
     background-color: white;
     border-radius: 8px;
 }
 
-/* Botones generales */
 .button {
     border-radius: 6px;
     padding: 8px 14px;
@@ -61,7 +55,6 @@ window {
     color: white;
 }
 
-/* Botón "Nuevo Archivo" */
 .button.new-file {
     background-color: #2FA1FF;
     color: white;
@@ -73,7 +66,6 @@ window {
     background-color: #0072cc;
 }
 
-/* Botón "Desuscribirse" */
 .unsubscribe {
     background-color: #dc3545;
     color: white;
@@ -88,7 +80,6 @@ window {
     background-color: #a71d2a;
 }
 
-/* Nombre de usuario */
 .username {
     text-transform: uppercase;
     color: white;
@@ -96,7 +87,6 @@ window {
     margin-left: 10px;
 }
 
-/* Área de texto */
 .file-text-area {
     padding: 16px;
     background-color: #1e1e1e;
@@ -107,12 +97,10 @@ window {
     min-height: 300px;
 }
 
-/* Etiquetas */
 .content {
     color: #000000;
 }
 
-/* Botones de archivo */
 .file_button {
     background-color: white;
     border: 1px solid #dddddd;
@@ -127,20 +115,17 @@ window {
     background-color: #f0f0f0;
 }
 
-/* Filtros */
 .button.filter {
     border-bottom: 0;
     border: 1px solid #000000;
     padding: 10px;
 }
 
-/* Spinner de carga */
 spinner {
     color: #2FA1FF;
     opacity: 0.8;
 }
 
-/* Celdas de la hoja de cálculo */
 .spreadsheet-cell {
     background-color: white;
     border: 1px solid #dddddd;
