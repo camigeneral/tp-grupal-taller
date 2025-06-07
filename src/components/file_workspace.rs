@@ -19,6 +19,7 @@ use components::file_editor::FileEditorMessage;
 use components::list_files::FileFilterAction;
 use components::types::FileType;
 
+
 #[derive(Debug)]
 /// Estructura principal que gestiona el espacio de trabajo de archivos, que incluye una lista de archivos
 /// y un editor de archivos. Mantiene el estado de la visibilidad del editor de archivos.
@@ -29,7 +30,7 @@ pub struct FileWorkspace {
     file_editor_ctrl: Controller<FileEditorModel>,
     /// Bandera que indica si el editor de archivos está visible.
     editor_visible: bool,
-
+    /// Nombre del archivo actual.
     current_file: String,
 }
 
@@ -119,6 +120,7 @@ impl SimpleComponent for FileWorkspace {
                     FileEditorOutputMessage::GoBack => FileWorkspaceMsg::CloseEditor,
                 },
             );
+
         let model = FileWorkspace {
             file_list_ctrl: list_files_cont,
             file_editor_ctrl: editor_file_cont,
