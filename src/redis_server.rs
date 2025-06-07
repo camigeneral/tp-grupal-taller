@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use commands::redis;
+use local_node::LocalNode;
 use std::env::args;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write};
@@ -8,6 +9,11 @@ use std::str;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::path::Path;
+
+use crate::commands::redis_response::RedisResponse;
+use crate::hashing::get_hash_slots;
+use crate::local_node::NodeRole;
+use crate::utils::redis_parser::CommandResponse;
 mod commands;
 mod client_info;
 mod utils;
@@ -44,9 +50,12 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let node_address = format!("127.0.0.1:{}", port + 10000);
     let client_address = format!("127.0.0.1:{}", port);
+    let peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>> = Arc::new(Mutex::new(HashMap::new()));
 
-    start_node_connection(port, node_address)?;
-    start_server(&client_address)?;
+    let local_node = start_node_connection(port, node_address, &peer_nodes)?;
+
+    let mutex_node = Arc::new(Mutex::new(local_node));
+    start_server(&client_address, mutex_node, peer_nodes)?;
 
     Ok(())
 }
@@ -65,7 +74,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Retorna un error si:
 /// - No se puede crear el socket TCP
 /// - Hay problemas al leer el archivo de persistencia
-fn start_server(bind_address: &str) -> std::io::Result<()> {
+fn start_server(bind_address: &str, local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>) -> std::io::Result<()> {
     let persistence_file = "docs.txt".to_string();
     let stored_documents = match load_persisted_data(&persistence_file) {
         Ok(docs) => docs,
@@ -91,7 +100,9 @@ fn start_server(bind_address: &str) -> std::io::Result<()> {
                     client_stream,
                     &active_clients,
                     &document_subscribers,
-                    &shared_documents
+                    &shared_documents,
+                    &local_node,
+                    &peer_nodes
                 )?;
             }
             Err(e) => {
@@ -130,6 +141,8 @@ fn handle_new_microservice_connection(
     active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
     document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
     shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    local_node: &Arc<Mutex<LocalNode>>,
+    peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>
 ) -> std::io::Result<()> {
     let client_addr = client_stream.peer_addr()?;
     println!("cliente conectado: {}", client_addr);
@@ -149,6 +162,8 @@ fn handle_new_microservice_connection(
     let cloned_clients_on_docs = Arc::clone(document_subscribers);
     let cloned_docs = Arc::clone(shared_documents);
     let client_addr_str = client_addr.to_string();
+    let cloned_node = Arc::clone(local_node);
+    let cloned_peer_nodes = Arc::clone(peer_nodes);
 
     thread::spawn(move || {
         match handle_client(
@@ -157,6 +172,8 @@ fn handle_new_microservice_connection(
             cloned_clients_on_docs,
             cloned_docs,
             client_addr_str,
+            cloned_node,
+            cloned_peer_nodes
         ) {
             Ok(_) => {
                 println!("Client {} disconnected.", client_addr);
@@ -184,11 +201,13 @@ fn handle_client(
     document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
     shared_documents: Arc<Mutex<HashMap<String, Vec<String>>>>,
     client_id: String,
+    local_node: Arc<Mutex<LocalNode>>,
+    peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
 
     loop {
-        let command_request = match utils::redis_parser::parse_command(&mut reader) {
+        let command_request: utils::redis_parser::CommandRequest = match utils::redis_parser::parse_command(&mut reader) {
             Ok(req) => req,
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::UnexpectedEof {
@@ -204,6 +223,49 @@ fn handle_client(
         };
 
         println!("Comando recibido: {:?}", command_request);
+
+        // hashing
+
+        let key = match &command_request.key {
+            Some(k) => k.clone(),
+            None => {
+                println!("No key found");
+                continue;
+            }
+        };
+
+        let hashed_key = get_hash_slots(key);
+
+        {
+            let locked_node = local_node.lock().unwrap();
+            let locked_peer_nodes = peer_nodes.lock().unwrap();
+            let lower_hash_bound = locked_node.hash_range.0;
+            let upper_hash_bound = locked_node.hash_range.1;
+
+            println!("Hash: {}", hashed_key);
+    
+            if hashed_key < lower_hash_bound || hashed_key >= upper_hash_bound {
+                if let Some(peer_node) = locked_peer_nodes.values().find(|p| p.role == NodeRole::Master && p.hash_range.0 <= hashed_key && p.hash_range.1 > hashed_key) {
+                    let response_string = format!("MOVED {} 127.0.0.1:{}", hashed_key, peer_node.port);
+                    let redis_redirect_response = CommandResponse::String(response_string.clone());
+    
+                    println!("Hashing para otro nodo: {:?}", response_string.clone());
+
+                    if let Err(e) = utils::redis_parser::write_response(stream, &redis_redirect_response) {
+                        println!("Error al escribir respuesta: {}", e);
+                        break; // to do: arreglar para que no se cierre todo el loop 
+                    }
+
+                    if let Err(e) = persist_documents(shared_documents.clone()) {
+                        eprintln!("Error al persistir documentos: {}", e);
+                    } // to do: va aca???
+                }
+
+                continue;
+            }
+        }
+
+        // end hashing
 
         let redis_response = redis::execute_command(
             command_request,
@@ -360,9 +422,8 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Vec<Str
 /// 
 /// # Errores
 /// Retorna un error si el puerto no corresponde a uno definido en los archivos de configuracion.
-pub fn start_node_connection(port: usize, node_address: String) -> Result<(), std::io::Error>{
-    let peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>> = Arc::new(Mutex::new(HashMap::new()));
-    let cloned_nodes = Arc::clone(&peer_nodes);
+pub fn start_node_connection(port: usize, node_address: String, peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>) -> Result<LocalNode, std::io::Error>{
+    let cloned_nodes = Arc::clone(peer_nodes);
 
     thread::spawn(move || {
         match connect_nodes(&node_address, cloned_nodes) {
@@ -418,7 +479,7 @@ pub fn start_node_connection(port: usize, node_address: String) -> Result<(), st
                                 stream,
                                 connection_port,
                                 local_node::NodeRole::Unknown,
-                                None,
+                                (0,16383),
                             ),
                         );
 
@@ -429,7 +490,7 @@ pub fn start_node_connection(port: usize, node_address: String) -> Result<(), st
             }
         }
 
-        Ok(())
+        Ok(local_node)
     }
 }
 
@@ -523,7 +584,7 @@ fn handle_node(
                             new_stream,
                             *parsed_port,
                             node_role,
-                            Some((*hash_range_start, *hash_range_end)),
+                            (*hash_range_start, *hash_range_end),
                         );
 
                         let node_address_to_connect = format!("127.0.0.1:{}", node_listening_port);

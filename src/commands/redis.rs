@@ -27,7 +27,7 @@ pub fn execute_command(
         "lset" => list::handle_lset(&request, docs),
         "linsert" => list::handle_linsert(&request, docs),
         _ => RedisResponse::new(
-            CommandResponse::Error("Unkown".to_string()),
+            CommandResponse::Error("Unknown".to_string()),
             false,
             "".to_string(),
             "".to_string(),

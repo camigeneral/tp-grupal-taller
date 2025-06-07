@@ -3,6 +3,7 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 #[derive(Debug)]
+#[derive(PartialEq)]
 pub enum NodeRole {
     Master,
     Replica,
