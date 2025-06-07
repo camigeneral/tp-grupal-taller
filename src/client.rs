@@ -1,7 +1,6 @@
 extern crate relm4;
 use self::relm4::Sender;
 use crate::app::AppMsg;
-use std::io::Read;
 use std::io::Write;
 use std::io::{BufRead, BufReader};
 #[allow(unused_imports)]
@@ -13,7 +12,6 @@ use std::sync::mpsc::Receiver;
 use std::thread;
 #[allow(unused_imports)]
 use std::time::Duration;
-use commands::client::ClientCommand;
 use utils::redis_parser::format_resp_command;
 
 pub fn client_run(

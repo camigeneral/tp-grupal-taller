@@ -4,6 +4,25 @@
 /// para la comunicación con el servidor.
 pub mod client_info;
 
+/// Módulo que contiene la información y la estructura del nodo local.
+///
+/// Define la estructura `LocalNode`, que representa al nodo actual dentro del clúster.
+/// Incluye información como el puerto, el rol y el rango de hash asignado.
+pub mod local_node;
+
+/// Módulo que contiene la información y la estructura de los nodos a los que se conecta.
+///
+/// Define la estructura `PeerNode`, que representa a los otros nodos del clúster
+/// Incluye información como el puerto, el rol, el rango de hash asignado y el socket
+/// TCP utilizado.
+pub mod peer_node;
+
+/// Módulo de hashing de claves.
+///
+/// Implementa la lógica para calcular el hash de una clave utilizando el algoritmo CRC16
+/// usado por Redis.
+pub mod hashing;
+
 /// Módulo principal de la aplicación.
 ///
 /// Define la estructura y lógica principal de la app, incluyendo los controladores
