@@ -138,7 +138,7 @@ impl SimpleComponent for FileWorkspace {
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
 
-            FileWorkspaceMsg::SubscribeFile(file, content, qty) => {
+            FileWorkspaceMsg::SubscribeFile(file, _content, _qty) => {
                 sender.output(FileWorkspaceOutputMessage::SubscribeFile(file)).unwrap();
             }
 
