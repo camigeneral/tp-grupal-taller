@@ -139,3 +139,24 @@ spinner {
     color: #2FA1FF;
     opacity: 0.8;
 }
+
+/* Celdas de la hoja de cálculo */
+.spreadsheet-cell {
+    background-color: white;
+    border: 1px solid #dddddd;
+    padding: 4px 8px;
+    font-family: monospace;
+    font-size: 14px;
+    transition: all 200ms ease;
+    color: #000000;
+}
+
+.spreadsheet-cell:focus {
+    background-color: #f0f8ff;
+    border-color: #2FA1FF;
+    outline: none;
+}
+
+.spreadsheet-cell:hover {
+    background-color: #f5f5f5;
+}
