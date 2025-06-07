@@ -38,6 +38,13 @@ pub mod list_files;
 ///
 pub mod types;
 
+/// Módulo que maneja la hoja de cálculo.
+///
+/// Este módulo define el componente `SpreadsheetModel`, que implementa una vista
+/// de hoja de cálculo de 100x100 celdas editables. Cada celda puede contener texto
+/// y se actualiza en tiempo real.
+pub mod spreadsheet;
+
 /// Módulo que maneja el sistema de login del usuario.
 ///
 /// Este módulo define el formulario del ingreso, validaciones y los usuarios permitidos para el manejo de la aplicacion.
