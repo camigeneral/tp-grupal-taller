@@ -239,7 +239,7 @@ fn handle_client(
             }
         };
 
-        let response = match hash(key, &local_node, &peer_nodes) {
+        let response = match resolve_key_location(key, &local_node, &peer_nodes) {
             Ok(()) => {
                 let redis_response = redis::execute_command(
                     command_request,
@@ -281,7 +281,14 @@ fn handle_client(
 }
 
 
-pub fn hash(key: String, local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>) -> Result<(), CommandResponse> {
+/// Determina si la key recibida corresponde al nodo actual o si debe ser redirigida a otro nodo,
+/// a traves del mensaje "MOVED *key hasheada* *ip del nodo correspondiente*". En el caso de que
+/// no se encuentre el nodo correspondiente, se manda el mensaje sin ip.
+/// 
+/// # Devuelve
+/// - "Ok(())" si la key corresponde al nodo actual
+/// - "Err(CommandResponse)" con el mensaje "MOVED" si corresponde a otro nodo
+pub fn resolve_key_location(key: String, local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>) -> Result<(), CommandResponse> {
     let hashed_key = get_hash_slots(key);
 
     {
