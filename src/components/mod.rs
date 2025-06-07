@@ -45,6 +45,12 @@ pub mod types;
 /// y se actualiza en tiempo real.
 pub mod spreadsheet;
 
+/// Módulo que maneja la hoja de text.
+///
+/// Este módulo define el componente `TextEditorModel`, que implementa una vista
+/// de hoja de text.
+pub mod text_editor;
+
 /// Módulo que maneja el sistema de login del usuario.
 ///
 /// Este módulo define el formulario del ingreso, validaciones y los usuarios permitidos para el manejo de la aplicacion.
