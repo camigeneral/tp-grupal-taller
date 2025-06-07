@@ -21,13 +21,16 @@ mod hashing;
 mod local_node;
 mod peer_node;
 
+
 #[derive(Debug)]
 pub enum RedisMessage {
     Node,
 }
 
+
 /// Número de argumentos esperados para iniciar el servidor
 static REQUIRED_ARGS: usize = 2;
+
 
 /// Inicia el servidor Redis.
 /// 
@@ -59,6 +62,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
 
 /// Inicia el servidor Redis y maneja las conexiones de clientes.
 /// 
@@ -114,6 +118,7 @@ fn start_server(bind_address: &str, local_node: Arc<Mutex<LocalNode>>, peer_node
     Ok(())
 }
 
+
 /// Inicializa el mapa de suscriptores para cada documento.
 /// 
 /// Crea una entrada vacía en el mapa de suscriptores para cada documento
@@ -135,6 +140,7 @@ fn initialize_document_subscribers(
     
     Arc::new(Mutex::new(subscriber_map))
 }
+
 
 fn handle_new_microservice_connection(
     mut client_stream: TcpStream,
@@ -187,6 +193,7 @@ fn handle_new_microservice_connection(
     Ok(())
 }
 
+
 /// Maneja la comunicación con un cliente conectado.
 /// 
 /// Esta función:
@@ -224,8 +231,6 @@ fn handle_client(
 
         println!("Comando recibido: {:?}", command_request);
 
-        // hashing
-
         let key = match &command_request.key {
             Some(k) => k.clone(),
             None => {
@@ -234,58 +239,31 @@ fn handle_client(
             }
         };
 
-        let hashed_key = get_hash_slots(key);
-
-        {
-            let locked_node = local_node.lock().unwrap();
-            let locked_peer_nodes = peer_nodes.lock().unwrap();
-            let lower_hash_bound = locked_node.hash_range.0;
-            let upper_hash_bound = locked_node.hash_range.1;
-
-            println!("Hash: {}", hashed_key);
-    
-            if hashed_key < lower_hash_bound || hashed_key >= upper_hash_bound {
-                if let Some(peer_node) = locked_peer_nodes.values().find(|p| p.role == NodeRole::Master && p.hash_range.0 <= hashed_key && p.hash_range.1 > hashed_key) {
-                    let response_string = format!("MOVED {} 127.0.0.1:{}", hashed_key, peer_node.port);
-                    let redis_redirect_response = CommandResponse::String(response_string.clone());
-    
-                    println!("Hashing para otro nodo: {:?}", response_string.clone());
-
-                    if let Err(e) = utils::redis_parser::write_response(stream, &redis_redirect_response) {
-                        println!("Error al escribir respuesta: {}", e);
-                        break; // to do: arreglar para que no se cierre todo el loop 
+        let response = match hash(key, &local_node, &peer_nodes) {
+            Ok(()) => {
+                let redis_response = redis::execute_command(
+                    command_request,
+                    shared_documents.clone(),
+                    document_subscribers.clone(),
+                    client_id.clone(),
+                );
+        
+                if redis_response.publish {
+                    if let Err(e) = publish_update(
+                        active_clients.clone(),
+                        document_subscribers.clone(),
+                        redis_response.message,
+                        redis_response.doc,
+                    ) {
+                        eprintln!("Error al publicar actualización: {}", e);
                     }
-
-                    if let Err(e) = persist_documents(shared_documents.clone()) {
-                        eprintln!("Error al persistir documentos: {}", e);
-                    } // to do: va aca???
                 }
-
-                continue;
+        
+                redis_response.response
             }
-        }
+            Err(response) => response,
+        };
 
-        // end hashing
-
-        let redis_response = redis::execute_command(
-            command_request,
-            shared_documents.clone(),
-            document_subscribers.clone(),
-            client_id.clone(),
-        );
-
-        if redis_response.publish {
-            if let Err(e) = publish_update(
-                active_clients.clone(),
-                document_subscribers.clone(),
-                redis_response.message,
-                redis_response.doc,
-            ) {
-                eprintln!("Error al publicar actualización: {}", e);
-            }
-        }
-
-        let response = redis_response.response;
         if let Err(e) = utils::redis_parser::write_response(stream, &response) {
             println!("Error al escribir respuesta: {}", e);
             break;
@@ -301,6 +279,41 @@ fn handle_client(
 
     Ok(())
 }
+
+
+pub fn hash(key: String, local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>) -> Result<(), CommandResponse> {
+    let hashed_key = get_hash_slots(key);
+
+    {
+        let locked_node = local_node.lock().unwrap();
+        let locked_peer_nodes = peer_nodes.lock().unwrap();
+        let lower_hash_bound = locked_node.hash_range.0;
+        let upper_hash_bound = locked_node.hash_range.1;
+
+        println!("Hash: {}", hashed_key);
+
+        if hashed_key < lower_hash_bound || hashed_key >= upper_hash_bound {
+            if let Some(peer_node) = locked_peer_nodes.values().find(|p| p.role == NodeRole::Master && p.hash_range.0 <= hashed_key && p.hash_range.1 > hashed_key) {
+                let response_string = format!("MOVED {} 127.0.0.1:{}", hashed_key, peer_node.port - 10000);
+                let redis_redirect_response = CommandResponse::String(response_string.clone());
+
+                println!("Hashing para otro nodo: {:?}", response_string.clone());
+
+                return Err(redis_redirect_response)
+            } else {
+                let response_string = format!("MOVED {}", hashed_key);
+                let redis_redirect_response = CommandResponse::String(response_string.clone());
+
+                println!("Hashing para nodo indefinido: {:?}", response_string.clone());
+
+                return Err(redis_redirect_response)
+            }
+        }
+    }
+
+    Ok(())
+}
+
 
 /// Publica una actualización a todos los clientes suscritos a un documento.
 /// 
@@ -330,6 +343,7 @@ pub fn publish_update(
     Ok(())
 }
 
+
 /// Limpia los recursos asociados a un cliente cuando se desconecta.
 /// 
 /// Elimina al cliente de:
@@ -348,6 +362,7 @@ fn cleanup_client_resources(
         subscriber_list.retain(|id| id != client_id);
     }
 }
+
 
 /// Persiste el estado actual de los documentos en el archivo.
 /// 
@@ -379,6 +394,7 @@ pub fn persist_documents(documents: Arc<Mutex<HashMap<String, Vec<String>>>>) ->
 
     Ok(())
 }
+
 
 /// Carga los documentos persistidos desde el archivo.
 /// 
@@ -418,6 +434,7 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Vec<Str
     Ok(documents)
 }
 
+
 /// Intenta establecer una primera conexion con los otros nodos del servidor
 /// 
 /// # Errores
@@ -455,7 +472,7 @@ pub fn start_node_connection(port: usize, node_address: String, peer_nodes: &Arc
         let mut lock_peer_nodes: std::sync::MutexGuard<'_, HashMap<String, peer_node::PeerNode>> = peer_nodes.lock().unwrap();
 
         for connection_port in node_ports {
-            if connection_port != port + 10000 {
+            if connection_port != local_node.port {
                 let node_address_to_connect = format!("127.0.0.1:{}", connection_port);
                 let peer_addr = format!("127.0.0.1:{}", connection_port);
                 match TcpStream::connect(node_address_to_connect) {
@@ -493,6 +510,7 @@ pub fn start_node_connection(port: usize, node_address: String, peer_nodes: &Arc
         Ok(local_node)
     }
 }
+
 
 /// Permite que un nodo esuche mensajes, y maneja las conexiones con los otros nodos.
 /// 
@@ -536,6 +554,7 @@ fn connect_nodes(address: &str, nodes: Arc<Mutex<HashMap<String, peer_node::Peer
 
     Ok(())
 }
+
 
 /// Maneja la comunicación con otro nodo.
 /// 
@@ -602,6 +621,7 @@ fn handle_node(
 
     Ok(())
 }
+
 
 /// Lee un archivo de configuracion y genera una lista de los puertos a los que un nodo se debe conectar
 /// 
