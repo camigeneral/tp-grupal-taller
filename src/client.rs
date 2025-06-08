@@ -14,6 +14,7 @@ use std::sync::mpsc::Receiver;
 use std::thread;
 #[allow(unused_imports)]
 use std::time::Duration;
+use std::sync::mpsc::{channel, Sender as MpscSender};
 use utils::redis_parser::format_resp_command;
 
 pub fn client_run (
@@ -41,11 +42,16 @@ pub fn client_run (
     let cloned_node_streams = Arc::clone(&node_streams);
     let cloned_last_command = Arc::clone(&last_command_sent);
 
+    let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
+    let connect_node_sender_cloned = connect_node_sender.clone();
+
     thread::spawn(move || {
-        if let Err(e) = listen_to_redis_response(redis_socket, ui_sender, cloned_node_streams, cloned_last_command) {
+        if let Err(e) = connect_to_nodes(connect_node_sender_cloned, connect_nodes_receiver, ui_sender, cloned_node_streams, cloned_last_command) {
             eprintln!("Error en la conexión con el nodo: {}", e);
         }
     });
+
+    let _ = connect_node_sender.send(redis_socket);
 
     for command in rx {
         let trimmed_command = command.to_string().trim().to_lowercase();        
@@ -76,9 +82,11 @@ pub fn client_run (
 fn listen_to_redis_response (
     microservice_socket: TcpStream,
     ui_sender: Option<Sender<AppMsg>>,
+    connect_node_sender: MpscSender<TcpStream>,
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     last_command_sent: Arc<Mutex<String>>
 ) -> std::io::Result<()> {
+    
     let mut reader = BufReader::new(microservice_socket);
     loop {
         let mut line = String::new();
@@ -104,23 +112,40 @@ fn listen_to_redis_response (
                 } else {
                     let stream: TcpStream = TcpStream::connect(new_node_address.clone())?;
                     let mut cloned_stream = stream.try_clone()?;
-                    let stream_cloned_for_thread = stream.try_clone()?;
+                    let cloned_stream_to_connect = stream.try_clone()?;
                     locked_node_streams.insert(new_node_address, stream);
 
                     cloned_stream.write_all(last_line_cloned.as_bytes())?;
 
-                    let cloned_node_streams = Arc::clone(&node_streams);
-                    let cloned_last_command = Arc::clone(&last_command_sent);
-                    let cloned_sender = ui_sender.clone();
-
-                    thread::spawn(move || {
-                        if let Err(e) = listen_to_redis_response(stream_cloned_for_thread, cloned_sender, cloned_node_streams, cloned_last_command) {
-                            eprintln!("Error en la conexión con el nodo: {}", e);
-                        }
-                    });
+                    let _ = connect_node_sender.send(cloned_stream_to_connect);
                 }
             }
         }
     }
+    Ok(())
+}
+
+
+fn connect_to_nodes(
+    sender: MpscSender<TcpStream>,
+    reciever: Receiver<TcpStream>,
+    ui_sender: Option<Sender<AppMsg>>,
+    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+    last_command_sent: Arc<Mutex<String>>
+) -> std::io::Result<()> {
+
+    for stream in reciever {
+        let cloned_node_streams = Arc::clone(&node_streams);
+        let cloned_last_command = Arc::clone(&last_command_sent);
+        let cloned_sender = ui_sender.clone();
+        let cloned_own_sender = sender.clone();
+
+        thread::spawn(move || {
+            if let Err(e) = listen_to_redis_response(stream, cloned_sender, cloned_own_sender, cloned_node_streams, cloned_last_command) {
+                eprintln!("Error en la conexión con el nodo: {}", e);
+            }
+        });
+    }
+
     Ok(())
 }
