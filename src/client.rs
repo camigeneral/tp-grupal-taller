@@ -91,7 +91,7 @@ fn listen_to_redis_response (
         println!("Respuesta de redis: {}", line);
 
         let response: Vec<&str> = line.split_whitespace().collect();
-        if response[0].to_uppercase() == "MOVED" {
+        if response[0].to_uppercase() == "ASK" {
             if response.len() < 3 {
                 println!("Nodo de redireccion no disponible");
             } else {

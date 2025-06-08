@@ -282,12 +282,12 @@ fn handle_client(
 
 
 /// Determina si la key recibida corresponde al nodo actual o si debe ser redirigida a otro nodo,
-/// a traves del mensaje "MOVED *key hasheada* *ip del nodo correspondiente*". En el caso de que
+/// a traves del mensaje "ASK *key hasheada* *ip del nodo correspondiente*". En el caso de que
 /// no se encuentre el nodo correspondiente, se manda el mensaje sin ip.
 /// 
 /// # Devuelve
 /// - "Ok(())" si la key corresponde al nodo actual
-/// - "Err(CommandResponse)" con el mensaje "MOVED" si corresponde a otro nodo
+/// - "Err(CommandResponse)" con el mensaje "ASK" si corresponde a otro nodo
 pub fn resolve_key_location(key: String, local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>) -> Result<(), CommandResponse> {
     let hashed_key = get_hash_slots(key);
 
@@ -301,14 +301,14 @@ pub fn resolve_key_location(key: String, local_node: &Arc<Mutex<LocalNode>>, pee
 
         if hashed_key < lower_hash_bound || hashed_key >= upper_hash_bound {
             if let Some(peer_node) = locked_peer_nodes.values().find(|p| p.role == NodeRole::Master && p.hash_range.0 <= hashed_key && p.hash_range.1 > hashed_key) {
-                let response_string = format!("MOVED {} 127.0.0.1:{}", hashed_key, peer_node.port - 10000);
+                let response_string = format!("ASK {} 127.0.0.1:{}", hashed_key, peer_node.port - 10000);
                 let redis_redirect_response = CommandResponse::String(response_string.clone());
 
                 println!("Hashing para otro nodo: {:?}", response_string.clone());
 
                 return Err(redis_redirect_response)
             } else {
-                let response_string = format!("MOVED {}", hashed_key);
+                let response_string = format!("ASK {}", hashed_key);
                 let redis_redirect_response = CommandResponse::String(response_string.clone());
 
                 println!("Hashing para nodo indefinido: {:?}", response_string.clone());
