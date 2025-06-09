@@ -5,12 +5,14 @@ use super::set;
 use super::string;
 use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 pub fn execute_command(
     request: CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
     client_addr: String,
 ) -> RedisResponse {
     match request.command.as_str() {
@@ -19,9 +21,11 @@ pub fn execute_command(
         "subscribe" => pub_sub::handle_subscribe(&request, clients_on_docs, client_addr),
         "unsubscribe" => pub_sub::handle_unsubscribe(&request, clients_on_docs, client_addr),
         "append" => string::handle_append(&request, docs),
-        "scard" => set::handle_scard(&request, clients_on_docs),
-        "smembers" => set::handle_smembers(&request, clients_on_docs),
-        "sscan" => set::handle_sscan(&request, clients_on_docs),
+        "scard" => set::handle_scard(&request, shared_sets),
+        "smembers" => set::handle_smembers(&request, shared_sets),
+        // "sscan" => set::handle_sscan(&request, shared_sets),
+        "sadd" => set::handle_sadd(&request, shared_sets),
+        "srem" => set::handle_srem(&request, shared_sets),
         "llen" => list::handle_llen(&request, docs),
         "rpush" => list::handle_rpush(&request, docs),
         "lset" => list::handle_lset(&request, docs),

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 use commands::redis;
 use std::env::args;
 use std::fs::{File, OpenOptions};
@@ -76,6 +77,7 @@ fn start_server(bind_address: &str) -> std::io::Result<()> {
     };
 
     // Inicializar estructuras de datos compartidas
+    let shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>> = Arc::new(Mutex::new(HashMap::new()));
     let shared_documents = Arc::new(Mutex::new(stored_documents.clone()));
     let document_subscribers = initialize_document_subscribers(&stored_documents);
     let active_clients = Arc::new(Mutex::new(HashMap::new()));
@@ -91,7 +93,8 @@ fn start_server(bind_address: &str) -> std::io::Result<()> {
                     client_stream,
                     &active_clients,
                     &document_subscribers,
-                    &shared_documents
+                    &shared_documents,
+                    &shared_sets
                 )?;
             }
             Err(e) => {
@@ -130,6 +133,7 @@ fn handle_new_microservice_connection(
     active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
     document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
     shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> std::io::Result<()> {
     let client_addr = client_stream.peer_addr()?;
     println!("cliente conectado: {}", client_addr);
@@ -148,6 +152,7 @@ fn handle_new_microservice_connection(
     let cloned_clients = Arc::clone(active_clients);
     let cloned_clients_on_docs = Arc::clone(document_subscribers);
     let cloned_docs = Arc::clone(shared_documents);
+    let cloned_sets = Arc::clone(shared_sets);
     let client_addr_str = client_addr.to_string();
 
     thread::spawn(move || {
@@ -156,6 +161,7 @@ fn handle_new_microservice_connection(
             cloned_clients,
             cloned_clients_on_docs,
             cloned_docs,
+            cloned_sets,
             client_addr_str,
         ) {
             Ok(_) => {
@@ -183,6 +189,7 @@ fn handle_client(
     active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
     document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
     shared_documents: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
     client_id: String,
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
@@ -209,6 +216,7 @@ fn handle_client(
             command_request,
             shared_documents.clone(),
             document_subscribers.clone(),
+            shared_sets.clone(),
             client_id.clone(),
         );
 
