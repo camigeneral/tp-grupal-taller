@@ -4,14 +4,14 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-/// Maneja el comando SCARD que devuelve el número de suscriptores en un documento
+/// Maneja el comando SCARD que devuelve el número de suscriptores en un set
 ///
 /// # Argumentos
-/// * `request` - La solicitud de comando que contiene el documento a consultar
-/// * `clients_on_docs` - Un mapa compartido y protegido que asocia documentos con listas de clientes suscritos
+/// * `request` - La solicitud de comando que contiene el set a consultar
+/// * `shared_sets` - Un mapa compartido y protegido que asocia sets con listas de clientes suscritos
 ///
 /// # Retorno
-/// * `RedisResponse` - La respuesta al comando con el número de suscriptores en el documento
+/// * `RedisResponse` - La respuesta al comando con el número de suscriptores en el set
 pub fn handle_scard(
     request: &CommandRequest,
     shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
@@ -64,14 +64,14 @@ pub fn handle_scard(
 }
 
 
-/// Maneja el comando SMEMBERS que lista todos los suscriptores de un documento
+/// Maneja el comando SMEMBERS que lista todos los suscriptores de un set
 ///
 /// # Argumentos
-/// * `request` - La solicitud de comando que contiene el documento a consultar
-/// * `clients_on_docs` - Un mapa compartido y protegido que asocia documentos con listas de clientes suscritos
+/// * `request` - La solicitud de comando que contiene el set a consultar
+/// * `shared_sets` - Un mapa compartido y protegido que asocia sets con listas de clientes suscritos
 ///
 /// # Retorno
-/// * `RedisResponse` - La respuesta al comando con la lista de suscriptores del documento
+/// * `RedisResponse` - La respuesta al comando con la lista de suscriptores del set
 pub fn handle_smembers(
     request: &CommandRequest,
     shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
@@ -109,11 +109,11 @@ pub fn handle_smembers(
 }
 
 
-// /// Maneja el comando SSCAN que busca suscriptores en un documento que coincidan con un patrón
+// /// Maneja el comando SSCAN que busca suscriptores en un set que coincidan con un patrón
 // ///
 // /// # Argumentos
-// /// * `request` - La solicitud de comando que contiene el documento a consultar y opcionalmente un patrón de búsqueda
-// /// * `clients_on_docs` - Un mapa compartido y protegido que asocia documentos con listas de clientes suscritos
+// /// * `request` - La solicitud de comando que contiene el set a consultar y opcionalmente un patrón de búsqueda
+// /// * `shared_sets` - Un mapa compartido y protegido que asocia set con listas de clientes suscritos
 // ///
 // /// # Retorno
 // /// * `RedisResponse` - La respuesta al comando con los suscriptores que coinciden con el patrón
@@ -175,7 +175,6 @@ pub fn handle_smembers(
 ///
 /// # Retorno
 /// * `RedisResponse` - La respuesta al comando indicando cuántos elementos fueron eliminados.
-
 pub fn handle_srem(
     request: &CommandRequest,
     shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
@@ -250,12 +249,12 @@ pub fn handle_sadd(
 
     let mut added = 0;
     for arg in &request.arguments {
-    if let Some(arg_str) = extract_string(arg) {
-        if set.insert(arg_str) {
-            added += 1;
+        if let Some(arg_str) = extract_string(arg) {
+            if set.insert(arg_str) {
+                added += 1;
+            }
         }
     }
-}
 
 
     RedisResponse::new(
@@ -279,7 +278,7 @@ fn extract_string(value: &ValueType) -> Option<String> {
 mod tests {
     use super::*;
 
-    fn setup_clients_on_docs() -> Arc<Mutex<HashMap<String, Vec<String>>>> {
+    fn setup_clients_on_sets() -> Arc<Mutex<HashMap<String, HashSet<String>>>> {
         let mut map = HashMap::new();
         map.insert(
             "doc1".to_string(),
@@ -291,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_handle_scard_ok() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SCARD".to_string(),
             key: Some("doc1".to_string()),
@@ -308,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_handle_scard_no_key() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SCARD".to_string(),
             key: None,
@@ -323,7 +322,7 @@ mod tests {
 
     #[test]
     fn test_handle_scard_doc_not_found() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SCARD".to_string(),
             key: Some("docX".to_string()),
@@ -338,7 +337,7 @@ mod tests {
 
     #[test]
     fn test_handle_smembers_ok() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SMEMBERS".to_string(),
             key: Some("doc1".to_string()),
@@ -357,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_handle_smembers_empty() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SMEMBERS".to_string(),
             key: Some("doc2".to_string()),
@@ -372,7 +371,7 @@ mod tests {
 
     #[test]
     fn test_handle_smembers_no_key() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SMEMBERS".to_string(),
             key: None,
@@ -387,7 +386,7 @@ mod tests {
 
     #[test]
     fn test_handle_smembers_doc_not_found() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SMEMBERS".to_string(),
             key: Some("docX".to_string()),
@@ -402,7 +401,7 @@ mod tests {
 
     #[test]
     fn test_handle_sscan_pattern_found() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SSCAN".to_string(),
             key: Some("doc1".to_string()),
@@ -417,7 +416,7 @@ mod tests {
 
     #[test]
     fn test_handle_sscan_pattern_not_found() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SSCAN".to_string(),
             key: Some("doc1".to_string()),
@@ -432,7 +431,7 @@ mod tests {
 
     #[test]
     fn test_handle_sscan_no_pattern() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SSCAN".to_string(),
             key: Some("doc1".to_string()),
@@ -451,7 +450,7 @@ mod tests {
 
     #[test]
     fn test_handle_sscan_pattern_wrong_type() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SSCAN".to_string(),
             key: Some("doc1".to_string()),
@@ -466,7 +465,7 @@ mod tests {
 
     #[test]
     fn test_handle_sscan_no_key() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SSCAN".to_string(),
             key: None,
@@ -481,7 +480,7 @@ mod tests {
 
     #[test]
     fn test_handle_sscan_doc_not_found() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SSCAN".to_string(),
             key: Some("docX".to_string()),
