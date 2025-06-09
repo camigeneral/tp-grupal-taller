@@ -57,8 +57,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let local_node = start_node_connection(port, node_address, &peer_nodes)?;
 
-    let mutex_node = Arc::new(Mutex::new(local_node));
-    start_server(&client_address, mutex_node, peer_nodes)?;
+    start_server(&client_address, local_node, peer_nodes)?;
 
     Ok(())
 }
@@ -446,15 +445,8 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Vec<Str
 /// 
 /// # Errores
 /// Retorna un error si el puerto no corresponde a uno definido en los archivos de configuracion.
-pub fn start_node_connection(port: usize, node_address: String, peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>) -> Result<LocalNode, std::io::Error>{
+pub fn start_node_connection(port: usize, node_address: String, peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>) -> Result<Arc<Mutex<LocalNode>>, std::io::Error>{
     let cloned_nodes = Arc::clone(peer_nodes);
-
-    thread::spawn(move || {
-        match connect_nodes(&node_address, cloned_nodes) {
-            Ok(_) => {}
-            Err(_e) => {}
-        }
-    });
 
     let config_path = match port {
         4000 => "redis0.conf",
@@ -473,13 +465,23 @@ pub fn start_node_connection(port: usize, node_address: String, peer_nodes: &Arc
     };
 
     let local_node = local_node::LocalNode::new_from_config(config_path)?;
+    let mutex_node = Arc::new(Mutex::new(local_node));
+    let cloned_mutex_node = Arc::clone(&mutex_node);
     let node_ports = read_node_ports(config_path)?;
+
+    thread::spawn(move || {
+        match connect_nodes(&node_address, cloned_nodes, cloned_mutex_node) {
+            Ok(_) => {}
+            Err(_e) => {}
+        }
+    });
 
     {
         let mut lock_peer_nodes: std::sync::MutexGuard<'_, HashMap<String, peer_node::PeerNode>> = peer_nodes.lock().unwrap();
+        let locked_mutex_node = mutex_node.lock().unwrap();
 
         for connection_port in node_ports {
-            if connection_port != local_node.port {
+            if connection_port != locked_mutex_node.port {
                 let node_address_to_connect = format!("127.0.0.1:{}", connection_port);
                 let peer_addr = format!("127.0.0.1:{}", connection_port);
                 match TcpStream::connect(node_address_to_connect) {
@@ -489,10 +491,10 @@ pub fn start_node_connection(port: usize, node_address: String, peer_nodes: &Arc
                         let message = format!(
                             "{:?} {} {:?} {} {}\n",
                             RedisMessage::Node,
-                            local_node.port,
-                            local_node.role,
-                            local_node.hash_range.0,
-                            local_node.hash_range.1
+                            locked_mutex_node.port,
+                            locked_mutex_node.role,
+                            locked_mutex_node.hash_range.0,
+                            locked_mutex_node.hash_range.1
                         );
 
                         cloned_stream.write_all(message.as_bytes())?;
@@ -514,8 +516,9 @@ pub fn start_node_connection(port: usize, node_address: String, peer_nodes: &Arc
             }
         }
 
-        Ok(local_node)
     }
+
+    Ok(mutex_node)
 }
 
 
@@ -527,7 +530,7 @@ pub fn start_node_connection(port: usize, node_address: String, peer_nodes: &Arc
 /// 
 /// # Errores
 /// Retorna un error si no se puede crear el socket TCP
-fn connect_nodes(address: &str, nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>) -> std::io::Result<()> {
+fn connect_nodes(address: &str, nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>, local_node: Arc<Mutex<LocalNode>>) -> std::io::Result<()> {
     let listener = TcpListener::bind(address)?;
     println!("Server listening nodes on {}", address);
 
@@ -538,11 +541,13 @@ fn connect_nodes(address: &str, nodes: Arc<Mutex<HashMap<String, peer_node::Peer
                 println!("New node connected: {}", client_addr);       
 
                 let cloned_nodes = Arc::clone(&nodes);
+                let cloned_local_node = Arc::clone(&local_node);
 
                 thread::spawn(move || {
                     match handle_node(
                         &mut node_stream,
-                        cloned_nodes
+                        cloned_nodes,
+                        &cloned_local_node,
                     ) {
                         Ok(_) => {
                             println!("Node {} disconnected.", client_addr);
@@ -568,7 +573,8 @@ fn connect_nodes(address: &str, nodes: Arc<Mutex<HashMap<String, peer_node::Peer
 /// Por el momento solo lee el comando "node", y con eso se guarda la informacion del nodo.
 fn handle_node(
     stream: &mut TcpStream,
-    nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>
+    nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
+    local_node: &Arc<Mutex<LocalNode>>,
 ) -> std::io::Result<()> {
     let reader = BufReader::new(stream.try_clone()?);
 
@@ -584,8 +590,9 @@ fn handle_node(
             "node" => {
                 let node_listening_port = &input[1];
                 let parsed_port = &input[1].trim().parse::<usize>().map_err(|_| {
-                    std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid end range")
+                    std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid port")
                 })?;
+                let node_address = format!("127.0.0.1:{}", node_listening_port);
 
                 let node_role = match input[2].trim().to_lowercase().as_str() {
                     "master" => local_node::NodeRole::Master,
@@ -594,7 +601,7 @@ fn handle_node(
                 };
 
                 let hash_range_start = &input[3].trim().parse::<usize>().map_err(|_| {
-                    std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid end range")
+                    std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid start range")
                 })?;
                 let hash_range_end = &input[4].trim().parse::<usize>().map_err(|_| {
                     std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid end range")
@@ -602,9 +609,12 @@ fn handle_node(
 
                {
                     let mut lock_nodes = nodes.lock().unwrap();
-                    if !lock_nodes.contains_key(&node_listening_port.to_string()) {
+                    let local_node_locked = local_node.lock().unwrap();
+                    // no lo conozco -> creo el stream y me guardo todo, y le mando mi info
+                    if !lock_nodes.contains_key(&node_address) {
                         let node_address_to_connect = format!("127.0.0.1:{}", node_listening_port);
                         let new_stream = TcpStream::connect(node_address_to_connect)?;
+                        let mut stream_to_respond = new_stream.try_clone()?;
 
                         let node_client = peer_node::PeerNode::new(
                             new_stream,
@@ -616,6 +626,25 @@ fn handle_node(
                         let node_address_to_connect = format!("127.0.0.1:{}", node_listening_port);
     
                         lock_nodes.insert(node_address_to_connect.to_string(), node_client);
+
+                        let message = format!(
+                            "{:?} {} {:?} {} {}\n",
+                            RedisMessage::Node,
+                            local_node_locked.port,
+                            local_node_locked.role,
+                            local_node_locked.hash_range.0,
+                            local_node_locked.hash_range.1
+                        );
+
+                        stream_to_respond.write_all(message.as_bytes())?;
+                    }
+                    // si lo conozco, actualizo todo menos el stream
+                    else {
+                        let peer_node_to_update = lock_nodes.get_mut(&node_address).unwrap();
+                        peer_node_to_update.role = node_role;
+                        peer_node_to_update.hash_range = (*hash_range_start, *hash_range_end);
+
+                        println!("hash range actualizado:  {}", lock_nodes.get_mut(&node_address).unwrap().hash_range.1);
                     }
                 }
             }
