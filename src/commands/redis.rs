@@ -11,15 +11,15 @@ use std::sync::{Arc, Mutex};
 pub fn execute_command(
     request: CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
     shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
     client_addr: String,
 ) -> RedisResponse {
     match request.command.as_str() {
         "get" => string::handle_get(&request, docs),
-        "set" => string::handle_set(&request, docs, clients_on_docs),
-        "subscribe" => pub_sub::handle_subscribe(&request, clients_on_docs, client_addr),
-        "unsubscribe" => pub_sub::handle_unsubscribe(&request, clients_on_docs, client_addr),
+        "set" => string::handle_set(&request, docs, document_subscribers),
+        "subscribe" => pub_sub::handle_subscribe(&request, document_subscribers, client_addr),
+        "unsubscribe" => pub_sub::handle_unsubscribe(&request, document_subscribers, client_addr),
         "append" => string::handle_append(&request, docs),
         "scard" => set::handle_scard(&request, shared_sets),
         "smembers" => set::handle_smembers(&request, shared_sets),
