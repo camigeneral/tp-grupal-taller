@@ -66,6 +66,10 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// - No se puede crear el socket TCP
 /// - Hay problemas al leer el archivo de persistencia
 fn start_server(bind_address: &str) -> std::io::Result<()> {
+    // Ejemplo en redis_server.rs
+    let config_path = "redis.conf"; // o el config que corresponda
+    let log_path = utils::logger::get_log_path_from_config(config_path);
+
     let persistence_file = "docs.txt".to_string();
     let stored_documents = match load_persisted_data(&persistence_file) {
         Ok(docs) => docs,
