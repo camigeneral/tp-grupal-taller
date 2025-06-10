@@ -7,17 +7,17 @@ use std::io::{BufRead, BufReader};
 #[allow(unused_imports)]
 use std::net::TcpListener;
 use std::net::TcpStream;
-use std::sync::{Arc, Mutex};
 #[allow(unused_imports)]
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{channel, Sender as MpscSender};
+use std::sync::{Arc, Mutex};
 use std::thread;
 #[allow(unused_imports)]
 use std::time::Duration;
-use std::sync::mpsc::{channel, Sender as MpscSender};
 use utils::redis_parser::format_resp_command;
 
-pub fn client_run (
+pub fn client_run(
     port: u16,
     rx: Receiver<String>,
     ui_sender: Option<Sender<AppMsg>>,
@@ -46,7 +46,13 @@ pub fn client_run (
     let connect_node_sender_cloned = connect_node_sender.clone();
 
     thread::spawn(move || {
-        if let Err(e) = connect_to_nodes(connect_node_sender_cloned, connect_nodes_receiver, ui_sender, cloned_node_streams, cloned_last_command) {
+        if let Err(e) = connect_to_nodes(
+            connect_node_sender_cloned,
+            connect_nodes_receiver,
+            ui_sender,
+            cloned_node_streams,
+            cloned_last_command,
+        ) {
             eprintln!("Error en la conexión con el nodo: {}", e);
         }
     });
@@ -54,7 +60,7 @@ pub fn client_run (
     let _ = connect_node_sender.send(redis_socket);
 
     for command in rx {
-        let trimmed_command = command.to_string().trim().to_lowercase();        
+        let trimmed_command = command.to_string().trim().to_lowercase();
         if trimmed_command == "close" {
             println!("Desconectando del servidor");
             break;
@@ -78,15 +84,13 @@ pub fn client_run (
     Ok(())
 }
 
-
-fn listen_to_redis_response (
+fn listen_to_redis_response(
     microservice_socket: TcpStream,
     ui_sender: Option<Sender<AppMsg>>,
     connect_node_sender: MpscSender<TcpStream>,
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
-    last_command_sent: Arc<Mutex<String>>
+    last_command_sent: Arc<Mutex<String>>,
 ) -> std::io::Result<()> {
-    
     let mut reader = BufReader::new(microservice_socket);
     loop {
         let mut line = String::new();
@@ -125,15 +129,13 @@ fn listen_to_redis_response (
     Ok(())
 }
 
-
 fn connect_to_nodes(
     sender: MpscSender<TcpStream>,
     reciever: Receiver<TcpStream>,
     ui_sender: Option<Sender<AppMsg>>,
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
-    last_command_sent: Arc<Mutex<String>>
+    last_command_sent: Arc<Mutex<String>>,
 ) -> std::io::Result<()> {
-
     for stream in reciever {
         let cloned_node_streams = Arc::clone(&node_streams);
         let cloned_last_command = Arc::clone(&last_command_sent);
@@ -141,7 +143,13 @@ fn connect_to_nodes(
         let cloned_own_sender = sender.clone();
 
         thread::spawn(move || {
-            if let Err(e) = listen_to_redis_response(stream, cloned_sender, cloned_own_sender, cloned_node_streams, cloned_last_command) {
+            if let Err(e) = listen_to_redis_response(
+                stream,
+                cloned_sender,
+                cloned_own_sender,
+                cloned_node_streams,
+                cloned_last_command,
+            ) {
                 eprintln!("Error en la conexión con el nodo: {}", e);
             }
         });

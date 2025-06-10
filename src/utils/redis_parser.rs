@@ -128,7 +128,7 @@ pub fn write_response(stream: &TcpStream, response: &CommandResponse) -> std::io
 }
 
 /// Formatea un comando en el protocolo RESP (Redis Serialization Protocol).
-/// 
+///
 /// # Retorna
 /// String formateada según el protocolo RESP
 #[allow(dead_code)]

@@ -11,7 +11,7 @@ fn main() {
 
     let port = match cli_args[1].parse::<u16>() {
         Ok(n) => n,
-        Err(_e) => return
+        Err(_e) => return,
     };
 
     let id = format!("rusty.docs{}", rand::thread_rng().gen_range(0..100));

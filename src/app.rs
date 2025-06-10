@@ -1,16 +1,16 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::{
-    prelude::{BoxExt, ButtonExt, GtkWindowExt, OrientableExt, WidgetExt, EditableExt},
+    prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, WidgetExt},
     CssProvider,
 };
 use crate::components::login::{LoginForm, LoginOutput};
 use app::gtk4::glib::Propagation;
+use client::client_run;
+use commands::client::ClientCommand;
 use components::file_workspace::{FileWorkspace, FileWorkspaceMsg, FileWorkspaceOutputMessage};
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
-use std::{collections::HashMap};
-use commands::client::ClientCommand;
-use client::client_run;
+use std::collections::HashMap;
 use std::thread;
 
 use std::sync::mpsc::{channel, Sender};
@@ -50,7 +50,7 @@ pub enum AppMsg {
     CloseApplication,
     RefreshData,
     CreateFile(String, String),
-    SubscribeFile(String)
+    SubscribeFile(String),
 }
 
 #[relm4::component(pub)]
@@ -80,7 +80,7 @@ impl SimpleComponent for AppModel {
                     set_spacing: 15,
                     gtk::Label {
                         set_label: "Comandos:",
-                    },                    
+                    },
                     #[name = "command_entry"]
                     gtk::Entry {
                         connect_changed[sender] => move |entry| {
@@ -140,16 +140,18 @@ impl SimpleComponent for AppModel {
             sender.input_sender(),
             |output| match output {
                 NavbarOutput::ToggleConnectionRequested => AppMsg::Connect,
-                NavbarOutput::CreateFileRequested(file_id, content) => AppMsg::CreateFile(file_id, content),
+                NavbarOutput::CreateFileRequested(file_id, content) => {
+                    AppMsg::CreateFile(file_id, content)
+                }
             },
         );
 
-        let files_manager_model = FileWorkspace::builder()
-            .launch(())
-            .forward(sender.input_sender(), |command: FileWorkspaceOutputMessage| match command {
-                FileWorkspaceOutputMessage::SubscribeFile(file) => AppMsg::SubscribeFile(file)
-                
-            });
+        let files_manager_model = FileWorkspace::builder().launch(()).forward(
+            sender.input_sender(),
+            |command: FileWorkspaceOutputMessage| match command {
+                FileWorkspaceOutputMessage::SubscribeFile(file) => AppMsg::SubscribeFile(file),
+            },
+        );
 
         let login_form_model = LoginForm::builder().launch(users).forward(
             sender.input_sender(),
@@ -209,8 +211,10 @@ impl SimpleComponent for AppModel {
                         eprintln!("Error al iniciar el cliente: {:?}", e);
                     }
                 });
-                
-                files_manager_cont_sender.send(FileWorkspaceMsg::ReloadFiles).unwrap();
+
+                files_manager_cont_sender
+                    .send(FileWorkspaceMsg::ReloadFiles)
+                    .unwrap();
                 self.header_cont
                     .sender()
                     .send(NavbarMsg::SetConnectionStatus(true))
@@ -269,7 +273,7 @@ impl SimpleComponent for AppModel {
                     println!("No hay un canal de comando disponible.");
                 }
             }
-            AppMsg::RefreshData => {                
+            AppMsg::RefreshData => {
                 self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
             }
 

@@ -1,7 +1,7 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::prelude::{
-    BoxExt, ButtonExt, OrientableExt, TextBufferExt, TextViewExt, WidgetExt,TextBufferExtManual
+    BoxExt, ButtonExt, OrientableExt, TextBufferExt, TextBufferExtManual, TextViewExt, WidgetExt,
 };
 
 use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
@@ -139,8 +139,7 @@ impl SimpleComponent for FileEditorModel {
             FileEditorMessage::ContentAdded(_new_text, _offset) => {
                 //Llamado a la api para insertar caracter
             }
-            FileEditorMessage::ContentRemoved(_start_offset, _end_offset) => {
-            }
+            FileEditorMessage::ContentRemoved(_start_offset, _end_offset) => {}
             FileEditorMessage::UpdateFile(file_name, contributors, content) => {
                 self.file_name = file_name;
                 self.num_contributors = contributors;
