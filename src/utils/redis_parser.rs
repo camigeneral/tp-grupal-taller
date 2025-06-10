@@ -127,6 +127,21 @@ pub fn write_response(stream: &TcpStream, response: &CommandResponse) -> std::io
     }
 }
 
+/// Formatea un comando en el protocolo RESP (Redis Serialization Protocol).
+/// 
+/// # Retorna
+/// String formateada según el protocolo RESP
+#[allow(dead_code)]
+pub fn format_resp_command(command_parts: &[&str]) -> String {
+    let mut resp_message = format!("*{}\r\n", command_parts.len());
+
+    for part in command_parts {
+        resp_message.push_str(&format!("${}\r\n{}\r\n", part.len(), part));
+    }
+
+    resp_message
+}
+
 /// Parsea una línea en formato RESP que representa un array de cadenas (`Vec<String>`).
 ///
 /// Lee el número de elementos del array (`*<n>`), seguido por `n` cadenas tipo bulk (`$<len>\r\n<value>\r\n`).

@@ -1,5 +1,5 @@
 use super::redis_response::RedisResponse;
-use parse::{CommandRequest, CommandResponse, ValueType};
+use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -89,6 +89,7 @@ pub fn handle_linsert(
             doc,
         )
     } else {
+        println!("pivot: {}", pivot_str);
         RedisResponse::new(
             CommandResponse::Error("Invalid pivot argument".to_string()),
             false,

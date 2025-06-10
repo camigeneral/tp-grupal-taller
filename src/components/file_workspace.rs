@@ -19,6 +19,7 @@ use components::file_editor::FileEditorMessage;
 use components::list_files::FileFilterAction;
 use components::types::FileType;
 
+
 #[derive(Debug)]
 /// Estructura principal que gestiona el espacio de trabajo de archivos, que incluye una lista de archivos
 /// y un editor de archivos. Mantiene el estado de la visibilidad del editor de archivos.
@@ -29,7 +30,7 @@ pub struct FileWorkspace {
     file_editor_ctrl: Controller<FileEditorModel>,
     /// Bandera que indica si el editor de archivos está visible.
     editor_visible: bool,
-
+    /// Nombre del archivo actual.
     current_file: String,
 }
 
@@ -43,12 +44,19 @@ pub enum FileWorkspaceMsg {
     Ignore,
     /// Mensaje para cerrar el editor de archivos.
     CloseEditor,
+    SubscribeFile(String, String, u8),
     ReloadFiles,
 }
 
+#[derive(Debug)]
+pub enum FileWorkspaceOutputMessage {
+    SubscribeFile(String)
+}
+
+
 #[relm4::component(pub)]
 impl SimpleComponent for FileWorkspace {
-    type Output = ();
+    type Output = FileWorkspaceOutputMessage;
     type Init = ();
     type Input = FileWorkspaceMsg;
 
@@ -112,6 +120,7 @@ impl SimpleComponent for FileWorkspace {
                     FileEditorOutputMessage::GoBack => FileWorkspaceMsg::CloseEditor,
                 },
             );
+
         let model = FileWorkspace {
             file_list_ctrl: list_files_cont,
             file_editor_ctrl: editor_file_cont,
@@ -126,8 +135,13 @@ impl SimpleComponent for FileWorkspace {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
+    fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
+
+            FileWorkspaceMsg::SubscribeFile(file, _content, _qty) => {
+                sender.output(FileWorkspaceOutputMessage::SubscribeFile(file)).unwrap();
+            }
+
             FileWorkspaceMsg::OpenFile(file, content, qty) => {
                 self.current_file = file.clone();
                 self.file_editor_ctrl
