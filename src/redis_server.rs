@@ -66,8 +66,8 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// - No se puede crear el socket TCP
 /// - Hay problemas al leer el archivo de persistencia
 fn start_server(bind_address: &str) -> std::io::Result<()> {
-    // Ejemplo en redis_server.rs
-    let config_path = "redis.conf"; // o el config que corresponda
+
+    let config_path = "redis.conf";
     let log_path = utils::logger::get_log_path_from_config(config_path);
 
     let persistence_file = "docs.txt".to_string();
@@ -88,6 +88,8 @@ fn start_server(bind_address: &str) -> std::io::Result<()> {
     let tcp_listener = TcpListener::bind(bind_address)?;
     println!("Servidor Redis escuchando en {}", bind_address);
 
+    utils::logger::log_event(&log_path, &format!("Servidor iniciado en {}", bind_address));
+    
     for incoming_connection in tcp_listener.incoming() {
         match incoming_connection {
             Ok(client_stream) => {
@@ -95,7 +97,8 @@ fn start_server(bind_address: &str) -> std::io::Result<()> {
                     client_stream,
                     &active_clients,
                     &document_subscribers,
-                    &shared_documents
+                    &shared_documents,
+                    &log_path,
                 )?;
             }
             Err(e) => {
@@ -134,9 +137,12 @@ fn handle_new_microservice_connection(
     active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
     document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
     shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    log_path: &str,
 ) -> std::io::Result<()> {
     let client_addr = client_stream.peer_addr()?;
     println!("cliente conectado: {}", client_addr);
+
+    utils::logger::log_event(&log_path, &format!("Cliente conectado: {}", client_addr));
 
     let client_stream_clone = client_stream.try_clone()?;
     
@@ -153,6 +159,7 @@ fn handle_new_microservice_connection(
     let cloned_clients_on_docs = Arc::clone(document_subscribers);
     let cloned_docs = Arc::clone(shared_documents);
     let client_addr_str = client_addr.to_string();
+    let log_path = log_path.to_string();
 
     thread::spawn(move || {
         match handle_client(
@@ -161,12 +168,18 @@ fn handle_new_microservice_connection(
             cloned_clients_on_docs,
             cloned_docs,
             client_addr_str,
+            &log_path,
         ) {
             Ok(_) => {
                 println!("Client {} disconnected.", client_addr);
+
+                utils::logger::log_event(&log_path, &format!("Cliente desconectado: {}", client_addr));
+
             }
             Err(e) => {
                 eprintln!("Error in connection with {}: {}", client_addr, e);
+
+                utils::logger::log_event(&log_path, &format!("Error en conexión con: {}", client_addr));
             }
         }
     });
@@ -188,6 +201,7 @@ fn handle_client(
     document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
     shared_documents: Arc<Mutex<HashMap<String, Vec<String>>>>,
     client_id: String,
+    log_path: &str,
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
 
