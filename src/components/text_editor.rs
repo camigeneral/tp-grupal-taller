@@ -72,6 +72,8 @@ impl SimpleComponent for TextEditorModel {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
+
+        println!("{:#?}, {:#?}", file_name, content);
         let mut model = TextEditorModel {
             file_name,
             num_contributors,
@@ -123,6 +125,7 @@ impl SimpleComponent for TextEditorModel {
                 self.content = content;
                 self.buffer.set_text(&self.content);
                 self.content_changed_manually = true;
+                println!("{:#?}", self);
             }
             TextEditorMessage::ResetEditor => {
                 self.buffer.set_text("");

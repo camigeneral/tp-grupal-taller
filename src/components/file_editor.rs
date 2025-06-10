@@ -133,8 +133,8 @@ impl SimpleComponent for FileEditorModel {
             content_changed_manually: false,
             spreadsheet_ctrl: spreadsheet_cont,
             text_editor_ctrl: text_editor_cont,    
-            spreadsheet_visible: true,
-            text_editor_visible: false,
+            spreadsheet_visible: false,
+            text_editor_visible: true,
         };
 
         
