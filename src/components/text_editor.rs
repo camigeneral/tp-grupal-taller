@@ -125,7 +125,6 @@ impl SimpleComponent for TextEditorModel {
                 self.content = content;
                 self.buffer.set_text(&self.content);
                 self.content_changed_manually = true;
-                println!("{:#?}", self);
             }
             TextEditorMessage::ResetEditor => {
                 self.buffer.set_text("");
