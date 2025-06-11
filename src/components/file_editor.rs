@@ -10,7 +10,7 @@ use self::relm4::{
 
 use components::spreadsheet::SpreadsheetModel;
 use components::text_editor::TextEditorModel;
-
+use components::text_editor::TextEditorMessage;
 
 /// Estructura que representa el modelo del editor de archivos. Contiene información sobre el archivo
 /// que se está editando, el contenido del archivo y el estado de cambios manuales en el contenido.
@@ -152,15 +152,16 @@ impl SimpleComponent for FileEditorModel {
             FileEditorMessage::ContentRemoved(_start_offset, _end_offset) => {
             }
             FileEditorMessage::UpdateFile(file_name, contributors, content) => {
-                self.file_name = file_name;
+
+                let _ = self.text_editor_ctrl.emit(TextEditorMessage::UpdateFile(file_name.clone(), contributors, content.clone()));
+                self.file_name = file_name.clone();
                 self.num_contributors = contributors;
-                self.content = content;
+                self.content = content.clone();
+
                 self.content_changed_manually = true;
             }
             FileEditorMessage::ResetEditor => {
-                self.content.clear();
-                self.file_name.clear();
-                self.num_contributors = 0;
+                let _ = self.text_editor_ctrl.emit(TextEditorMessage::ResetEditor);
             },
 
         }

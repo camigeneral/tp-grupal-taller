@@ -32,6 +32,8 @@ pub struct FileWorkspace {
     editor_visible: bool,
     /// Nombre del archivo actual.
     current_file: String,
+
+    current_file_content: HashMap<String, String>,
 }
 
 /// Enum que define los diferentes mensajes que puede recibir el componente `FileWorkspace`.
@@ -126,6 +128,7 @@ impl SimpleComponent for FileWorkspace {
             file_editor_ctrl: editor_file_cont,
             editor_visible: false,
             current_file: "".to_string(),
+            current_file_content: HashMap::new(),
         };
 
         let list_box_widget = model.file_list_ctrl.widget();
@@ -162,6 +165,7 @@ impl SimpleComponent for FileWorkspace {
                 let file_editor_sender = self.file_editor_ctrl.sender().clone();
 
                 let current_file = self.current_file.clone();
+                println!("current_file: {}", current_file);
 
                 glib::timeout_add_local(Duration::from_millis(100), move || {
                     let new_files = get_files_list(&"docs.txt".to_string());
