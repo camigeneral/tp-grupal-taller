@@ -5,6 +5,8 @@
 //! - Comunicación con el servidor Redis
 //! - Procesamiento de comandos
 //! - Distribución de actualizaciones
+use crate::commands::client::ClientCommand;
+use std::io::BufWriter;
 use std::io::Read;
 use std::io::Write;
 use std::io::{BufRead, BufReader};
@@ -13,30 +15,28 @@ use std::net::TcpListener;
 use std::net::TcpStream;
 #[allow(unused_imports)]
 use std::sync::mpsc;
+use std::sync::Mutex;
 #[allow(unused_imports)]
 use std::time::Duration;
-use std::sync::Mutex;
-use crate::commands::client::ClientCommand;
-use std::io::BufWriter;
 
 /// Estructura principal del microservicio que actúa como intermediario entre clientes y Redis.
-/// 
+///
 /// Esta estructura mantiene:
 /// - La conexión con el servidor Redis
 /// - Las conexiones con los clientes
 /// - El socket de escucha para nuevas conexiones
-/// 
+///
 #[derive(Debug)]
-pub struct Microservice {    
+pub struct Microservice {
     /// Socket TCP que escucha nuevas conexiones entrantes de clientes
-    pub tcp_listener: TcpListener,    
-    
+    pub tcp_listener: TcpListener,
+
     /// Conexión al servidor Redis, protegida por mutex para acceso concurrente.
     /// Se mantiene como Option para manejar la conexión/desconexión de forma segura.
     pub redis_connection: Mutex<Option<TcpStream>>,
-    
+
     /// Lista de conexiones activas con clientes, protegida por mutex para acceso concurrente
-    pub active_clients: Mutex<Vec<TcpStream>>
+    pub active_clients: Mutex<Vec<TcpStream>>,
 }
 
 impl Microservice {
@@ -44,19 +44,19 @@ impl Microservice {
         let bind_address = format!("127.0.0.1:{}", port);
         let tcp_listener = TcpListener::bind(bind_address.clone()).unwrap();
         println!("Microservice levantado en: {:?}", bind_address);
-        
-        Self {            
+
+        Self {
             tcp_listener,
             redis_connection: Mutex::new(None),
-            active_clients: Mutex::new(Vec::new())
+            active_clients: Mutex::new(Vec::new()),
         }
     }
 
     /// Establece una conexión con el servidor Redis.
-    /// 
+    ///
     /// Intenta establecer una conexión TCP con el servidor Redis en el puerto 4000.
     /// La conexión se almacena en el Mutex redis_connection para acceso concurrente.
-    /// 
+    ///
     /// # Errores
     /// Retorna un error si:
     /// - No se puede establecer la conexión TCP
@@ -65,16 +65,16 @@ impl Microservice {
         println!("Intentando conectar a Redis...");
         let mut redis_connection_guard = self.redis_connection.lock().unwrap();
         println!("Lock obtenido para redis_connection");
-        
+
         let redis_address = format!("127.0.0.1:{}", 4000);
         println!("Intentando conectar a Redis en {}", redis_address);
-        
+
         match TcpStream::connect(&redis_address) {
             Ok(stream) => {
                 println!("Conexión establecida exitosamente con Redis");
                 *redis_connection_guard = Some(stream);
                 Ok(())
-            },
+            }
             Err(e) => {
                 println!("Error al conectar con Redis: {}", e);
                 Err(e)
@@ -91,15 +91,19 @@ impl Microservice {
     }
 
     /// Maneja el comando del cliente.
-    /// 
+    ///
     /// Traduce el comando del cliente al formato RESP de Redis y lo envía al servidor Redis.
-    /// 
+    ///
     /// # Errores
     /// Retorna un error si hay problemas de lectura/escritura en el stream
-    fn handle_client_command(&self, client_command: ClientCommand, client_writer: &mut TcpStream) -> std::io::Result<()> {
-        let redis_command = self.parse_client_command_to_redis_command(client_command);                                            
+    fn handle_client_command(
+        &self,
+        client_command: ClientCommand,
+        client_writer: &mut TcpStream,
+    ) -> std::io::Result<()> {
+        let redis_command = self.parse_client_command_to_redis_command(client_command);
         if let Ok(()) = self.send_resp_command(redis_command) {
-            client_writer.write_all(b"OK\r\n")?;            
+            client_writer.write_all(b"OK\r\n")?;
         } else {
             println!("Error al enviar el comando a Redis");
         }
@@ -107,17 +111,17 @@ impl Microservice {
     }
 
     /// Maneja la comunicación con un cliente conectado.
-    /// 
+    ///
     /// Procesa los comandos recibidos del cliente y los envía a Redis.
     /// Mantiene un bucle de lectura hasta que el cliente se desconecte o
     /// envíe un comando de cierre.
-    /// 
+    ///
     /// # Errores
     /// Retorna un error si hay problemas de lectura/escritura en el stream
     pub fn listen_to_client(&self, client_stream: TcpStream) -> std::io::Result<()> {
         let mut client_writer = client_stream.try_clone()?;
         let mut command_reader = BufReader::new(client_stream);
-        
+
         loop {
             let mut command_buffer = String::new();
             let bytes_read = command_reader.read_line(&mut command_buffer)?;
@@ -129,12 +133,15 @@ impl Microservice {
 
             if let Ok(client_command) = ClientCommand::from_string(&command_buffer.clone()) {
                 match client_command.clone() {
-                    ClientCommand::CreateFile { file_id: _, content: _ } => self.handle_client_command(client_command, &mut client_writer)?,
+                    ClientCommand::CreateFile {
+                        file_id: _,
+                        content: _,
+                    } => self.handle_client_command(client_command, &mut client_writer)?,
                     ClientCommand::Close => {
                         println!("Comando de cierre recibido");
                         break;
                     }
-                    _ => self.handle_client_command(client_command, &mut client_writer)?,                    
+                    _ => self.handle_client_command(client_command, &mut client_writer)?,
                 }
             } else {
                 println!("Error al parsear el comando: {:?}", command_buffer);
@@ -144,69 +151,72 @@ impl Microservice {
     }
 
     /// Formatea un comando en el protocolo RESP (Redis Serialization Protocol).
-    /// 
+    ///
     /// # Retorna
     /// String formateada según el protocolo RESP
     pub fn format_resp_command(&self, command_parts: &[&str]) -> String {
         let mut resp_message = format!("*{}\r\n", command_parts.len());
-    
+
         for part in command_parts {
             resp_message.push_str(&format!("${}\r\n{}\r\n", part.len(), part));
         }
-    
+
         resp_message
     }
-    
+
     /// Convierte un comando del cliente al formato RESP de Redis.
-    /// 
+    ///
     /// Traduce los comandos del protocolo del cliente al protocolo RESP
     /// que entiende Redis.
-    /// 
+    ///
     /// # Argumentos
     /// * `client_command` - Comando del cliente a convertir
-    /// 
+    ///
     /// # Retorna
     /// String con el comando formateado en protocolo RESP
     pub fn parse_client_command_to_redis_command(&self, client_command: ClientCommand) -> String {
         println!("Traduciendo comando del cliente: {:?}", client_command);
         match client_command {
-            ClientCommand::CreateFile { file_id, content } => { 
+            ClientCommand::CreateFile { file_id, content } => {
                 let resp_command = self.format_resp_command(&["set", &file_id, &content]);
                 println!("Comando traducido a RESP: {}", resp_command);
                 resp_command
-            },
+            }
             ClientCommand::Subscribe { file_id } => {
                 let resp_command = self.format_resp_command(&["subscribe", &file_id]);
                 println!("Comando traducido a RESP: {}", resp_command);
                 resp_command
-            },
+            }
             ClientCommand::Unsubscribe { file_id } => {
                 let resp_command = self.format_resp_command(&["unsubscribe", &file_id]);
                 println!("Comando traducido a RESP: {}", resp_command);
                 resp_command
-            },
-            
+            }
+
             _ => client_command.to_string(),
         }
     }
 
     /// Envía un comando RESP al servidor Redis.
-    /// 
+    ///
     /// # Argumentos
     /// * `resp_command` - Comando en formato RESP a enviar
-    /// 
+    ///
     /// # Errores
     /// Retorna un error si:
     /// - No hay conexión establecida con Redis
     /// - Hay problemas al escribir en el stream
     /// - No se puede obtener el lock del Mutex
     pub fn send_resp_command(&self, resp_command: String) -> std::io::Result<()> {
-        println!("Iniciando envío de comando RESP");  
+        println!("Iniciando envío de comando RESP");
         println!("Obteniendo acceso a la conexión Redis...");
-        
+
         let redis_connection_guard = self.redis_connection.lock().unwrap();
-        println!("Acceso obtenido. Estado de la conexión: {:#?}", redis_connection_guard);
-        
+        println!(
+            "Acceso obtenido. Estado de la conexión: {:#?}",
+            redis_connection_guard
+        );
+
         match redis_connection_guard.as_ref() {
             Some(redis_stream) => {
                 println!("Conexión activa encontrada, preparando escritura...");
@@ -216,19 +226,19 @@ impl Microservice {
                 command_writer.flush()?;
                 println!("Comando enviado exitosamente");
                 Ok(())
-            },
+            }
             None => {
                 println!("Error: No hay conexión activa con Redis");
                 Err(std::io::Error::new(
                     std::io::ErrorKind::NotConnected,
-                    "No hay conexión establecida con Redis"
+                    "No hay conexión establecida con Redis",
                 ))
             }
         }
     }
 
     /// Escucha y procesa las respuestas del servidor Redis.
-    /// 
+    ///
     /// Mantiene un bucle de lectura continua para procesar las respuestas
     /// que envía Redis. Soporta todos los tipos de respuesta del protocolo RESP:
     /// - Strings simples (+)
@@ -236,7 +246,7 @@ impl Microservice {
     /// - Enteros (:)
     /// - Bulk strings ($)
     /// - Arrays (*)
-    /// 
+    ///
     /// # Errores
     /// Retorna un error si:
     /// - No hay conexión con Redis
@@ -246,10 +256,10 @@ impl Microservice {
         let redis_connection_guard = self.redis_connection.lock().unwrap();
         let redis_stream = redis_connection_guard.as_ref().unwrap().try_clone()?;
         drop(redis_connection_guard);
-        
+
         let mut response_reader = BufReader::new(redis_stream);
         println!("Iniciando escucha de respuestas Redis");
-        
+
         loop {
             let mut response_line = String::new();
             let bytes_read = response_reader.read_line(&mut response_line)?;
@@ -260,7 +270,10 @@ impl Microservice {
                 break;
             }
 
-            println!("Respuesta RESP recibida: {}", response_line.replace("\r\n", "\\r\\n"));
+            println!(
+                "Respuesta RESP recibida: {}",
+                response_line.replace("\r\n", "\\r\\n")
+            );
             match response_line.chars().next() {
                 Some('$') => {
                     let size_str = response_line.trim_end();
@@ -281,7 +294,8 @@ impl Microservice {
                     let mut content_buffer = vec![0u8; content_size + 2]; // +2 para CRLF
                     response_reader.read_exact(&mut content_buffer)?;
 
-                    let content = String::from_utf8_lossy(&content_buffer[..content_size]).to_string();
+                    let content =
+                        String::from_utf8_lossy(&content_buffer[..content_size]).to_string();
                     println!("Contenido recibido: {}", content);
                 }
                 Some('-') => {
@@ -318,12 +332,12 @@ impl Microservice {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::client::client_run;
+    use std::io::Write;
+    use std::net::TcpListener;
+    use std::sync::mpsc;
     use std::thread;
     use std::time::Duration;
-    use std::net::TcpListener;
-    use std::io::Write;
-    use std::sync::mpsc;
-    use crate::client::client_run;
 
     fn format_resp_command(parts: &[&str]) -> String {
         let mut result = format!("*{}\r\n", parts.len());
@@ -350,7 +364,10 @@ mod tests {
         // Prueba con caracteres especiales
         let special = vec!["SET", "key:1", "hello world"];
         let result = format_resp_command(&special);
-        assert_eq!(result, "*3\r\n$3\r\nSET\r\n$5\r\nkey:1\r\n$11\r\nhello world\r\n");
+        assert_eq!(
+            result,
+            "*3\r\n$3\r\nSET\r\n$5\r\nkey:1\r\n$11\r\nhello world\r\n"
+        );
     }
 
     #[test]
@@ -367,7 +384,9 @@ mod tests {
             stream.write_all(b"$5\r\nhello\r\n").unwrap();
             stream.write_all(b"-Error message\r\n").unwrap();
             stream.write_all(b":1000\r\n").unwrap();
-            stream.write_all(b"*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n").unwrap();
+            stream
+                .write_all(b"*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n")
+                .unwrap();
             stream.write_all(b"$-1\r\n").unwrap(); // Valor nulo
         });
 
@@ -386,39 +405,39 @@ mod tests {
     fn test_connection_errors() {
         let port = 9999; // Puerto no utilizado
         let (_tx, rx) = mpsc::channel();
-        
+
         let result = client_run(port, rx, None);
         assert!(result.is_err());
     }
 
-   /*  #[test]
-   TODO: Revisar 
-    fn test_multiple_clients() {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
+    /*  #[test]
+    TODO: Revisar
+     fn test_multiple_clients() {
+         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+         let port = listener.local_addr().unwrap().port();
 
-        let server_thread = thread::spawn(move || {
-            for _ in 0..3 {
-                if let Ok((mut stream, _)) = listener.accept() {
-                    stream.write_all(b"+OK\r\n").unwrap();
-                }
-            }
-        });
+         let server_thread = thread::spawn(move || {
+             for _ in 0..3 {
+                 if let Ok((mut stream, _)) = listener.accept() {
+                     stream.write_all(b"+OK\r\n").unwrap();
+                 }
+             }
+         });
 
-        let mut client_threads = vec![];
-        for _ in 0..3 {
-            let (tx, rx) = mpsc::channel();
-            let client_thread = thread::spawn(move || {
-                let _ = client_run(port, rx, None);
-            });
-            thread::sleep(Duration::from_millis(50));
-            tx.send(ClientCommand::Close).unwrap();
-            client_threads.push(client_thread);
-        }
+         let mut client_threads = vec![];
+         for _ in 0..3 {
+             let (tx, rx) = mpsc::channel();
+             let client_thread = thread::spawn(move || {
+                 let _ = client_run(port, rx, None);
+             });
+             thread::sleep(Duration::from_millis(50));
+             tx.send(ClientCommand::Close).unwrap();
+             client_threads.push(client_thread);
+         }
 
-        for thread in client_threads {
-            assert!(thread.join().is_ok());
-        }
-        assert!(server_thread.join().is_ok());
-    } */
+         for thread in client_threads {
+             assert!(thread.join().is_ok());
+         }
+         assert!(server_thread.join().is_ok());
+     } */
 }
