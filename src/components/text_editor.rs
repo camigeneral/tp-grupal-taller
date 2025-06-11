@@ -1,7 +1,7 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::prelude::{
-    BoxExt,  OrientableExt, TextBufferExt, TextViewExt, WidgetExt,TextBufferExtManual
+    BoxExt, OrientableExt, TextBufferExt, TextBufferExtManual, TextViewExt, WidgetExt,
 };
 
 use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
@@ -72,7 +72,6 @@ impl SimpleComponent for TextEditorModel {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-
         println!("{:#?}, {:#?}", file_name, content);
         let mut model = TextEditorModel {
             file_name,
@@ -117,8 +116,7 @@ impl SimpleComponent for TextEditorModel {
             TextEditorMessage::ContentAdded(_new_text, _offset) => {
                 //Llamado a la api para insertar caracter
             }
-            TextEditorMessage::ContentRemoved(_start_offset, _end_offset) => {
-            }
+            TextEditorMessage::ContentRemoved(_start_offset, _end_offset) => {}
             TextEditorMessage::UpdateFile(file_name, contributors, content) => {
                 self.file_name = file_name;
                 self.num_contributors = contributors;

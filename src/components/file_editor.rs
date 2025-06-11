@@ -1,16 +1,14 @@
 extern crate gtk4;
 extern crate relm4;
-use self::gtk4::prelude::{
-    BoxExt, ButtonExt, OrientableExt, WidgetExt
-};
+use self::gtk4::prelude::{BoxExt, ButtonExt, OrientableExt, WidgetExt};
 use self::relm4::{
     gtk, Component, ComponentController, ComponentParts, ComponentSender, Controller,
     RelmWidgetExt, SimpleComponent,
 };
 
 use components::spreadsheet::SpreadsheetModel;
-use components::text_editor::TextEditorModel;
 use components::text_editor::TextEditorMessage;
+use components::text_editor::TextEditorModel;
 
 /// Estructura que representa el modelo del editor de archivos. Contiene información sobre el archivo
 /// que se está editando, el contenido del archivo y el estado de cambios manuales en el contenido.
@@ -107,24 +105,18 @@ impl SimpleComponent for FileEditorModel {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-
-        let spreadsheet_cont = SpreadsheetModel::builder()
-            .launch(())
-            .forward(
-                sender.input_sender(),
-                |msg| match msg {
-                    _ => FileEditorMessage::ResetEditor,
-                },
-            );
+        let spreadsheet_cont = SpreadsheetModel::builder().launch(()).forward(
+            sender.input_sender(),
+            |msg| match msg {
+                _ => FileEditorMessage::ResetEditor,
+            },
+        );
 
         let text_editor_cont = TextEditorModel::builder()
             .launch((file_name.clone(), num_contributors, content.clone()))
-            .forward(
-                sender.input_sender(),
-                |msg| match msg {
-                    _ => FileEditorMessage::ResetEditor,
-                },
-            );
+            .forward(sender.input_sender(), |msg| match msg {
+                _ => FileEditorMessage::ResetEditor,
+            });
 
         let model = FileEditorModel {
             file_name,
@@ -132,12 +124,11 @@ impl SimpleComponent for FileEditorModel {
             content,
             content_changed_manually: false,
             spreadsheet_ctrl: spreadsheet_cont,
-            text_editor_ctrl: text_editor_cont,    
+            text_editor_ctrl: text_editor_cont,
             spreadsheet_visible: false,
             text_editor_visible: true,
         };
 
-        
         let spreadsheet_widget = model.spreadsheet_ctrl.widget();
         let text_widget = model.text_editor_ctrl.widget();
         let widgets = view_output!();
@@ -149,11 +140,13 @@ impl SimpleComponent for FileEditorModel {
             FileEditorMessage::ContentAdded(_new_text, _offset) => {
                 //Llamado a la api para insertar caracter
             }
-            FileEditorMessage::ContentRemoved(_start_offset, _end_offset) => {
-            }
+            FileEditorMessage::ContentRemoved(_start_offset, _end_offset) => {}
             FileEditorMessage::UpdateFile(file_name, contributors, content) => {
-
-                let _ = self.text_editor_ctrl.emit(TextEditorMessage::UpdateFile(file_name.clone(), contributors, content.clone()));
+                let _ = self.text_editor_ctrl.emit(TextEditorMessage::UpdateFile(
+                    file_name.clone(),
+                    contributors,
+                    content.clone(),
+                ));
                 self.file_name = file_name.clone();
                 self.num_contributors = contributors;
                 self.content = content.clone();
@@ -162,8 +155,7 @@ impl SimpleComponent for FileEditorModel {
             }
             FileEditorMessage::ResetEditor => {
                 let _ = self.text_editor_ctrl.emit(TextEditorMessage::ResetEditor);
-            },
-
+            }
         }
     }
 }
