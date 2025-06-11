@@ -1,4 +1,4 @@
-use std::fs::{File};
+use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
@@ -9,7 +9,7 @@ pub enum NodeRole {
     Unknown,
 }
 
-/// Estructura que representa la instancia de nodo levantada en la consola. Contiene el puerto en el que 
+/// Estructura que representa la instancia de nodo levantada en la consola. Contiene el puerto en el que
 /// escucha nodos entrantes, el tipo (master o replica), y su hash range.
 pub struct LocalNode {
     pub port: usize,
@@ -56,13 +56,10 @@ impl LocalNode {
             }
         };
 
-        Ok(
-            LocalNode {
-                port,
-                role,
-                hash_range: (hash_range_start, hash_range_end,)
-            }
-        )
-
+        Ok(LocalNode {
+            port,
+            role,
+            hash_range: (hash_range_start, hash_range_end),
+        })
     }
 }

@@ -19,7 +19,6 @@ use components::file_editor::FileEditorMessage;
 use components::list_files::FileFilterAction;
 use components::types::FileType;
 
-
 #[derive(Debug)]
 /// Estructura principal que gestiona el espacio de trabajo de archivos, que incluye una lista de archivos
 /// y un editor de archivos. Mantiene el estado de la visibilidad del editor de archivos.
@@ -50,9 +49,8 @@ pub enum FileWorkspaceMsg {
 
 #[derive(Debug)]
 pub enum FileWorkspaceOutputMessage {
-    SubscribeFile(String)
+    SubscribeFile(String),
 }
-
 
 #[relm4::component(pub)]
 impl SimpleComponent for FileWorkspace {
@@ -137,9 +135,10 @@ impl SimpleComponent for FileWorkspace {
 
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
-
             FileWorkspaceMsg::SubscribeFile(file, _content, _qty) => {
-                sender.output(FileWorkspaceOutputMessage::SubscribeFile(file)).unwrap();
+                sender
+                    .output(FileWorkspaceOutputMessage::SubscribeFile(file))
+                    .unwrap();
             }
 
             FileWorkspaceMsg::OpenFile(file, content, qty) => {
@@ -158,7 +157,8 @@ impl SimpleComponent for FileWorkspace {
                 self.editor_visible = false;
             }
             FileWorkspaceMsg::ReloadFiles => {
-                let file_list_sender: relm4::Sender<FileFilterAction> = self.file_list_ctrl.sender().clone();
+                let file_list_sender: relm4::Sender<FileFilterAction> =
+                    self.file_list_ctrl.sender().clone();
                 let file_editor_sender = self.file_editor_ctrl.sender().clone();
 
                 let current_file = self.current_file.clone();
