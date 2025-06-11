@@ -32,8 +32,6 @@ pub struct FileWorkspace {
     editor_visible: bool,
     /// Nombre del archivo actual.
     current_file: String,
-
-    current_file_content: HashMap<String, String>,
 }
 
 /// Enum que define los diferentes mensajes que puede recibir el componente `FileWorkspace`.
@@ -128,7 +126,6 @@ impl SimpleComponent for FileWorkspace {
             file_editor_ctrl: editor_file_cont,
             editor_visible: false,
             current_file: "".to_string(),
-            current_file_content: HashMap::new(),
         };
 
         let list_box_widget = model.file_list_ctrl.widget();
