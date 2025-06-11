@@ -68,7 +68,15 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn start_server(bind_address: &str) -> std::io::Result<()> {
     let config_path = "redis.conf";
     let log_path = utils::logger::get_log_path_from_config(config_path);
-    let _ = std::fs::File::create(&log_path);
+    
+    use std::fs;
+    if fs::metadata(&log_path).map(|m| m.len() > 0).unwrap_or(false) {
+        let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_path)
+                .and_then(|mut file| writeln!(file, ""));
+    }
 
     let persistence_file = "docs.txt".to_string();
     let stored_documents = match load_persisted_data(&persistence_file) {
@@ -143,7 +151,7 @@ fn handle_new_microservice_connection(
     let client_addr = client_stream.peer_addr()?;
     println!("cliente conectado: {}", client_addr);
 
-    utils::logger::log_event(&log_path, &format!("Cliente conectado: {}", client_addr));
+    utils::logger::log_event(log_path, &format!("Cliente conectado: {}", client_addr));
 
     let client_stream_clone = client_stream.try_clone()?;
 
@@ -440,34 +448,31 @@ pub fn start_node_connection(port: usize, node_address: String) -> Result<(), st
             if connection_port != port + 10000 {
                 let node_address_to_connect = format!("127.0.0.1:{}", connection_port);
                 let peer_addr = format!("127.0.0.1:{}", connection_port);
-                match TcpStream::connect(node_address_to_connect) {
-                    Ok(stream) => {
-                        let mut cloned_stream = stream.try_clone()?;
+                if let Ok(stream) = TcpStream::connect(node_address_to_connect) {
+                    let mut cloned_stream = stream.try_clone()?;
 
-                        let message = format!(
-                            "{:?} {} {:?} {} {}\n",
-                            RedisMessage::Node,
-                            local_node.port,
-                            local_node.role,
-                            local_node.hash_range.0,
-                            local_node.hash_range.1
-                        );
+                    let message = format!(
+                        "{:?} {} {:?} {} {}\n",
+                        RedisMessage::Node,
+                        local_node.port,
+                        local_node.role,
+                        local_node.hash_range.0,
+                        local_node.hash_range.1
+                    );
 
-                        cloned_stream.write_all(message.as_bytes())?;
+                    cloned_stream.write_all(message.as_bytes())?;
 
-                        lock_peer_nodes.insert(
-                            peer_addr,
-                            peer_node::PeerNode::new(
-                                stream,
-                                connection_port,
-                                local_node::NodeRole::Unknown,
-                                None,
-                            ),
-                        );
+                    lock_peer_nodes.insert(
+                        peer_addr,
+                        peer_node::PeerNode::new(
+                            stream,
+                            connection_port,
+                            local_node::NodeRole::Unknown,
+                            None,
+                        ),
+                    );
 
-                        ()
-                    }
-                    Err(_) => {}
+                    
                 };
             }
         }
