@@ -106,7 +106,7 @@ impl SimpleComponent for FileListView {
                 gtk::Label {
                     set_label: "No hay archivos cargados. Crea uno nuevo!"
                 },
-                
+
                 #[watch]
                 set_visible: model.all_filles.len() == 0
             }
