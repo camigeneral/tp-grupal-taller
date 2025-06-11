@@ -101,6 +101,15 @@ impl SpreadsheetModel {
             let right = self.simple_calculator(&expr[pos + 1..])?;
             return Ok(left + right);
         }
+                
+        if let Some(pos) = expr.rfind('-') {
+            if pos > 0 {
+                let left = self.simple_calculator(&expr[..pos])?;
+                let right = self.simple_calculator(&expr[pos+1..])?;
+                return Ok(left - right);
+            }
+        }
+            
         expr.parse::<f64>()
             .map_err(|_| format!("Expresión inválida: {}", expr))
     }
