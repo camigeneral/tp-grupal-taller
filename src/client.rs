@@ -33,7 +33,7 @@ pub fn client_run(
     });
 
     for command in rx {
-        let trimmed_command = command.to_string().trim().to_lowercase();        
+        let trimmed_command = command.to_string().trim().to_lowercase();
         if trimmed_command == "close" {
             println!("Desconectando del servidor");
             break;
@@ -54,7 +54,7 @@ pub fn client_run(
 
 fn listen_to_redis_response(
     microservice_socket: TcpStream,
-    _ui_sender: Option<Sender<AppMsg>>,
+    ui_sender: Option<Sender<AppMsg>>,
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(microservice_socket);
     loop {
@@ -65,6 +65,9 @@ fn listen_to_redis_response(
             break;
         }
         println!("Respuesta de redis: {}", line);
+        if let Some(sender) = &ui_sender {
+            let _ = sender.send(AppMsg::RefreshData);
+        }
     }
     Ok(())
 }
