@@ -1,5 +1,4 @@
 extern crate relm4;
-use self::relm4::Sender;
 use std::io::Write;
 use std::io::{BufRead, BufReader};
 #[allow(unused_imports)]
@@ -7,7 +6,6 @@ use std::net::TcpListener;
 use std::net::TcpStream;
 #[allow(unused_imports)]
 use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
 use std::thread;
 #[allow(unused_imports)]
 use std::time::Duration;
@@ -19,8 +17,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Conectándome al server de redis en {:?}", address);
     let mut socket: TcpStream = TcpStream::connect(address)?;
 
-    let mut command = "Soy Microservicio\r\n".to_string();
-    let trimmed_command = command.trim().to_lowercase();
+    let command = "Microservicio\r\n".to_string();
 
     println!("Enviando: {:?}", command);
     let parts: Vec<&str> = command.split_whitespace().collect();
@@ -29,9 +26,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
 
     socket.write_all(resp_command.as_bytes())?;
-
-
-    
 
     let redis_socket = socket.try_clone()?;
 
@@ -42,18 +36,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     loop{
-        let mut command = String::new();
-        println!("Ingrese un comando (o 'close' para desconectar):");
-        std::io::stdin().read_line(&mut command)?;
-        let trimmed_command = command.trim().to_lowercase();
-
-        if trimmed_command == "close" {
-            println!("Desconectando del servidor");
-            break;
-        } else {
-            println!("Enviando: {:?}", command);
-            let parts: Vec<&str> = trimmed_command.split_whitespace().collect();
-        }
+        
     }
 
     Ok(())

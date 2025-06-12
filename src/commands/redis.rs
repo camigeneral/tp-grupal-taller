@@ -6,16 +6,19 @@ use super::string;
 use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use crate::client_info;
+
 
 pub fn execute_command(
     request: CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
     client_addr: String,
+    active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
 ) -> RedisResponse {
     match request.command.as_str() {
         "get" => string::handle_get(&request, docs),
-        "set" => string::handle_set(&request, docs, clients_on_docs),
+        "set" => string::handle_set(&request, docs, clients_on_docs, active_clients),
         "subscribe" => pub_sub::handle_subscribe(&request, clients_on_docs, client_addr),
         "unsubscribe" => pub_sub::handle_unsubscribe(&request, clients_on_docs, client_addr),
         "append" => string::handle_append(&request, docs),

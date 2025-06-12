@@ -24,6 +24,16 @@ pub fn client_run(
     println!("Conectándome al server de redis en {:?}", address);
     let mut socket: TcpStream = TcpStream::connect(address)?;
 
+    let command = "Cliente\r\n".to_string();
+
+    println!("Enviando: {:?}", command);
+    let parts: Vec<&str> = command.split_whitespace().collect();
+    let resp_command = format_resp_command(&parts);
+
+    println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
+
+    socket.write_all(resp_command.as_bytes())?;
+
     let redis_socket = socket.try_clone()?;
 
     thread::spawn(move || {
@@ -36,6 +46,12 @@ pub fn client_run(
         let trimmed_command = command.to_string().trim().to_lowercase();
         if trimmed_command == "close" {
             println!("Desconectando del servidor");
+            let parts: Vec<&str> = trimmed_command.split_whitespace().collect();
+            let resp_command = format_resp_command(&parts);
+
+            println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
+
+            socket.write_all(resp_command.as_bytes())?;
             break;
         } else {
             println!("Enviando: {:?}", command);

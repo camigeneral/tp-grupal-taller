@@ -87,7 +87,7 @@ fn start_server(bind_address: &str) -> std::io::Result<()> {
     for incoming_connection in tcp_listener.incoming() {
         match incoming_connection {
             Ok(client_stream) => {
-                handle_new_microservice_connection(
+                handle_new_client_connection(
                     client_stream,
                     &active_clients,
                     &document_subscribers,
@@ -125,21 +125,48 @@ fn initialize_document_subscribers(
     Arc::new(Mutex::new(subscriber_map))
 }
 
-fn handle_new_microservice_connection(
+fn handle_new_client_connection(
     mut client_stream: TcpStream,
     active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
     document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
     shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) -> std::io::Result<()> {
     let client_addr = client_stream.peer_addr()?;
-    println!("cliente conectado: {}", client_addr);
+    
+
+    let mut reader = BufReader::new(client_stream.try_clone()?);
+    let command_request = match utils::redis_parser::parse_command(&mut reader) {
+        Ok(req) => req,
+        Err(e) => {
+            println!("Error al parsear comando: {}", e);
+            utils::redis_parser::write_response(
+                &client_stream,
+                &utils::redis_parser::CommandResponse::Error("Comando inválido".to_string()),
+            )?;
+            return Ok(()); // Salir anticipadamente
+        }
+    };
+
+
+    let client_type;
+
+    if command_request.command == "microservicio" {
+        client_type = "Microservicio".to_string();
+        println!("Microservicio conectado: {}", client_addr);
+        
+
+    }else{
+        client_type = "Cliente".to_string();
+        println!("Cliente conectado: {}", client_addr);
+    }
 
     let client_stream_clone = client_stream.try_clone()?;
-
+    
     {
         let client_addr = client_addr.to_string();
         let client = client_info::Client {
             stream: client_stream_clone,
+            client_type: client_type,
         };
         let mut lock_clients = active_clients.lock().unwrap();
         lock_clients.insert(client_addr, client);
@@ -205,11 +232,18 @@ fn handle_client(
 
         println!("Comando recibido: {:?}", command_request);
 
+        if command_request.command == "microservicio" {
+            save_microservice(client_id.clone(), active_clients.clone());
+            continue; // Evita procesar esto como un comando general
+        }
+
+
         let redis_response = redis::execute_command(
             command_request,
             shared_documents.clone(),
             document_subscribers.clone(),
             client_id.clone(),
+            active_clients.clone(),
         );
 
         if redis_response.publish {
@@ -562,3 +596,18 @@ fn read_node_ports<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<usize>> {
 
     Ok(ports)
 }
+fn save_microservice(
+    client_id: String,
+    active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
+) {
+    let mut clients = active_clients.lock().unwrap();
+
+    if let Some(client) = clients.get_mut(&client_id) {
+        client.client_type = "Microservicio".to_string();
+
+        // Enviar mensaje al microservicio
+        let response = utils::redis_parser::CommandResponse::String("Microservicio Conectado".to_string());
+        let _ = utils::redis_parser::write_response(&client.stream, &response);
+    }
+}
+

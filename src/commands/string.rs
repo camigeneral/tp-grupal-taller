@@ -1,3 +1,4 @@
+use crate::client_info;
 use super::redis;
 use super::redis_response::RedisResponse;
 #[allow(unused_imports)]
@@ -52,6 +53,7 @@ pub fn handle_set(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
 ) -> RedisResponse {
     let doc_name = match &request.key {
         Some(k) => k.clone(),
@@ -77,12 +79,26 @@ pub fn handle_set(
     let content = redis::extract_string_arguments(&request.arguments);
 
     {
+        // Guardar contenido del documento
         let mut docs_lock = docs.lock().unwrap();
         docs_lock.insert(doc_name.clone(), vec![content.clone()]);
+    }
 
+    {
         let mut clients_on_docs_lock = clients_on_docs.lock().unwrap();
-        if !clients_on_docs_lock.contains_key(&doc_name) {
-            clients_on_docs_lock.insert(doc_name.clone(), Vec::new());
+        let active_clients_lock = active_clients.lock().unwrap();
+
+        // Asegurarse de que exista la entrada para el doc
+        let subscribers = clients_on_docs_lock
+            .entry(doc_name.clone())
+            .or_insert_with(Vec::new);
+
+        // Recorrer todos los microservicios y suscribirlos si no están
+        for (addr, client) in active_clients_lock.iter() {
+            if client.client_type == "Microservicio" && !subscribers.contains(addr) {
+                subscribers.push(addr.clone());
+                println!("Microservicio {} suscripto automáticamente a {}", addr, doc_name);
+            }
         }
     }
 
@@ -94,6 +110,7 @@ pub fn handle_set(
 
     RedisResponse::new(CommandResponse::Ok, true, notification, doc_name)
 }
+
 
 /// Maneja el comando APPEND para agregar contenido a un documento línea por línea.
 ///
