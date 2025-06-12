@@ -1,4 +1,5 @@
 use commands::redis;
+// use crate::microservice::subscribe_microservice_to_all_docs;
 use std::collections::HashMap;
 use std::env::args;
 use std::fs::{File, OpenOptions};
@@ -152,8 +153,12 @@ fn handle_new_client_connection(
 
     if command_request.command == "microservicio" {
         client_type = "Microservicio".to_string();
+        subscribe_microservice_to_all_docs(
+            client_addr.to_string(),
+            Arc::clone(shared_documents),
+            Arc::clone(document_subscribers),
+        );
         println!("Microservicio conectado: {}", client_addr);
-        
 
     }else{
         client_type = "Cliente".to_string();
@@ -231,11 +236,6 @@ fn handle_client(
         };
 
         println!("Comando recibido: {:?}", command_request);
-
-        if command_request.command == "microservicio" {
-            save_microservice(client_id.clone(), active_clients.clone());
-            continue; // Evita procesar esto como un comando general
-        }
 
 
         let redis_response = redis::execute_command(
@@ -610,4 +610,3 @@ fn save_microservice(
         let _ = utils::redis_parser::write_response(&client.stream, &response);
     }
 }
-

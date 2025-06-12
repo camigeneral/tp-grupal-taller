@@ -31,13 +31,23 @@ pub fn handle_subscribe(
 
     let mut map = clients_on_docs.lock().unwrap();
     if let Some(list) = map.get_mut(doc) {
-        list.push(client_addr);
+        list.push(client_addr.clone());
         RedisResponse::new(
             CommandResponse::String(format!("Subscribed to {}", doc)),
             false,
             "".to_string(),
             "".to_string(),
+        );
+
+        let notification = format!("Client {} subscribed to {}",client_addr, doc);
+
+        RedisResponse::new(
+            CommandResponse::Null,
+            true,
+            notification,
+            doc.to_string(),
         )
+
     } else {
         RedisResponse::new(
             CommandResponse::Error("Document not found".to_string()),

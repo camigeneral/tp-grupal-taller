@@ -93,11 +93,12 @@ pub fn handle_set(
             .entry(doc_name.clone())
             .or_insert_with(Vec::new);
 
-        // Recorrer todos los microservicios y suscribirlos si no están
+        // Recorrer hasta encontrar el microservicios y suscribirlo si no están
         for (addr, client) in active_clients_lock.iter() {
             if client.client_type == "Microservicio" && !subscribers.contains(addr) {
                 subscribers.push(addr.clone());
                 println!("Microservicio {} suscripto automáticamente a {}", addr, doc_name);
+                break;
             }
         }
     }
