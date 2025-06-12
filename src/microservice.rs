@@ -65,7 +65,9 @@ fn listen_to_redis_response(
             if parts.len() >= 5 {
                 let client_addr = parts[1];
 
-                let bienvenida = format!("Bienvenido client {}", client_addr);
+                let doc_name = parts[4];
+
+                let bienvenida = format!("Welcome {} {}",doc_name, client_addr);
                 
 
                 let parts: Vec<&str> = bienvenida.split_whitespace().collect();

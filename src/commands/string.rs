@@ -173,6 +173,34 @@ pub fn handle_append(
     )
 }
 
+pub fn handle_welcome(
+    request: &CommandRequest,
+    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+) -> RedisResponse {
+    let client = redis::extract_string_arguments(&request.arguments);
+
+    let doc = match &request.key {
+        Some(k) => k.clone(),
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Usage: WELCOME <client> <document>".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
+    };
+
+    let notification = format!("Welcome {} to {}", client, doc);
+
+    RedisResponse::new(
+        CommandResponse::Null,
+        true,
+        notification,
+        doc,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

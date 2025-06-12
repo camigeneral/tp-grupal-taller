@@ -596,17 +596,23 @@ fn read_node_ports<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<usize>> {
 
     Ok(ports)
 }
-fn save_microservice(
-    client_id: String,
-    active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
+
+pub fn subscribe_microservice_to_all_docs(
+    addr: String,
+    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) {
-    let mut clients = active_clients.lock().unwrap();
+    let docs_lock = docs.lock().unwrap();
+    let mut clients_on_docs_lock = clients_on_docs.lock().unwrap();
 
-    if let Some(client) = clients.get_mut(&client_id) {
-        client.client_type = "Microservicio".to_string();
+    for doc_name in docs_lock.keys() {
+        let subscribers = clients_on_docs_lock
+            .entry(doc_name.clone())
+            .or_insert_with(Vec::new);
 
-        // Enviar mensaje al microservicio
-        let response = utils::redis_parser::CommandResponse::String("Microservicio Conectado".to_string());
-        let _ = utils::redis_parser::write_response(&client.stream, &response);
+        if !subscribers.contains(&addr) {
+            subscribers.push(addr.clone());
+            println!("Microservicio {} suscripto automáticamente a {}", addr, doc_name);
+        }
     }
 }
