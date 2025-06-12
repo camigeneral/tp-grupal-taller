@@ -68,6 +68,18 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// - No se puede crear el socket TCP
 /// - Hay problemas al leer el archivo de persistencia
 fn start_server(bind_address: &str) -> std::io::Result<()> {
+    let config_path = "redis.conf";
+    let log_path = utils::logger::get_log_path_from_config(config_path);
+    
+    use std::fs;
+    if fs::metadata(&log_path).map(|m| m.len() > 0).unwrap_or(false) {
+        let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_path)
+                .and_then(|mut file| writeln!(file, ""));
+    }
+
     let persistence_file = "docs.txt".to_string();
     let stored_documents = match load_persisted_data(&persistence_file) {
         Ok(docs) => docs,
@@ -87,6 +99,8 @@ fn start_server(bind_address: &str) -> std::io::Result<()> {
     let tcp_listener = TcpListener::bind(bind_address)?;
     println!("Servidor Redis escuchando en {}", bind_address);
 
+    utils::logger::log_event(&log_path, &format!("Servidor iniciado en {}", bind_address));
+
     for incoming_connection in tcp_listener.incoming() {
         match incoming_connection {
             Ok(client_stream) => {
@@ -95,11 +109,13 @@ fn start_server(bind_address: &str) -> std::io::Result<()> {
                     &active_clients,
                     &document_subscribers,
                     &shared_documents,
-                    &shared_sets
+                    &shared_sets,
+                    &log_path,
                 )?;
             }
             Err(e) => {
                 eprintln!("Error al aceptar conexión: {}", e);
+                utils::logger::log_event(&log_path, &format!("Error al aceptar conexión: {}", e));
             }
         }
     }
@@ -135,9 +151,12 @@ fn handle_new_microservice_connection(
     document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
     shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>,
     shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    log_path: &str,
 ) -> std::io::Result<()> {
     let client_addr = client_stream.peer_addr()?;
     println!("cliente conectado: {}", client_addr);
+
+    utils::logger::log_event(log_path, &format!("Cliente conectado: {}", client_addr));
 
     let client_stream_clone = client_stream.try_clone()?;
 
@@ -155,6 +174,7 @@ fn handle_new_microservice_connection(
     let cloned_docs = Arc::clone(shared_documents);
     let cloned_sets = Arc::clone(shared_sets);
     let client_addr_str = client_addr.to_string();
+    let log_path = log_path.to_string();
 
     thread::spawn(move || {
         match handle_client(
@@ -164,12 +184,23 @@ fn handle_new_microservice_connection(
             cloned_docs,
             cloned_sets,
             client_addr_str,
+            &log_path,
         ) {
             Ok(_) => {
                 println!("Client {} disconnected.", client_addr);
+
+                utils::logger::log_event(
+                    &log_path,
+                    &format!("Cliente desconectado: {}", client_addr),
+                );
             }
             Err(e) => {
                 eprintln!("Error in connection with {}: {}", client_addr, e);
+
+                utils::logger::log_event(
+                    &log_path,
+                    &format!("Error en conexión con: {}", client_addr),
+                );
             }
         }
     });
@@ -192,6 +223,7 @@ fn handle_client(
     shared_documents: Arc<Mutex<HashMap<String, Vec<String>>>>,
     shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
     client_id: String,
+    log_path: &str,
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
 
@@ -207,11 +239,19 @@ fn handle_client(
                     stream,
                     &utils::redis_parser::CommandResponse::Error("Comando inválido".to_string()),
                 )?;
+                utils::logger::log_event(
+                    log_path,
+                    &format!("Error al parsear comando de {}: {}", client_id, e),
+                );
                 continue;
             }
         };
 
         println!("Comando recibido: {:?}", command_request);
+        utils::logger::log_event(
+            log_path,
+            &format!("Comando recibido de {}: {:?}", client_id, command_request),
+        );
 
         let redis_response = redis::execute_command(
             command_request,
@@ -235,8 +275,17 @@ fn handle_client(
         let response = redis_response.response;
         if let Err(e) = utils::redis_parser::write_response(stream, &response) {
             println!("Error al escribir respuesta: {}", e);
+            utils::logger::log_event(
+                log_path,
+                &format!("Error al escribir respuesta a {}: {}", client_id, e),
+            );
             break;
         }
+
+        utils::logger::log_event(
+            log_path,
+            &format!("Respuesta enviada a {}: {:?}", client_id, response),
+        );
 
         if let Err(e) = persist_documents(shared_documents.clone()) {
             eprintln!("Error al persistir documentos: {}", e);
@@ -408,34 +457,31 @@ pub fn start_node_connection(port: usize, node_address: String) -> Result<(), st
             if connection_port != port + 10000 {
                 let node_address_to_connect = format!("127.0.0.1:{}", connection_port);
                 let peer_addr = format!("127.0.0.1:{}", connection_port);
-                match TcpStream::connect(node_address_to_connect) {
-                    Ok(stream) => {
-                        let mut cloned_stream = stream.try_clone()?;
+                if let Ok(stream) = TcpStream::connect(node_address_to_connect) {
+                    let mut cloned_stream = stream.try_clone()?;
 
-                        let message = format!(
-                            "{:?} {} {:?} {} {}\n",
-                            RedisMessage::Node,
-                            local_node.port,
-                            local_node.role,
-                            local_node.hash_range.0,
-                            local_node.hash_range.1
-                        );
+                    let message = format!(
+                        "{:?} {} {:?} {} {}\n",
+                        RedisMessage::Node,
+                        local_node.port,
+                        local_node.role,
+                        local_node.hash_range.0,
+                        local_node.hash_range.1
+                    );
 
-                        cloned_stream.write_all(message.as_bytes())?;
+                    cloned_stream.write_all(message.as_bytes())?;
 
-                        lock_peer_nodes.insert(
-                            peer_addr,
-                            peer_node::PeerNode::new(
-                                stream,
-                                connection_port,
-                                local_node::NodeRole::Unknown,
-                                None,
-                            ),
-                        );
+                    lock_peer_nodes.insert(
+                        peer_addr,
+                        peer_node::PeerNode::new(
+                            stream,
+                            connection_port,
+                            local_node::NodeRole::Unknown,
+                            None,
+                        ),
+                    );
 
-                        ()
-                    }
-                    Err(_) => {}
+                    
                 };
             }
         }
