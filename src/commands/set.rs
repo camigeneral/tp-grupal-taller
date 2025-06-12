@@ -1,199 +1,284 @@
 use super::redis_response::RedisResponse;
 use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-/// Maneja el comando SCARD que devuelve el número de suscriptores en un documento
+/// Maneja el comando SCARD que devuelve el número de suscriptores en un set
 ///
 /// # Argumentos
-/// * `request` - La solicitud de comando que contiene el documento a consultar
-/// * `clients_on_docs` - Un mapa compartido y protegido que asocia documentos con listas de clientes suscritos
+/// * `request` - La solicitud de comando que contiene el set a consultar
+/// * `shared_sets` - Un mapa compartido y protegido que asocia sets con listas de clientes suscritos
 ///
 /// # Retorno
-/// * `RedisResponse` - La respuesta al comando con el número de suscriptores en el documento
+/// * `RedisResponse` - La respuesta al comando con el número de suscriptores en el set
 pub fn handle_scard(
     request: &CommandRequest,
-    clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> RedisResponse {
-    let doc = match &request.key {
+    // Validar que se haya pasado una clave
+    let set_key = match &request.key {
         Some(k) => k,
         None => {
             return RedisResponse::new(
-                CommandResponse::Error("Usage: SCARD <document>".to_string()),
+                CommandResponse::Error("Uso: SCARD <clave_del_set>".to_string()),
                 false,
                 "".to_string(),
                 "".to_string(),
-            )
+            );
         }
     };
 
-    let lock_clients_on_docs = clients_on_docs.lock().unwrap();
-    if let Some(subscribers) = lock_clients_on_docs.get(doc) {
-        RedisResponse::new(
+    // Intentar obtener acceso exclusivo a los sets compartidos
+    let lock_shared_sets = match shared_sets.lock() {
+        Ok(guard) => guard,
+        Err(_) => {
+            return RedisResponse::new(
+                CommandResponse::Error("No se pudo acceder al conjunto compartido".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            );
+        }
+    };
+
+    // Verificar si existe el set y obtener su tamaño
+    match lock_shared_sets.get(set_key) {
+        Some(subs) => RedisResponse::new(
             CommandResponse::String(format!(
-                "Number of subscribers in channel {}: {}",
-                doc,
-                subscribers.len()
+                "Cantidad de elementos en '{}': {}",
+                set_key,
+                subs.len()
             )),
             false,
             "".to_string(),
             "".to_string(),
-        )
-    } else {
-        RedisResponse::new(
-            CommandResponse::Error("Document not found".to_string()),
+        ),
+        None => RedisResponse::new(
+            CommandResponse::Error(format!("No existe el set '{}'", set_key)),
             false,
             "".to_string(),
             "".to_string(),
-        )
+        ),
     }
 }
 
-/// Maneja el comando SMEMBERS que lista todos los suscriptores de un documento
+
+/// Maneja el comando SMEMBERS que lista todos los suscriptores de un set
 ///
 /// # Argumentos
-/// * `request` - La solicitud de comando que contiene el documento a consultar
-/// * `clients_on_docs` - Un mapa compartido y protegido que asocia documentos con listas de clientes suscritos
+/// * `request` - La solicitud de comando que contiene el set a consultar
+/// * `shared_sets` - Un mapa compartido y protegido que asocia sets con listas de clientes suscritos
 ///
 /// # Retorno
-/// * `RedisResponse` - La respuesta al comando con la lista de suscriptores del documento
+/// * `RedisResponse` - La respuesta al comando con la lista de suscriptores del set
 pub fn handle_smembers(
     request: &CommandRequest,
-    clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> RedisResponse {
-    let doc = match &request.key {
+    let key = match &request.key {
         Some(k) => k,
         None => {
             return RedisResponse::new(
-                CommandResponse::Error("Usage: SMEMBERS <document>".to_string()),
-                false,
-                "".to_string(),
-                "".to_string(),
-            )
-        }
-    };
-
-    let lock_clients_on_docs = clients_on_docs.lock().unwrap();
-    if let Some(subscribers) = lock_clients_on_docs.get(doc) {
-        if subscribers.is_empty() {
-            return RedisResponse::new(
-                CommandResponse::String(format!("No subscribers in document {}", doc)),
+                CommandResponse::Error("Uso: SMEMBERS <key>".to_string()),
                 false,
                 "".to_string(),
                 "".to_string(),
             );
         }
+    };
 
-        let mut response = format!("Subscribers in document {}:\n", doc);
-        for subscriber in subscribers {
-            response.push_str(&format!("{}\n", subscriber));
+    let sets = shared_sets.lock().unwrap();
+    match sets.get(key) {
+        Some(set) => {
+            let members = set.iter().cloned().collect::<Vec<String>>().join(", ");
+            RedisResponse::new(
+                CommandResponse::String(format!("Miembros: {}", members)),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
         }
-        RedisResponse::new(
-            CommandResponse::String(response),
+        None => RedisResponse::new(
+            CommandResponse::Error("Set no encontrado".to_string()),
             false,
             "".to_string(),
             "".to_string(),
-        )
-    } else {
-        RedisResponse::new(
-            CommandResponse::Error("Document not found".to_string()),
-            false,
-            "".to_string(),
-            "".to_string(),
-        )
+        ),
     }
 }
 
-/// Maneja el comando SSCAN que busca suscriptores en un documento que coincidan con un patrón
+
+// /// Maneja el comando SSCAN que busca suscriptores en un set que coincidan con un patrón
+// ///
+// /// # Argumentos
+// /// * `request` - La solicitud de comando que contiene el set a consultar y opcionalmente un patrón de búsqueda
+// /// * `shared_sets` - Un mapa compartido y protegido que asocia set con listas de clientes suscritos
+// ///
+// /// # Retorno
+// /// * `RedisResponse` - La respuesta al comando con los suscriptores que coinciden con el patrón
+// pub fn handle_sscan(
+//     request: &CommandRequest,
+//     shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+// ) -> RedisResponse {
+//     let key = match &request.key {
+//         Some(k) => k,
+//         None => {
+//             return RedisResponse::new(
+//                 CommandResponse::Error("Uso: SSCAN <key> <cursor> [count N]".to_string()),
+//                 false,
+//                 "".to_string(),
+//                 "".to_string(),
+//             );
+//         }
+//     };
+
+//     let cursor: usize = request.arguments.get(0).and_then(|c| c.parse().ok()).unwrap_or(0);
+//     let count: usize = match request.arguments.iter().position(|s| s == "count") {
+//         Some(i) => request.arguments.get(i + 1).and_then(|n| n.parse().ok()).unwrap_or(10),
+//         None => 10,
+//     };
+
+//     let sets = shared_sets.lock().unwrap();
+//     match sets.get(key) {
+//         Some(set) => {
+//             let mut members: Vec<String> = set.iter().cloned().collect();
+//             members.sort(); // para que el orden sea predecible
+
+//             let end = usize::min(cursor + count, members.len());
+//             let next_cursor = if end >= members.len() { 0 } else { end };
+
+//             let slice = &members[cursor..end];
+//             let response = format!("Cursor: {}\nMiembros: {}", next_cursor, slice.join(", "));
+
+//             RedisResponse::new(
+//                 CommandResponse::String(response),
+//                 false,
+//                 "".to_string(),
+//                 "".to_string(),
+//             )
+//         }
+//         None => RedisResponse::new(
+//             CommandResponse::Error("Set no encontrado".to_string()),
+//             false,
+//             "".to_string(),
+//             "".to_string(),
+//         ),
+//     }
+// }
+
+/// Maneja el comando SREM que elimina uno o más elementos de un conjunto.
 ///
 /// # Argumentos
-/// * `request` - La solicitud de comando que contiene el documento a consultar y opcionalmente un patrón de búsqueda
-/// * `clients_on_docs` - Un mapa compartido y protegido que asocia documentos con listas de clientes suscritos
+/// * `request` - La solicitud del comando que contiene la clave del conjunto y los elementos a eliminar.
+/// * `shared_sets` - Un mapa compartido y protegido que asocia claves con conjuntos de elementos (`HashSet<String>`).
 ///
 /// # Retorno
-/// * `RedisResponse` - La respuesta al comando con los suscriptores que coinciden con el patrón
-pub fn handle_sscan(
+/// * `RedisResponse` - La respuesta al comando indicando cuántos elementos fueron eliminados.
+pub fn handle_srem(
     request: &CommandRequest,
-    clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> RedisResponse {
-    let doc = match &request.key {
+    let key = match &request.key {
         Some(k) => k,
         None => {
             return RedisResponse::new(
-                CommandResponse::Error("Usage: SSCAN <document> [pattern]".to_string()),
-                false,
-                "".to_string(),
-                "".to_string(),
-            )
-        }
-    };
-
-    let pattern = if !request.arguments.is_empty() {
-        match &request.arguments[0] {
-            ValueType::String(s) => s,
-            ValueType::Integer(i) => {
-                return RedisResponse::new(
-                    CommandResponse::Error(format!("Expected string pattern, got integer: {}", i)),
-                    false,
-                    "".to_string(),
-                    "".to_string(),
-                )
-            }
-            _ => {
-                return RedisResponse::new(
-                    CommandResponse::Error("Pattern must be a string".to_string()),
-                    false,
-                    "".to_string(),
-                    "".to_string(),
-                )
-            }
-        }
-    } else {
-        ""
-    };
-
-    let lock_clients_on_docs = clients_on_docs.lock().unwrap();
-    if let Some(subscribers) = lock_clients_on_docs.get(doc) {
-        let matching_subscribers: Vec<&String> =
-            subscribers.iter().filter(|s| s.contains(pattern)).collect();
-
-        if matching_subscribers.is_empty() {
-            return RedisResponse::new(
-                CommandResponse::String(format!(
-                    "No subscribers matching '{}' in document {}",
-                    pattern, doc
-                )),
+                CommandResponse::Error("Uso: SREM <key> <member1> [member2 ...]".to_string()),
                 false,
                 "".to_string(),
                 "".to_string(),
             );
         }
+    };
 
-        let mut response = format!("Subscribers in {} matching '{}':\n", doc, pattern);
-        for subscriber in matching_subscribers {
-            response.push_str(&format!("{}\n", subscriber));
+    let mut sets = shared_sets.lock().unwrap();
+    match sets.get_mut(key) {
+        Some(set) => {
+            let mut removed = 0;
+            for arg in &request.arguments {
+                if let Some(arg_str) = extract_string(arg) {
+                    if set.remove(&arg_str) {
+                        removed += 1;
+                    }
+                }
+            }
+
+            RedisResponse::new(
+                CommandResponse::String(format!("{} miembro(s) eliminado(s)", removed)),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
         }
-        RedisResponse::new(
-            CommandResponse::String(response),
+        None => RedisResponse::new(
+            CommandResponse::Error("Set no encontrado".to_string()),
             false,
             "".to_string(),
             "".to_string(),
-        )
-    } else {
-        RedisResponse::new(
-            CommandResponse::Error("Document not found".to_string()),
-            false,
-            "".to_string(),
-            "".to_string(),
-        )
+        ),
     }
 }
+
+/// Maneja el comando SADD que agrega uno o más elementos a un conjunto.
+///
+/// # Argumentos
+/// * `request` - La solicitud del comando que contiene la clave del conjunto y los elementos a agregar.
+/// * `shared_sets` - Un mapa compartido y protegido que asocia claves con conjuntos de elementos (`HashSet<String>`).
+///
+/// # Retorno
+/// * `RedisResponse` - La respuesta al comando indicando cuántos elementos fueron agregados.
+
+pub fn handle_sadd(
+    request: &CommandRequest,
+    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+) -> RedisResponse {
+    let key = match &request.key {
+        Some(k) => k,
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Uso: SADD <key> <member1> [member2 ...]".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            );
+        }
+    };
+
+    let mut sets = shared_sets.lock().unwrap();
+    let set = sets.entry(key.clone()).or_insert_with(HashSet::new);
+
+    let mut added = 0;
+    for arg in &request.arguments {
+        if let Some(arg_str) = extract_string(arg) {
+            if set.insert(arg_str) {
+                added += 1;
+            }
+        }
+    }
+
+
+    RedisResponse::new(
+        CommandResponse::String(format!("{} miembro(s) agregado(s)", added)),
+        false,
+        "".to_string(),
+        "".to_string(),
+    )
+}
+
+fn extract_string(value: &ValueType) -> Option<String> {
+    match value {
+        ValueType::String(s) => Some(s.clone()),
+        ValueType::Integer(i) => Some(i.to_string()),
+        _ => None, // Podés ampliar los casos si necesitás
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn setup_clients_on_docs() -> Arc<Mutex<HashMap<String, Vec<String>>>> {
+    fn setup_clients_on_sets() -> Arc<Mutex<HashMap<String, HashSet<String>>>> {
         let mut map = HashMap::new();
         map.insert(
             "doc1".to_string(),
@@ -205,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_handle_scard_ok() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SCARD".to_string(),
             key: Some("doc1".to_string()),
@@ -222,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_handle_scard_no_key() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SCARD".to_string(),
             key: None,
@@ -237,7 +322,7 @@ mod tests {
 
     #[test]
     fn test_handle_scard_doc_not_found() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SCARD".to_string(),
             key: Some("docX".to_string()),
@@ -252,7 +337,7 @@ mod tests {
 
     #[test]
     fn test_handle_smembers_ok() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SMEMBERS".to_string(),
             key: Some("doc1".to_string()),
@@ -271,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_handle_smembers_empty() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SMEMBERS".to_string(),
             key: Some("doc2".to_string()),
@@ -286,7 +371,7 @@ mod tests {
 
     #[test]
     fn test_handle_smembers_no_key() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SMEMBERS".to_string(),
             key: None,
@@ -301,7 +386,7 @@ mod tests {
 
     #[test]
     fn test_handle_smembers_doc_not_found() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SMEMBERS".to_string(),
             key: Some("docX".to_string()),
@@ -316,7 +401,7 @@ mod tests {
 
     #[test]
     fn test_handle_sscan_pattern_found() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SSCAN".to_string(),
             key: Some("doc1".to_string()),
@@ -331,7 +416,7 @@ mod tests {
 
     #[test]
     fn test_handle_sscan_pattern_not_found() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SSCAN".to_string(),
             key: Some("doc1".to_string()),
@@ -346,7 +431,7 @@ mod tests {
 
     #[test]
     fn test_handle_sscan_no_pattern() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SSCAN".to_string(),
             key: Some("doc1".to_string()),
@@ -365,7 +450,7 @@ mod tests {
 
     #[test]
     fn test_handle_sscan_pattern_wrong_type() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SSCAN".to_string(),
             key: Some("doc1".to_string()),
@@ -380,7 +465,7 @@ mod tests {
 
     #[test]
     fn test_handle_sscan_no_key() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SSCAN".to_string(),
             key: None,
@@ -395,7 +480,7 @@ mod tests {
 
     #[test]
     fn test_handle_sscan_doc_not_found() {
-        let clients = setup_clients_on_docs();
+        let clients = setup_clients_on_sets();
         let req = CommandRequest {
             command: "SSCAN".to_string(),
             key: Some("docX".to_string()),
