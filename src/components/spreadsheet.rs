@@ -101,23 +101,24 @@ impl SpreadsheetModel {
             let right = self.simple_calculator(&expr[pos + 1..])?;
             return Ok(left + right);
         }
-                
-        if let Some(pos) = expr.rfind('-') { //TODO: arreglar manejo de negativos 
+
+        if let Some(pos) = expr.rfind('-') {
+            //TODO: arreglar manejo de negativos
             if pos > 0 {
                 let left = self.simple_calculator(&expr[..pos])?;
-                let right = self.simple_calculator(&expr[pos+1..])?;
+                let right = self.simple_calculator(&expr[pos + 1..])?;
                 return Ok(left - right);
             }
         }
         if let Some(pos) = expr.rfind('*') {
             let left = self.simple_calculator(&expr[..pos])?;
-            let right = self.simple_calculator(&expr[pos+1..])?;
+            let right = self.simple_calculator(&expr[pos + 1..])?;
             return Ok(left * right);
         }
-        
+
         if let Some(pos) = expr.rfind('/') {
             let left = self.simple_calculator(&expr[..pos])?;
-            let right = self.simple_calculator(&expr[pos+1..])?;
+            let right = self.simple_calculator(&expr[pos + 1..])?;
             if right == 0.0 {
                 return Err("División por cero".to_string());
             }
@@ -281,7 +282,7 @@ impl SimpleComponent for SpreadsheetModel {
                 sender
                     .output(SpreadsheetOutput::ContentChanged(
                         cell_name,
-                        self.cells[row][col].display_text.clone()
+                        self.cells[row][col].display_text.clone(),
                     ))
                     .unwrap();
             }
