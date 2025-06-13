@@ -8,16 +8,11 @@ pub struct PeerNode {
     pub stream: TcpStream,
     pub port: usize,
     pub role: NodeRole,
-    pub hash_range: Option<(usize, usize)>,
+    pub hash_range: (usize, usize),
 }
 
 impl PeerNode {
-    pub fn new(
-        stream: TcpStream,
-        port: usize,
-        role: NodeRole,
-        hash_range: Option<(usize, usize)>,
-    ) -> Self {
+    pub fn new(stream: TcpStream, port: usize, role: NodeRole, hash_range: (usize, usize)) -> Self {
         PeerNode {
             stream,
             port,
