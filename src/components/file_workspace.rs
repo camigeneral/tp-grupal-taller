@@ -29,7 +29,7 @@ pub struct FileWorkspace {
     file_editor_ctrl: Controller<FileEditorModel>,
     /// Bandera que indica si el editor de archivos está visible.
     editor_visible: bool,
-
+    /// Nombre del archivo actual.
     current_file: String,
 }
 
@@ -118,6 +118,7 @@ impl SimpleComponent for FileWorkspace {
                     FileEditorOutputMessage::GoBack => FileWorkspaceMsg::CloseEditor,
                 },
             );
+
         let model = FileWorkspace {
             file_list_ctrl: list_files_cont,
             file_editor_ctrl: editor_file_cont,
@@ -134,7 +135,7 @@ impl SimpleComponent for FileWorkspace {
 
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
-            FileWorkspaceMsg::SubscribeFile(file, content, qty) => {
+            FileWorkspaceMsg::SubscribeFile(file, _content, _qty) => {
                 sender
                     .output(FileWorkspaceOutputMessage::SubscribeFile(file))
                     .unwrap();

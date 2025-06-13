@@ -1,24 +1,37 @@
 extern crate gtk4;
 extern crate relm4;
-use self::gtk4::prelude::{
-    BoxExt, ButtonExt, OrientableExt, TextBufferExt, TextBufferExtManual, TextViewExt, WidgetExt,
+use self::gtk4::prelude::{BoxExt, ButtonExt, OrientableExt, WidgetExt};
+use self::relm4::{
+    gtk, Component, ComponentController, ComponentParts, ComponentSender, Controller,
+    RelmWidgetExt, SimpleComponent,
 };
 
-use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
+use components::spreadsheet::SpreadsheetModel;
+use components::text_editor::TextEditorMessage;
+use components::text_editor::TextEditorModel;
 
 /// Estructura que representa el modelo del editor de archivos. Contiene información sobre el archivo
 /// que se está editando, el contenido del archivo y el estado de cambios manuales en el contenido.
 #[derive(Debug)]
 pub struct FileEditorModel {
+    /// Controlador para el modelo de la hoja de cálculo.
+    spreadsheet_ctrl: Controller<SpreadsheetModel>,
+
+    /// Bandera que indica si la hoja de cálculo está visible.
+    spreadsheet_visible: bool,
+
+    /// Controlador para el modelo del editor de texto.
+    text_editor_ctrl: Controller<TextEditorModel>,
+
+    /// Bandera que indica si el editor de texto está visible.
+    text_editor_visible: bool,
+
     /// Nombre del archivo que se está editando.
     file_name: String,
     /// Número de colaboradores que están trabajando en el archivo.
     num_contributors: u8,
     /// Contenido del archivo.
     content: String,
-    /// Buffer de texto usado para mostrar el contenido en el editor.
-    buffer: gtk::TextBuffer,
-    /// Indica si el contenido del archivo ha sido modificado manualmente en el editor.
     content_changed_manually: bool,
 }
 
@@ -69,25 +82,20 @@ impl SimpleComponent for FileEditorModel {
                     set_label: &format!("Editando archivo: {}", model.file_name),
                     set_xalign: 0.0,
                 },
-                gtk::Button {
-                    set_label: "Desuscribirse",
-                    add_css_class: "unsubscribe",
-                    add_css_class: "button",
-                },
             },
-            gtk::ScrolledWindow {
-                set_vexpand: true,
-                #[wrap(Some)]
-                #[name="textview"]
-                set_child = &gtk::TextView {
-                    set_buffer: Some(&model.buffer),
-                    add_css_class: "file-text-area",
-                    set_visible: true,
+            #[local_ref]
+            spreadsheet_widget -> gtk::Box {
+                set_orientation: gtk::Orientation::Vertical,
+                #[watch]
+                set_visible: model.spreadsheet_visible
+            },
 
-                    set_wrap_mode: gtk::WrapMode::Word,
-                    set_overwrite: true,
-                },
-            }
+            #[local_ref]
+            text_widget -> gtk::Box {
+                set_orientation: gtk::Orientation::Vertical,
+                #[watch]
+                set_visible: model.text_editor_visible
+            },
         }
     }
 
@@ -96,40 +104,32 @@ impl SimpleComponent for FileEditorModel {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let mut model = FileEditorModel {
+        let spreadsheet_cont = SpreadsheetModel::builder().launch(()).forward(
+            sender.input_sender(),
+            |msg| match msg {
+                _ => FileEditorMessage::ResetEditor,
+            },
+        );
+
+        let text_editor_cont = TextEditorModel::builder()
+            .launch((file_name.clone(), num_contributors, content.clone()))
+            .forward(sender.input_sender(), |msg| match msg {
+                _ => FileEditorMessage::ResetEditor,
+            });
+
+        let model = FileEditorModel {
             file_name,
             num_contributors,
             content,
             content_changed_manually: false,
-            buffer: gtk::TextBuffer::new(None),
+            spreadsheet_ctrl: spreadsheet_cont,
+            text_editor_ctrl: text_editor_cont,
+            spreadsheet_visible: false,
+            text_editor_visible: true,
         };
 
-        model.buffer = gtk::TextBuffer::builder().text(&model.content).build();
-
-        let sender = sender.clone();
-
-        // Pensar como hacer para que al resetear no mande el mensaje a la api para borrar el contenido
-
-        let sender_insert = sender.clone();
-        model
-            .buffer
-            .connect_insert_text(move |_buffer, iter, text| {
-                sender_insert.input(FileEditorMessage::ContentAdded(
-                    text.to_string(),
-                    iter.offset(),
-                ));
-            });
-
-        let sender_delete = sender.clone();
-        model
-            .buffer
-            .connect_delete_range(move |_buffer, start, end| {
-                sender_delete.input(FileEditorMessage::ContentRemoved(
-                    start.offset(),
-                    end.offset(),
-                ));
-            });
-
+        let spreadsheet_widget = model.spreadsheet_ctrl.widget();
+        let text_widget = model.text_editor_ctrl.widget();
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }
@@ -141,17 +141,19 @@ impl SimpleComponent for FileEditorModel {
             }
             FileEditorMessage::ContentRemoved(_start_offset, _end_offset) => {}
             FileEditorMessage::UpdateFile(file_name, contributors, content) => {
-                self.file_name = file_name;
+                let _ = self.text_editor_ctrl.emit(TextEditorMessage::UpdateFile(
+                    file_name.clone(),
+                    contributors,
+                    content.clone(),
+                ));
+                self.file_name = file_name.clone();
                 self.num_contributors = contributors;
-                self.content = content;
-                self.buffer.set_text(&self.content);
+                self.content = content.clone();
+
                 self.content_changed_manually = true;
             }
             FileEditorMessage::ResetEditor => {
-                self.buffer.set_text("");
-                self.content.clear();
-                self.file_name.clear();
-                self.num_contributors = 0;
+                let _ = self.text_editor_ctrl.emit(TextEditorMessage::ResetEditor);
             }
         }
     }

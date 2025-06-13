@@ -1,6 +1,7 @@
 use commands::redis;
 use local_node::LocalNode;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::env::args;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write};
@@ -73,11 +74,23 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Retorna un error si:
 /// - No se puede crear el socket TCP
 /// - Hay problemas al leer el archivo de persistencia
-fn start_server(
+fn start_server(    
     bind_address: &str,
     local_node: Arc<Mutex<LocalNode>>,
     peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
 ) -> std::io::Result<()> {
+    let config_path = "redis.conf";
+    let log_path = utils::logger::get_log_path_from_config(config_path);
+    
+    use std::fs;
+    if fs::metadata(&log_path).map(|m| m.len() > 0).unwrap_or(false) {
+        let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_path)
+                .and_then(|mut file| writeln!(file, ""));
+    }
+
     let persistence_file = "docs.txt".to_string();
     let stored_documents = match load_persisted_data(&persistence_file) {
         Ok(docs) => docs,
@@ -88,6 +101,7 @@ fn start_server(
     };
 
     // Inicializar estructuras de datos compartidas
+    let shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>> = Arc::new(Mutex::new(HashMap::new()));
     let shared_documents = Arc::new(Mutex::new(stored_documents.clone()));
     let document_subscribers = initialize_document_subscribers(&stored_documents);
     let active_clients = Arc::new(Mutex::new(HashMap::new()));
@@ -95,6 +109,8 @@ fn start_server(
     // Iniciar servidor TCP
     let tcp_listener = TcpListener::bind(bind_address)?;
     println!("Servidor Redis escuchando en {}", bind_address);
+
+    utils::logger::log_event(&log_path, &format!("Servidor iniciado en {}", bind_address));
 
     for incoming_connection in tcp_listener.incoming() {
         match incoming_connection {
@@ -106,10 +122,13 @@ fn start_server(
                     &shared_documents,
                     &local_node,
                     &peer_nodes,
+                    &shared_sets,
+                    &log_path,
                 )?;
             }
             Err(e) => {
                 eprintln!("Error al aceptar conexión: {}", e);
+                utils::logger::log_event(&log_path, &format!("Error al aceptar conexión: {}", e));
             }
         }
     }
@@ -146,9 +165,13 @@ fn handle_new_microservice_connection(
     shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>,
     local_node: &Arc<Mutex<LocalNode>>,
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
+    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    log_path: &str,
 ) -> std::io::Result<()> {
     let client_addr = client_stream.peer_addr()?;
     println!("cliente conectado: {}", client_addr);
+
+    utils::logger::log_event(log_path, &format!("Cliente conectado: {}", client_addr));
 
     let client_stream_clone = client_stream.try_clone()?;
 
@@ -164,9 +187,11 @@ fn handle_new_microservice_connection(
     let cloned_clients = Arc::clone(active_clients);
     let cloned_clients_on_docs = Arc::clone(document_subscribers);
     let cloned_docs = Arc::clone(shared_documents);
+    let cloned_sets = Arc::clone(shared_sets);
     let client_addr_str = client_addr.to_string();
     let cloned_node = Arc::clone(local_node);
     let cloned_peer_nodes = Arc::clone(peer_nodes);
+    let log_path = log_path.to_string();
 
     thread::spawn(move || {
         match handle_client(
@@ -174,15 +199,27 @@ fn handle_new_microservice_connection(
             cloned_clients,
             cloned_clients_on_docs,
             cloned_docs,
+            cloned_sets,
             client_addr_str,
             cloned_node,
             cloned_peer_nodes,
+            &log_path,
         ) {
             Ok(_) => {
                 println!("Client {} disconnected.", client_addr);
+
+                utils::logger::log_event(
+                    &log_path,
+                    &format!("Cliente desconectado: {}", client_addr),
+                );
             }
             Err(e) => {
                 eprintln!("Error in connection with {}: {}", client_addr, e);
+
+                utils::logger::log_event(
+                    &log_path,
+                    &format!("Error en conexión con: {}", client_addr),
+                );
             }
         }
     });
@@ -203,9 +240,11 @@ fn handle_client(
     active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
     document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
     shared_documents: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
     client_id: String,
     local_node: Arc<Mutex<LocalNode>>,
     peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
+    log_path: &str,
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
 
@@ -229,11 +268,23 @@ fn handle_client(
             };
 
         println!("Comando recibido: {:?}", command_request);
+        utils::logger::log_event(
+            log_path,
+            &format!("Comando recibido de {}: {:?}", client_id, command_request),
+        );
 
         let key = match &command_request.key {
             Some(k) => k.clone(),
             None => {
                 println!("No key found");
+                utils::redis_parser::write_response(
+                    stream,
+                    &utils::redis_parser::CommandResponse::Error("Comando inválido".to_string()),
+                )?;
+                utils::logger::log_event(
+                    log_path,
+                    &format!("Error al parsear comando de {}: No se encontro la key", client_id),
+                );
                 continue;
             }
         };
@@ -244,6 +295,7 @@ fn handle_client(
                     command_request,
                     shared_documents.clone(),
                     document_subscribers.clone(),
+                    shared_sets.clone(),
                     client_id.clone(),
                 );
 
@@ -265,8 +317,17 @@ fn handle_client(
 
         if let Err(e) = utils::redis_parser::write_response(stream, &response) {
             println!("Error al escribir respuesta: {}", e);
+            utils::logger::log_event(
+                log_path,
+                &format!("Error al escribir respuesta a {}: {}", client_id, e),
+            );
             break;
         }
+
+        utils::logger::log_event(
+            log_path,
+            &format!("Respuesta enviada a {}: {:?}", client_id, response),
+        );
 
         if let Err(e) = persist_documents(shared_documents.clone()) {
             eprintln!("Error al persistir documentos: {}", e);

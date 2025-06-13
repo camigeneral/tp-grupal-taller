@@ -5,6 +5,8 @@ use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+
+
 pub fn handle_get(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
@@ -38,20 +40,20 @@ pub fn handle_get(
 /// - Si no se especifica documento o contenido, devuelve un error.
 /// - Si el documento existe, lo sobreescribe.
 /// - Si no existe, lo crea.
-/// - Registra el documento en el mapa de `clients_on_docs` para futuras suscripciones.
+/// - Registra el documento en el mapa de `document_subscribers` para futuras suscripciones.
 /// - Publica una notificación para los clientes suscritos.
 ///
 /// # Parámetros
 /// - `request`: contiene el documento y los argumentos (contenido).
 /// - `docs`: referencia a la base de documentos compartida.
-/// - `clients_on_docs`: referencia a la tabla de suscriptores.
+/// - `document_subscribers`: referencia a la tabla de suscriptores.
 ///
 /// # Retorna
 /// - `RedisResponse::Ok` con notificación activa y nombre del documento.
 pub fn handle_set(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) -> RedisResponse {
     let doc_name = match &request.key {
         Some(k) => k.clone(),
@@ -80,9 +82,9 @@ pub fn handle_set(
         let mut docs_lock = docs.lock().unwrap();
         docs_lock.insert(doc_name.clone(), vec![content.clone()]);
 
-        let mut clients_on_docs_lock = clients_on_docs.lock().unwrap();
-        if !clients_on_docs_lock.contains_key(&doc_name) {
-            clients_on_docs_lock.insert(doc_name.clone(), Vec::new());
+        let mut document_subscribers_lock = document_subscribers.lock().unwrap();
+        if !document_subscribers_lock.contains_key(&doc_name) {
+            document_subscribers_lock.insert(doc_name.clone(), Vec::new());
         }
     }
 
@@ -144,7 +146,8 @@ pub fn handle_append(
         line_number = entry.len();
     }
 
-    let notification = format!("New content in {}: {}", doc, content);
+    // let notification = format!("New content in {}: {} L{}", doc, content, line_number);
+    let notification = format!("L{}: {} ", line_number,content);
     println!("Publishing to subscribers of {}: {}", doc, notification);
 
     RedisResponse::new(

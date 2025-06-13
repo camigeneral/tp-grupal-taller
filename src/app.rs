@@ -240,7 +240,7 @@ impl SimpleComponent for AppModel {
             }
             AppMsg::CommandChanged(command) => self.command = command,
 
-            AppMsg::CreateFile(file_id, content) => {
+            AppMsg::CreateFile(_file_id, _content) => {
                 /* println!("Se ejecuto el siguiente comando: {:#?}", self.command);
                 if let Some(channel_sender) = &self.command_sender {
                     if let Err(e) = channel_sender.send(ClientCommand::CreateFile{ file_id, content }) {
@@ -251,7 +251,7 @@ impl SimpleComponent for AppModel {
                 } */
             }
 
-            AppMsg::SubscribeFile(file) => {
+            AppMsg::SubscribeFile(_file) => {
                 /* if let Some(channel_sender) = &self.command_sender {
                     if let Err(e) = channel_sender.send("SUBSCRIBE ".to_string() + &file) {
                         println!("Error enviando comando: {}", e);

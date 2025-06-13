@@ -18,6 +18,10 @@ microservice:
 client: 
 	cargo run --bin client
 
+
+clean_redis:
+	pkill -f "redis_server" || true
+
 clean:
 	rm -rf target
 	pkill -f "redis_server" || true
