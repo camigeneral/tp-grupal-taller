@@ -1,8 +1,1 @@
-text125681/++/nuevo/--/
-text831423/++/nuevo/--/
-text8248/++/nuevo/--/
-text326769/++/nuevo/--/
-text347057/++/nuevo/--/
-text996907/++/nuevo/--/
-doc2/++/hola/--/
-doc1/++/hola/--/hola/--/hola/--/hola/--/
+doc1/++/hola/--/

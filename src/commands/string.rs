@@ -6,6 +6,8 @@ use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+
+
 pub fn handle_get(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
@@ -39,20 +41,20 @@ pub fn handle_get(
 /// - Si no se especifica documento o contenido, devuelve un error.
 /// - Si el documento existe, lo sobreescribe.
 /// - Si no existe, lo crea.
-/// - Registra el documento en el mapa de `clients_on_docs` para futuras suscripciones.
+/// - Registra el documento en el mapa de `document_subscribers` para futuras suscripciones.
 /// - Publica una notificación para los clientes suscritos.
 ///
 /// # Parámetros
 /// - `request`: contiene el documento y los argumentos (contenido).
 /// - `docs`: referencia a la base de documentos compartida.
-/// - `clients_on_docs`: referencia a la tabla de suscriptores.
+/// - `document_subscribers`: referencia a la tabla de suscriptores.
 ///
 /// # Retorna
 /// - `RedisResponse::Ok` con notificación activa y nombre del documento.
 pub fn handle_set(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
     active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
 ) -> RedisResponse {
     let doc_name = match &request.key {
@@ -85,11 +87,11 @@ pub fn handle_set(
     }
 
     {
-        let mut clients_on_docs_lock = clients_on_docs.lock().unwrap();
+        let mut document_subscribers_lock = document_subscribers.lock().unwrap();
         let active_clients_lock = active_clients.lock().unwrap();
 
         // Asegurarse de que exista la entrada para el doc
-        let subscribers = clients_on_docs_lock
+        let subscribers = document_subscribers_lock
             .entry(doc_name.clone())
             .or_insert_with(Vec::new);
 
@@ -162,7 +164,8 @@ pub fn handle_append(
         line_number = entry.len();
     }
 
-    let notification = format!("New content in {}: {}", doc, content);
+    // let notification = format!("New content in {}: {} L{}", doc, content, line_number);
+    let notification = format!("L{}: {} ", line_number,content);
     println!("Publishing to subscribers of {}: {}", doc, notification);
 
     RedisResponse::new(
@@ -261,7 +264,7 @@ mod tests {
             key: Some("doc2".to_string()),
             arguments: vec![ValueType::String("hello world".to_string())],
         };
-        let resp = handle_set(&req, docs.clone(), clients.clone());
+        let resp = handle_set(&req, docs.clone(), clients.clone(), Arc::new(Mutex::new(HashMap::new())));
         assert_eq!(resp.response, CommandResponse::Ok);
         let docs_guard = docs.lock().unwrap();
         assert_eq!(
@@ -281,7 +284,7 @@ mod tests {
             key: None,
             arguments: vec![ValueType::String("something".to_string())],
         };
-        let resp = handle_set(&req, docs, clients);
+        let resp = handle_set(&req, docs, clients, Arc::new(Mutex::new(HashMap::new())));
         assert!(matches!(resp.response, CommandResponse::Error(_)));
     }
 
@@ -294,7 +297,7 @@ mod tests {
             key: Some("doc3".to_string()),
             arguments: vec![],
         };
-        let resp = handle_set(&req, docs, clients);
+        let resp = handle_set(&req, docs, clients, Arc::new(Mutex::new(HashMap::new())));
         assert!(matches!(resp.response, CommandResponse::Error(_)));
     }
 

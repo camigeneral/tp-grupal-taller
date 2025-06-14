@@ -5,6 +5,7 @@ use super::set;
 use super::string;
 use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use crate::client_info;
 
@@ -12,26 +13,29 @@ use crate::client_info;
 pub fn execute_command(
     request: CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
     client_addr: String,
     active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
 ) -> RedisResponse {
     match request.command.as_str() {
         "get" => string::handle_get(&request, docs),
-        "set" => string::handle_set(&request, docs, clients_on_docs, active_clients),
-        "subscribe" => pub_sub::handle_subscribe(&request, clients_on_docs, client_addr),
-        "unsubscribe" => pub_sub::handle_unsubscribe(&request, clients_on_docs, client_addr),
+        "set" => string::handle_set(&request, docs, document_subscribers, active_clients),
+        "subscribe" => pub_sub::handle_subscribe(&request, document_subscribers, client_addr),
+        "unsubscribe" => pub_sub::handle_unsubscribe(&request, document_subscribers, client_addr),
         "append" => string::handle_append(&request, docs),
-        "scard" => set::handle_scard(&request, clients_on_docs),
-        "smembers" => set::handle_smembers(&request, clients_on_docs),
-        "sscan" => set::handle_sscan(&request, clients_on_docs),
+        "scard" => set::handle_scard(&request, shared_sets),
+        "smembers" => set::handle_smembers(&request, shared_sets),
+        // "sscan" => set::handle_sscan(&request, shared_sets),
+        "sadd" => set::handle_sadd(&request, shared_sets),
+        "srem" => set::handle_srem(&request, shared_sets),
         "llen" => list::handle_llen(&request, docs),
         "rpush" => list::handle_rpush(&request, docs),
         "lset" => list::handle_lset(&request, docs),
         "linsert" => list::handle_linsert(&request, docs),
         "welcome" => string::handle_welcome(&request, docs),
         _ => RedisResponse::new(
-            CommandResponse::Error("Unkown".to_string()),
+            CommandResponse::Error("Unknown".to_string()),
             false,
             "".to_string(),
             "".to_string(),

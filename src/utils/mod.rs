@@ -1,3 +1,4 @@
+pub mod logger;
 /// Módulo encargado de parsear comandos y respuestas en formato RESP.
 ///
 /// Implementa funciones y tipos para interpretar comandos entrantes,

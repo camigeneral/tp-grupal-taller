@@ -32,7 +32,6 @@ pub struct FileEditorModel {
     num_contributors: u8,
     /// Contenido del archivo.
     content: String,
-
     content_changed_manually: bool,
 }
 
