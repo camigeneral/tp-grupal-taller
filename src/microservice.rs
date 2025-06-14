@@ -9,9 +9,25 @@ use std::sync::mpsc;
 use std::thread;
 #[allow(unused_imports)]
 use std::time::Duration;
+use std::env::args;
+
+
+static REQUIRED_ARGS: usize = 2;
+
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let redis_port = 4000;
+    let cli_args: Vec<String> = args().collect();
+    if cli_args.len() != REQUIRED_ARGS {
+        eprintln!("Error: Cantidad de argumentos inválida");
+        eprintln!("Uso: {} <puerto>", cli_args[0]);
+        return Err("Error: Cantidad de argumentos inválida".into());
+    }
+
+    let redis_port = match cli_args[1].parse::<usize>() {
+        Ok(n) => n,
+        Err(_e) => return Err("Failed to parse arguments".into()),
+    };
+
     let address = format!("127.0.0.1:{}", redis_port);
 
     println!("Conectándome al server de redis en {:?}", address);
@@ -53,9 +69,7 @@ fn listen_to_redis_response(
 
         println!("Respuesta de redis: {}", line);
 
-        // Detectar mensaje de subscripción
         if line.starts_with("Client ") && line.contains(" subscribed to ") {
-            // Parsear "Client <addr> subscribed to <doc>"
             let parts: Vec<&str> = line.trim().split_whitespace().collect();
             if parts.len() >= 5 {
                 let client_addr = parts[1];
@@ -67,7 +81,6 @@ fn listen_to_redis_response(
 
                 let parts: Vec<&str> = bienvenida.split_whitespace().collect();
 
-                // Enviar mensaje al canal del documento
                 let mensaje_final = format_resp_command(&parts);
 
                 if let Err(e) = microservice_socket.write_all(mensaje_final.as_bytes()) {
@@ -79,7 +92,6 @@ fn listen_to_redis_response(
     Ok(())
 }
 
-
 pub fn format_resp_command(command_parts: &[&str]) -> String {
     let mut resp_message = format!("*{}\r\n", command_parts.len());
 
@@ -89,35 +101,3 @@ pub fn format_resp_command(command_parts: &[&str]) -> String {
 
     resp_message
 }
-
-
-
-// fn handle_user_subscribed_event(
-//     doc_name: &str,
-//     user_addr: &str,
-//     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-//     clients_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
-// ) {
-//     // Obtener lista de suscriptores al documento
-//     let subscribers = {
-//         let lock = clients_on_docs.lock().unwrap();
-//         lock.get(doc_name).cloned().unwrap_or_default()
-//     };
-
-//     // Formatear mensaje
-//     let msg = format!(
-//         "Suscriptores actuales al documento '{}': {:?}",
-//         doc_name, subscribers
-//     );
-
-//     // Enviar mensaje al usuario que se suscribió
-//     let mut streams_lock = clients_streams.lock().unwrap();
-//     if let Some(mut stream) = streams_lock.get_mut(user_addr) {
-//         use std::io::Write;
-//         if let Err(e) = stream.write_all(msg.as_bytes()) {
-//             eprintln!("Error al enviar lista de suscriptores a {}: {}", user_addr, e);
-//         }
-//     } else {
-//         eprintln!("No se encontró conexión TCP para {}", user_addr);
-//     }
-// }

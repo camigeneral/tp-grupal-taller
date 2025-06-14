@@ -7,8 +7,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use client_info::ClientType;
 
-
-
 pub fn handle_get(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
@@ -82,7 +80,6 @@ pub fn handle_set(
     let content = redis::extract_string_arguments(&request.arguments);
 
     {
-        // Guardar contenido del documento
         let mut docs_lock = docs.lock().unwrap();
         docs_lock.insert(doc_name.clone(), vec![content.clone()]);
     }
@@ -91,12 +88,10 @@ pub fn handle_set(
         let mut document_subscribers_lock = document_subscribers.lock().unwrap();
         let active_clients_lock = active_clients.lock().unwrap();
 
-        // Asegurarse de que exista la entrada para el doc
         let subscribers = document_subscribers_lock
             .entry(doc_name.clone())
             .or_insert_with(Vec::new);
 
-        // Recorrer hasta encontrar el microservicios y suscribirlo si no están
         for (addr, client) in active_clients_lock.iter() {
             if client.client_type == ClientType::Microservicio && !subscribers.contains(addr) {
                 subscribers.push(addr.clone());
@@ -114,7 +109,6 @@ pub fn handle_set(
 
     RedisResponse::new(CommandResponse::Ok, true, notification, doc_name)
 }
-
 
 /// Maneja el comando APPEND para agregar contenido a un documento línea por línea.
 ///
