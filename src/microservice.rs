@@ -9,9 +9,6 @@ use std::sync::mpsc;
 use std::thread;
 #[allow(unused_imports)]
 use std::time::Duration;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::collections::HashMap;
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let redis_port = 4000;
@@ -41,8 +38,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop{
         
     }
-
-    Ok(())
 }
 
 fn listen_to_redis_response(

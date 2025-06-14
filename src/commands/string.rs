@@ -174,8 +174,7 @@ pub fn handle_append(
 }
 
 pub fn handle_welcome(
-    request: &CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    request: &CommandRequest
 ) -> RedisResponse {
     let client = redis::extract_string_arguments(&request.arguments);
 
