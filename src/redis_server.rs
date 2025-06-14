@@ -20,6 +20,7 @@ mod hashing;
 mod local_node;
 mod peer_node;
 mod utils;
+use client_info::ClientType;
 
 #[derive(Debug)]
 pub enum RedisMessage {
@@ -184,22 +185,19 @@ fn handle_new_client_connection(
         }
     };
 
-
-    let client_type;
-
-    if command_request.command == "microservicio" {
-        client_type = "Microservicio".to_string();
+    let client_type = if command_request.command == "microservicio" {
         subscribe_microservice_to_all_docs(
             client_addr.to_string(),
             Arc::clone(shared_documents),
             Arc::clone(document_subscribers),
         );
         println!("Microservicio conectado: {}", client_addr);
-
-    }else{
-        client_type = "Cliente".to_string();
+        ClientType::Microservicio
+    } else {
         println!("Cliente conectado: {}", client_addr);
-    }
+        ClientType::Cliente
+    };
+
 
     utils::logger::log_event(log_path, &format!("Cliente conectado: {}", client_addr));
 
@@ -209,7 +207,7 @@ fn handle_new_client_connection(
         let client_addr = client_addr.to_string();
         let client = client_info::Client {
             stream: client_stream_clone,
-            client_type: client_type,
+            client_type,
         };
         let mut lock_clients = active_clients.lock().unwrap();
         lock_clients.insert(client_addr, client);

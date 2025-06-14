@@ -5,6 +5,7 @@ use super::redis_response::RedisResponse;
 use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use client_info::ClientType;
 
 
 
@@ -97,7 +98,7 @@ pub fn handle_set(
 
         // Recorrer hasta encontrar el microservicios y suscribirlo si no están
         for (addr, client) in active_clients_lock.iter() {
-            if client.client_type == "Microservicio" && !subscribers.contains(addr) {
+            if client.client_type == ClientType::Microservicio && !subscribers.contains(addr) {
                 subscribers.push(addr.clone());
                 println!("Microservicio {} suscripto automáticamente a {}", addr, doc_name);
                 break;
@@ -177,8 +178,7 @@ pub fn handle_append(
 }
 
 pub fn handle_welcome(
-    request: &CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    request: &CommandRequest
 ) -> RedisResponse {
     let client = redis::extract_string_arguments(&request.arguments);
 

@@ -33,7 +33,7 @@ pub fn execute_command(
         "rpush" => list::handle_rpush(&request, docs),
         "lset" => list::handle_lset(&request, docs),
         "linsert" => list::handle_linsert(&request, docs),
-        "welcome" => string::handle_welcome(&request, docs),
+        "welcome" => string::handle_welcome(&request),
         _ => RedisResponse::new(
             CommandResponse::Error("Unknown".to_string()),
             false,

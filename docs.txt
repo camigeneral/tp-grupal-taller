@@ -1,1 +1,13 @@
+<<<<<<< HEAD
 doc1/++/hola/--/
+=======
+text831423/++/nuevo/--/
+doc2/++/hola/--/
+doc1/++/hola/--/hola/--/hola/--/hola/--/
+text125681/++/nuevo/--/
+docprueba/++/aaa/--/
+text8248/++/nuevo/--/
+text326769/++/nuevo/--/
+text347057/++/nuevo/--/
+text996907/++/nuevo/--/
+>>>>>>> 2a2bfd695fc20ffca1921bca0d079577f31afb82
