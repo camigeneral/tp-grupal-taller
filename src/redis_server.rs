@@ -54,9 +54,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
-    let local_node = start_node_connection(port, node_address, &peer_nodes)?;
-
-    start_server(&client_address, local_node, peer_nodes)?;
+    start_server(&client_address,port, node_address, peer_nodes)?;
 
     Ok(())
 }
@@ -77,7 +75,8 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// - Hay problemas al leer el archivo de persistencia
 fn start_server(    
     bind_address: &str,
-    local_node: Arc<Mutex<LocalNode>>,
+    port: usize,
+    node_address: String,
     peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
 ) -> std::io::Result<()> {
     let config_path = "redis.conf";
@@ -106,6 +105,15 @@ fn start_server(
     let shared_documents = Arc::new(Mutex::new(stored_documents.clone()));
     let document_subscribers = initialize_document_subscribers(&stored_documents);
     let active_clients = Arc::new(Mutex::new(HashMap::new()));
+
+    let local_node = start_node_connection(
+        port,
+        node_address,
+        &peer_nodes,
+        &document_subscribers,
+        &shared_documents,
+        &shared_sets
+    )?;
 
     // Iniciar servidor TCP
     let tcp_listener = TcpListener::bind(bind_address)?;
@@ -548,6 +556,9 @@ pub fn start_node_connection(
     port: usize,
     node_address: String,
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
+    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> Result<Arc<Mutex<LocalNode>>, std::io::Error> {
     let cloned_nodes = Arc::clone(peer_nodes);
 
@@ -572,10 +583,13 @@ pub fn start_node_connection(
     let local_node = local_node::LocalNode::new_from_config(config_path)?;
     let mutex_node = Arc::new(Mutex::new(local_node));
     let cloned_mutex_node = Arc::clone(&mutex_node);
+    let cloned_document_subscribers = Arc::clone(&document_subscribers);
+    let cloned_shared_documents = Arc::clone(&shared_documents);
+    let cloned_shared_sets = Arc::clone(&shared_sets);
     let node_ports = read_node_ports(config_path)?;
 
     thread::spawn(
-        move || match connect_nodes(&node_address, cloned_nodes, cloned_mutex_node) {
+        move || match connect_nodes(&node_address, cloned_nodes, cloned_mutex_node, cloned_document_subscribers, cloned_shared_documents, cloned_shared_sets) {
             Ok(_) => {}
             Err(_e) => {}
         },
@@ -638,6 +652,9 @@ fn connect_nodes(
     address: &str,
     nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
     local_node: Arc<Mutex<LocalNode>>,
+    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_documents: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> std::io::Result<()> {
     let listener = TcpListener::bind(address)?;
     println!("Server listening nodes on {}", address);
@@ -650,9 +667,12 @@ fn connect_nodes(
 
                 let cloned_nodes = Arc::clone(&nodes);
                 let cloned_local_node = Arc::clone(&local_node);
+                let cloned_document_subscribers = Arc::clone(&document_subscribers);
+                let cloned_shared_documents = Arc::clone(&shared_documents);
+                let cloned_shared_sets = Arc::clone(&shared_sets);
 
                 thread::spawn(move || {
-                    match handle_node(&mut node_stream, cloned_nodes, &cloned_local_node) {
+                    match handle_node(&mut node_stream, cloned_nodes, &cloned_local_node, cloned_document_subscribers, cloned_shared_documents, cloned_shared_sets) {
                         Ok(_) => {
                             println!("Node {} disconnected.", client_addr);
                         }
@@ -678,6 +698,9 @@ fn handle_node(
     stream: &mut TcpStream,
     nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
     local_node: &Arc<Mutex<LocalNode>>,
+    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_documents: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> std::io::Result<()> {
     let reader = BufReader::new(stream.try_clone()?);
     let mut saving_command = false;
@@ -771,10 +794,10 @@ fn handle_node(
                     }
                 }
             }
-            "startReplicaCommand" => {
+            "startreplicacommand" => {
                 saving_command = true;
             }
-            "endReplicaCommand" => {
+            "endreplicacommand" => {
                 saving_command = false;
                 let cursor = Cursor::new(command_string.clone());
                 let mut reader_for_command = BufReader::new(cursor);
@@ -797,12 +820,14 @@ fn handle_node(
                 };
                 println!("Replica command request {:?}", command_request);
 
-                // let redis_response = redis::execute_replica_command(
-                //     command_request,
-                //     shared_documents.clone(),
-                //     document_subscribers.clone(),
-                //     shared_sets.clone(),
-                // );
+                let redis_response = redis::execute_replica_command(
+                    command_request,
+                    shared_documents.clone(),
+                    document_subscribers.clone(),
+                    shared_sets.clone(),
+                );
+
+                println!("Replica redis response {:?}", redis_response.response);
 
                 command_string = "".to_string();
             }
