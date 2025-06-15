@@ -671,6 +671,12 @@ fn handle_node(
                     _ => local_node::NodeRole::Unknown,
                 };
 
+                let cloned_role = match input[2].trim().to_lowercase().as_str() {
+                    "master" => local_node::NodeRole::Master,
+                    "replica" => local_node::NodeRole::Replica,
+                    _ => local_node::NodeRole::Unknown,
+                };
+
                 let hash_range_start = &input[3].trim().parse::<usize>().map_err(|_| {
                     std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid start range")
                 })?;
@@ -680,7 +686,7 @@ fn handle_node(
 
                 {
                     let mut lock_nodes = nodes.lock().unwrap();
-                    let local_node_locked = local_node.lock().unwrap();
+                    let mut local_node_locked = local_node.lock().unwrap();
                     // no lo conozco -> creo el stream y me guardo todo, y le mando mi info
                     if !lock_nodes.contains_key(&node_address) {
                         let node_address_to_connect = format!("127.0.0.1:{}", node_listening_port);
@@ -693,6 +699,15 @@ fn handle_node(
                             node_role,
                             (*hash_range_start, *hash_range_end),
                         );
+
+                        // me fijo si es mi master/replica
+                        if *hash_range_start == local_node_locked.hash_range.0 && cloned_role != local_node_locked.role {
+                            if local_node_locked.role == NodeRole::Master {
+                                local_node_locked.replica_nodes.push(*parsed_port);
+                            } else {
+                                local_node_locked.master_node = Some(*parsed_port);
+                            }
+                        }
 
                         let node_address_to_connect = format!("127.0.0.1:{}", node_listening_port);
 

@@ -15,6 +15,8 @@ pub struct LocalNode {
     pub port: usize,
     pub role: NodeRole,
     pub hash_range: (usize, usize),
+    pub master_node: Option<usize>,
+    pub replica_nodes: Vec<usize>,
 }
 
 impl LocalNode {
@@ -60,6 +62,8 @@ impl LocalNode {
             port,
             role,
             hash_range: (hash_range_start, hash_range_end),
+            master_node: None,
+            replica_nodes: Vec::new(),
         })
     }
 }
