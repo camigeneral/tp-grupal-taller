@@ -291,6 +291,7 @@ fn handle_client(
 
         let response = match resolve_key_location(key, &local_node, &peer_nodes) {
             Ok(()) => {
+                let unparsed_command = command_request.unparsed_command.clone();
                 let redis_response = redis::execute_command(
                     command_request,
                     shared_documents.clone(),
@@ -309,6 +310,8 @@ fn handle_client(
                         eprintln!("Error al publicar actualización: {}", e);
                     }
                 }
+
+                let _ = broadcast_to_replicas(&local_node, &peer_nodes, unparsed_command);
 
                 redis_response.response
             }
@@ -336,6 +339,33 @@ fn handle_client(
 
     cleanup_client_resources(&client_id, &active_clients, &document_subscribers);
     // to do: agregar comando para salir, esto nunca se ejecuta porque nunca termina el loop
+
+    Ok(())
+}
+
+pub fn broadcast_to_replicas(
+    local_node: &Arc<Mutex<LocalNode>>,
+    peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
+    unparsed_command: String
+) -> std::io::Result<()> {
+    let locked_local_node = local_node.lock().unwrap();
+    let mut locked_peer_nodes = peer_nodes.lock().unwrap();
+    let replicas = &locked_local_node.replica_nodes;
+    println!("initial command {}", unparsed_command);
+
+    // to do: guuardarme el stream en localnode
+    for replica in replicas {
+        let key = format!("127.0.0.1:{}", replica);
+        if let Some(peer_node) = locked_peer_nodes.get_mut(&key) {
+            let mut stream = &peer_node.stream;
+            let message = format!(
+                "{}\n",
+                unparsed_command
+            );
+
+            stream.write_all(message.as_bytes())?;
+        }
+    }
 
     Ok(())
 }
