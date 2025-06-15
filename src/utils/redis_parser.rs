@@ -45,6 +45,7 @@ pub struct CommandRequest {
     pub command: String,
     pub key: Option<String>,
     pub arguments: Vec<ValueType>,
+    pub unparsed_command: String
 }
 
 /// Representa una respuesta que puede enviarse a un cliente en formato RESP.
@@ -75,7 +76,7 @@ pub enum CommandResponse {
 /// # Errores
 /// Retorna `std::io::Error` si el formato RESP es inválido o si el comando está vacío
 pub fn parse_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<CommandRequest> {
-    let command_parts = parse_resp_command(reader)?;
+    let (command_parts, unparsed_command) = parse_resp_command(reader)?;
 
     if command_parts.is_empty() {
         return Err(std::io::Error::new(
@@ -90,6 +91,7 @@ pub fn parse_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<Comma
         command,
         key: None,
         arguments: Vec::new(),
+        unparsed_command,
     };
 
     if command_parts.len() > 1 {
@@ -148,9 +150,12 @@ pub fn format_resp_command(command_parts: &[&str]) -> String {
 ///
 /// # Errores
 /// Retorna `std::io::Error` si el formato RESP no es válido o si ocurre un error de lectura.
-pub fn parse_resp_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<Vec<String>> {
+pub fn parse_resp_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<(Vec<String>, String)> {
     let mut line = String::new();
+    let mut unparsed_command = String::new();
+
     reader.read_line(&mut line)?;
+    unparsed_command.push_str(&line);
 
     if !line.starts_with('*') {
         return Err(std::io::Error::new(
@@ -165,6 +170,7 @@ pub fn parse_resp_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<
     for _ in 0..num_elements {
         line.clear();
         reader.read_line(&mut line)?;
+        unparsed_command.push_str(&line);
 
         if !line.starts_with('$') {
             return Err(std::io::Error::new(
@@ -185,15 +191,18 @@ pub fn parse_resp_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<
 
         let mut buffer = vec![0u8; length];
         reader.read_exact(&mut buffer)?;
+        unparsed_command.push_str(&String::from_utf8_lossy(&buffer));
 
         let mut crlf = [0u8; 2];
         reader.read_exact(&mut crlf)?;
+        unparsed_command.push_str("\r\n");
 
         result.push(String::from_utf8_lossy(&buffer).to_string());
     }
 
-    Ok(result)
+    Ok((result, unparsed_command))
 }
+
 
 /// Escribe una cadena como bulk string en formato RESP (`$<len>\r\n<value>\r\n`).
 ///
