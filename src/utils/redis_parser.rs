@@ -204,6 +204,8 @@ pub fn parse_resp_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<
 }
 
 
+
+
 /// Escribe una cadena como bulk string en formato RESP (`$<len>\r\n<value>\r\n`).
 ///
 /// # Errores
@@ -236,6 +238,89 @@ pub fn write_resp_null(mut stream: &TcpStream) -> std::io::Result<()> {
 /// Retorna `std::io::Error` si no puede escribir en el stream.
 pub fn write_resp_error(mut stream: &TcpStream, msg: &str) -> std::io::Result<()> {
     stream.write_all(format!("-ERR {}\r\n", msg).as_bytes())
+}
+
+pub fn parse_replica_command(reader: &mut BufReader<std::io::Cursor<String>>) -> std::io::Result<CommandRequest> {
+    let (command_parts, unparsed_command) = parse_replica_resp(reader)?;
+
+    if command_parts.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Empty command",
+        ));
+    }
+
+    let command = command_parts[0].to_lowercase();
+
+    let mut request = CommandRequest {
+        command,
+        key: None,
+        arguments: Vec::new(),
+        unparsed_command,
+    };
+
+    if command_parts.len() > 1 {
+        request.key = Some(command_parts[1].clone());
+    }
+
+    for arg in command_parts.iter().skip(2) {
+        request.arguments.push(ValueType::String(arg.clone()));
+    }
+
+    Ok(request)
+}
+
+pub fn parse_replica_resp(reader: &mut BufReader<std::io::Cursor<String>>) -> std::io::Result<(Vec<String>, String)> {
+    let mut line = String::new();
+    let mut unparsed_command = String::new();
+
+    reader.read_line(&mut line)?;
+    unparsed_command.push_str(&line);
+
+    if !line.starts_with('*') {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Not a RESP array",
+        ));
+    }
+
+    let num_elements: usize = line[1..].trim().parse().unwrap_or(0);
+    let mut result = Vec::with_capacity(num_elements);
+
+    for _ in 0..num_elements {
+        line.clear();
+        reader.read_line(&mut line)?;
+        unparsed_command.push_str(&line);
+
+        if !line.starts_with('$') {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Expected bulk string",
+            ));
+        }
+
+        let length: usize = match line[1..].trim().parse() {
+            Ok(len) => len,
+            Err(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Invalid length",
+                ))
+            }
+        };
+
+        let mut buffer = vec![0u8; length];
+        reader.read_exact(&mut buffer)?;
+        unparsed_command.push_str(&String::from_utf8_lossy(&buffer));
+
+        let mut crlf = [0u8; 2];
+        reader.read_exact(&mut crlf)?;
+        unparsed_command.push_str("\r\n");
+
+        result.push(String::from_utf8_lossy(&buffer).to_string());
+    }
+
+    Ok((result, unparsed_command))
 }
 
 #[cfg(test)]

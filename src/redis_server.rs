@@ -10,6 +10,7 @@ use std::path::Path;
 use std::str;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::io::Cursor;
 
 use crate::hashing::get_hash_slots;
 use crate::local_node::NodeRole;
@@ -359,11 +360,12 @@ pub fn broadcast_to_replicas(
         if let Some(peer_node) = locked_peer_nodes.get_mut(&key) {
             let mut stream = &peer_node.stream;
             let message = format!(
-                "{}\n",
+                "{}",
                 unparsed_command
             );
-
+            stream.write_all("startReplicaCommand\n".to_string().as_bytes())?;
             stream.write_all(message.as_bytes())?;
+            stream.write_all("endReplicaCommand\n".to_string().as_bytes())?;
         }
     }
 
@@ -678,6 +680,8 @@ fn handle_node(
     local_node: &Arc<Mutex<LocalNode>>,
 ) -> std::io::Result<()> {
     let reader = BufReader::new(stream.try_clone()?);
+    let mut saving_command = false;
+    let mut command_string = String::new();
 
     for command in reader.lines().map_while(Result::ok) {
         let input: Vec<String> = command
@@ -767,8 +771,48 @@ fn handle_node(
                     }
                 }
             }
+            "startReplicaCommand" => {
+                saving_command = true;
+            }
+            "endReplicaCommand" => {
+                saving_command = false;
+                let cursor = Cursor::new(command_string.clone());
+                let mut reader_for_command = BufReader::new(cursor);
+                let command_request: utils::redis_parser::CommandRequest =
+                match utils::redis_parser::parse_replica_command(&mut reader_for_command) {
+                    Ok(req) => req,
+                    Err(e) => {
+                        if e.kind() == std::io::ErrorKind::UnexpectedEof {
+                            break;
+                        }
+                        println!("Error al parsear comando: {}", e);
+                        utils::redis_parser::write_response(
+                            stream,
+                            &utils::redis_parser::CommandResponse::Error(
+                                "Comando inválido".to_string(),
+                            ),
+                        )?;
+                        continue;
+                    }
+                };
+                println!("Replica command request {:?}", command_request);
+
+                // let redis_response = redis::execute_replica_command(
+                //     command_request,
+                //     shared_documents.clone(),
+                //     document_subscribers.clone(),
+                //     shared_sets.clone(),
+                // );
+
+                command_string = "".to_string();
+            }
             _ => {
-                writeln!(stream, "Comando no reconocido")?;
+                if saving_command {
+                    let formated = format!("{}\r\n", command);
+                    command_string.push_str(&formated);
+                } else {
+                    writeln!(stream, "Comando no reconocido")?;
+                }
             }
         };
     }

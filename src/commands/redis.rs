@@ -39,6 +39,30 @@ pub fn execute_command(
     }
 }
 
+pub fn execute_replica_command(
+    request: CommandRequest,
+    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+) -> RedisResponse {
+    match request.command.as_str() {
+        "get" => string::handle_get(&request, docs),
+        "set" => string::handle_set(&request, docs, document_subscribers),
+        "append" => string::handle_append(&request, docs),
+        "sadd" => set::handle_sadd(&request, shared_sets),
+        "srem" => set::handle_srem(&request, shared_sets),
+        "rpush" => list::handle_rpush(&request, docs),
+        "lset" => list::handle_lset(&request, docs),
+        "linsert" => list::handle_linsert(&request, docs),
+        _ => RedisResponse::new(
+            CommandResponse::Error("Unknown".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        ),
+    }
+}
+
 pub fn extract_string_arguments(arguments: &[ValueType]) -> String {
     arguments
         .iter()
