@@ -4,10 +4,17 @@ use relm4::RelmApp;
 use rusty_docs::app::AppModel;
 extern crate rand;
 use rand::Rng;
+use std::env::args;
 
 fn main() {
+    let cli_args: Vec<String> = args().collect();
+
+    let port = match cli_args[1].parse::<u16>() {
+        Ok(n) => n,
+        Err(_e) => return,
+    };
+
     let id = format!("rusty.docs{}", rand::thread_rng().gen_range(0..100));
     let app = RelmApp::new(&id);
-    let redis_port = 4000;
-    app.run::<AppModel>(redis_port);
+    app.with_args(vec![]).run::<AppModel>(port);
 }

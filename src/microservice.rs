@@ -1,13 +1,6 @@
-//! Implementación del microservicio que actúa como intermediario.
-//!
-//! Este módulo implementa la lógica principal del microservicio, incluyendo:
-//! - Manejo de conexiones TCP con clientes
-//! - Comunicación con el servidor Redis
-//! - Procesamiento de comandos
-//! - Distribución de actualizaciones
-use crate::commands::client::ClientCommand;
-use std::io::BufWriter;
-use std::io::Read;
+extern crate relm4;
+// use self::relm4::Sender;
+use std::collections::HashMap;
 use std::io::Write;
 use std::io::{BufRead, BufReader};
 #[allow(unused_imports)]
@@ -15,429 +8,157 @@ use std::net::TcpListener;
 use std::net::TcpStream;
 #[allow(unused_imports)]
 use std::sync::mpsc;
-use std::sync::Mutex;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{channel, Sender as MpscSender};
+use std::sync::{Arc, Mutex};
+use std::thread;
 #[allow(unused_imports)]
 use std::time::Duration;
+use std::env::args;
 
-/// Estructura principal del microservicio que actúa como intermediario entre clientes y Redis.
-///
-/// Esta estructura mantiene:
-/// - La conexión con el servidor Redis
-/// - Las conexiones con los clientes
-/// - El socket de escucha para nuevas conexiones
-///
-#[derive(Debug)]
-pub struct Microservice {
-    /// Socket TCP que escucha nuevas conexiones entrantes de clientes
-    pub tcp_listener: TcpListener,
 
-    /// Conexión al servidor Redis, protegida por mutex para acceso concurrente.
-    /// Se mantiene como Option para manejar la conexión/desconexión de forma segura.
-    pub redis_connection: Mutex<Option<TcpStream>>,
+static REQUIRED_ARGS: usize = 2;
 
-    /// Lista de conexiones activas con clientes, protegida por mutex para acceso concurrente
-    pub active_clients: Mutex<Vec<TcpStream>>,
+
+pub fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cli_args: Vec<String> = args().collect();
+    if cli_args.len() != REQUIRED_ARGS {
+        eprintln!("Error: Cantidad de argumentos inválida");
+        eprintln!("Uso: {} <puerto>", cli_args[0]);
+        return Err("Error: Cantidad de argumentos inválida".into());
+    }
+
+    let redis_port = match cli_args[1].parse::<usize>() {
+        Ok(n) => n,
+        Err(_e) => return Err("Failed to parse arguments".into()),
+    };
+
+    let node_streams: Arc<Mutex<HashMap<String, TcpStream>>> = Arc::new(Mutex::new(HashMap::new()));
+    let last_command_sent: Arc<Mutex<String>> = Arc::new(Mutex::new("".to_string()));
+
+    let address = format!("127.0.0.1:{}", redis_port);
+    let cloned_address = address.clone();
+
+    println!("Conectándome al server de redis en {:?}", address);
+    let mut socket: TcpStream = TcpStream::connect(address)?;
+
+    let command = "Microservicio\r\n".to_string();
+
+    println!("Enviando: {:?}", command);
+    let parts: Vec<&str> = command.split_whitespace().collect();
+    let resp_command = format_resp_command(&parts);
+
+    println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
+
+    socket.write_all(resp_command.as_bytes())?;
+
+    let redis_socket = socket.try_clone()?;
+    let redis_socket_clone_for_hashmap = socket.try_clone()?;
+
+    {
+        let mut locked_node_streams = node_streams.lock().unwrap();
+        locked_node_streams.insert(cloned_address, redis_socket_clone_for_hashmap);
+    }
+
+    let cloned_node_streams = Arc::clone(&node_streams);
+    let cloned_last_command = Arc::clone(&last_command_sent);
+
+    let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
+    let connect_node_sender_cloned = connect_node_sender.clone();
+
+    thread::spawn(move || {
+        if let Err(e) = connect_to_nodes(
+            connect_node_sender_cloned,
+            connect_nodes_receiver,
+            cloned_node_streams,
+            cloned_last_command,
+        ) {
+            eprintln!("Error en la conexión con el nodo: {}", e);
+        }
+    });
+
+    let _ = connect_node_sender.send(redis_socket);
+
+    loop{
+        
+    }
 }
 
-impl Microservice {
-    pub fn new(port: u16) -> Self {
-        let bind_address = format!("127.0.0.1:{}", port);
-        let tcp_listener = TcpListener::bind(bind_address.clone()).unwrap();
-        println!("Microservice levantado en: {:?}", bind_address);
+fn listen_to_redis_response(
+    mut microservice_socket: TcpStream,
+    connect_node_sender: MpscSender<TcpStream>,
+    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+    last_command_sent: Arc<Mutex<String>>,
+) -> std::io::Result<()> {
+    let mut reader = BufReader::new(microservice_socket.try_clone()?);
+    loop {
+        let _ = connect_node_sender.clone();
+        let _ = last_command_sent.clone();
+        let _ = node_streams.clone();
 
-        Self {
-            tcp_listener,
-            redis_connection: Mutex::new(None),
-            active_clients: Mutex::new(Vec::new()),
-        }
-    }
-
-    /// Establece una conexión con el servidor Redis.
-    ///
-    /// Intenta establecer una conexión TCP con el servidor Redis en el puerto 4000.
-    /// La conexión se almacena en el Mutex redis_connection para acceso concurrente.
-    ///
-    /// # Errores
-    /// Retorna un error si:
-    /// - No se puede establecer la conexión TCP
-    /// - No se puede obtener el lock del Mutex
-    pub fn connect_to_redis(&self) -> std::io::Result<()> {
-        println!("Intentando conectar a Redis...");
-        let mut redis_connection_guard = self.redis_connection.lock().unwrap();
-        println!("Lock obtenido para redis_connection");
-
-        let redis_address = format!("127.0.0.1:{}", 4000);
-        println!("Intentando conectar a Redis en {}", redis_address);
-
-        match TcpStream::connect(&redis_address) {
-            Ok(stream) => {
-                println!("Conexión establecida exitosamente con Redis");
-                *redis_connection_guard = Some(stream);
-                Ok(())
-            }
-            Err(e) => {
-                println!("Error al conectar con Redis: {}", e);
-                Err(e)
-            }
-        }
-    }
-
-    /// Cierra la conexión con el servidor Redis.
-    ///     
-    pub fn disconnect_from_redis(&self) -> std::io::Result<()> {
-        let mut redis_connection_guard = self.redis_connection.lock().unwrap();
-        *redis_connection_guard = None;
-        Ok(())
-    }
-
-    /// Maneja el comando del cliente.
-    ///
-    /// Traduce el comando del cliente al formato RESP de Redis y lo envía al servidor Redis.
-    ///
-    /// # Errores
-    /// Retorna un error si hay problemas de lectura/escritura en el stream
-    fn handle_client_command(
-        &self,
-        client_command: ClientCommand,
-        client_writer: &mut TcpStream,
-    ) -> std::io::Result<()> {
-        let redis_command = self.parse_client_command_to_redis_command(client_command);
-        if let Ok(()) = self.send_resp_command(redis_command) {
-            client_writer.write_all(b"OK\r\n")?;
-        } else {
-            println!("Error al enviar el comando a Redis");
-        }
-        Ok(())
-    }
-
-    /// Maneja la comunicación con un cliente conectado.
-    ///
-    /// Procesa los comandos recibidos del cliente y los envía a Redis.
-    /// Mantiene un bucle de lectura hasta que el cliente se desconecte o
-    /// envíe un comando de cierre.
-    ///
-    /// # Errores
-    /// Retorna un error si hay problemas de lectura/escritura en el stream
-    pub fn listen_to_client(&self, client_stream: TcpStream) -> std::io::Result<()> {
-        let mut client_writer = client_stream.try_clone()?;
-        let mut command_reader = BufReader::new(client_stream);
-
-        loop {
-            let mut command_buffer = String::new();
-            let bytes_read = command_reader.read_line(&mut command_buffer)?;
-            println!("Comando recibido: {:?}", command_buffer);
-
-            if bytes_read == 0 {
-                break;
-            }
-
-            if let Ok(client_command) = ClientCommand::from_string(&command_buffer.clone()) {
-                match client_command.clone() {
-                    ClientCommand::CreateFile {
-                        file_id: _,
-                        content: _,
-                    } => self.handle_client_command(client_command, &mut client_writer)?,
-                    ClientCommand::Close => {
-                        println!("Comando de cierre recibido");
-                        break;
-                    }
-                    _ => self.handle_client_command(client_command, &mut client_writer)?,
-                }
-            } else {
-                println!("Error al parsear el comando: {:?}", command_buffer);
-            }
-        }
-        Ok(())
-    }
-
-    /// Formatea un comando en el protocolo RESP (Redis Serialization Protocol).
-    ///
-    /// # Retorna
-    /// String formateada según el protocolo RESP
-    pub fn format_resp_command(&self, command_parts: &[&str]) -> String {
-        let mut resp_message = format!("*{}\r\n", command_parts.len());
-
-        for part in command_parts {
-            resp_message.push_str(&format!("${}\r\n{}\r\n", part.len(), part));
+        let mut line = String::new();
+        let bytes_read = reader.read_line(&mut line)?;
+        if bytes_read == 0 {
+            break;
         }
 
-        resp_message
-    }
+        println!("Respuesta de redis: {}", line);
 
-    /// Convierte un comando del cliente al formato RESP de Redis.
-    ///
-    /// Traduce los comandos del protocolo del cliente al protocolo RESP
-    /// que entiende Redis.
-    ///
-    /// # Argumentos
-    /// * `client_command` - Comando del cliente a convertir
-    ///
-    /// # Retorna
-    /// String con el comando formateado en protocolo RESP
-    pub fn parse_client_command_to_redis_command(&self, client_command: ClientCommand) -> String {
-        println!("Traduciendo comando del cliente: {:?}", client_command);
-        match client_command {
-            ClientCommand::CreateFile { file_id, content } => {
-                let resp_command = self.format_resp_command(&["set", &file_id, &content]);
-                println!("Comando traducido a RESP: {}", resp_command);
-                resp_command
-            }
-            ClientCommand::Subscribe { file_id } => {
-                let resp_command = self.format_resp_command(&["subscribe", &file_id]);
-                println!("Comando traducido a RESP: {}", resp_command);
-                resp_command
-            }
-            ClientCommand::Unsubscribe { file_id } => {
-                let resp_command = self.format_resp_command(&["unsubscribe", &file_id]);
-                println!("Comando traducido a RESP: {}", resp_command);
-                resp_command
-            }
+        if line.starts_with("Client ") && line.contains(" subscribed to ") {
+            let parts: Vec<&str> = line.trim().split_whitespace().collect();
+            if parts.len() >= 5 {
+                let client_addr = parts[1];
 
-            _ => client_command.to_string(),
-        }
-    }
+                let doc_name = parts[4];
 
-    /// Envía un comando RESP al servidor Redis.
-    ///
-    /// # Argumentos
-    /// * `resp_command` - Comando en formato RESP a enviar
-    ///
-    /// # Errores
-    /// Retorna un error si:
-    /// - No hay conexión establecida con Redis
-    /// - Hay problemas al escribir en el stream
-    /// - No se puede obtener el lock del Mutex
-    pub fn send_resp_command(&self, resp_command: String) -> std::io::Result<()> {
-        println!("Iniciando envío de comando RESP");
-        println!("Obteniendo acceso a la conexión Redis...");
+                let bienvenida = format!("Welcome {} {}",doc_name, client_addr);
+                
 
-        let redis_connection_guard = self.redis_connection.lock().unwrap();
-        println!(
-            "Acceso obtenido. Estado de la conexión: {:#?}",
-            redis_connection_guard
-        );
+                let parts: Vec<&str> = bienvenida.split_whitespace().collect();
 
-        match redis_connection_guard.as_ref() {
-            Some(redis_stream) => {
-                println!("Conexión activa encontrada, preparando escritura...");
-                let mut command_writer = BufWriter::new(redis_stream);
-                println!("Enviando comando: {}", resp_command);
-                command_writer.write_all(resp_command.as_bytes())?;
-                command_writer.flush()?;
-                println!("Comando enviado exitosamente");
-                Ok(())
-            }
-            None => {
-                println!("Error: No hay conexión activa con Redis");
-                Err(std::io::Error::new(
-                    std::io::ErrorKind::NotConnected,
-                    "No hay conexión establecida con Redis",
-                ))
-            }
-        }
-    }
+                let mensaje_final = format_resp_command(&parts);
 
-    /// Escucha y procesa las respuestas del servidor Redis.
-    ///
-    /// Mantiene un bucle de lectura continua para procesar las respuestas
-    /// que envía Redis. Soporta todos los tipos de respuesta del protocolo RESP:
-    /// - Strings simples (+)
-    /// - Errores (-)
-    /// - Enteros (:)
-    /// - Bulk strings ($)
-    /// - Arrays (*)
-    ///
-    /// # Errores
-    /// Retorna un error si:
-    /// - No hay conexión con Redis
-    /// - Hay problemas al leer del stream
-    /// - No se puede obtener el lock del Mutex
-    pub fn listen_to_redis(&self) -> std::io::Result<()> {
-        let redis_connection_guard = self.redis_connection.lock().unwrap();
-        let redis_stream = redis_connection_guard.as_ref().unwrap().try_clone()?;
-        drop(redis_connection_guard);
-
-        let mut response_reader = BufReader::new(redis_stream);
-        println!("Iniciando escucha de respuestas Redis");
-
-        loop {
-            let mut response_line = String::new();
-            let bytes_read = response_reader.read_line(&mut response_line)?;
-            println!("Bytes leídos: {:?}", bytes_read);
-
-            if bytes_read == 0 {
-                println!("Conexión cerrada por Redis");
-                break;
-            }
-
-            println!(
-                "Respuesta RESP recibida: {}",
-                response_line.replace("\r\n", "\\r\\n")
-            );
-            match response_line.chars().next() {
-                Some('$') => {
-                    let size_str = response_line.trim_end();
-
-                    if size_str == "$-1" || size_str == "$-1\r" {
-                        println!("Valor nulo recibido");
-                        continue;
-                    }
-
-                    let content_size: usize = match size_str[1..].trim().parse() {
-                        Ok(n) => n,
-                        Err(_) => {
-                            eprintln!("Error al parsear tamaño del contenido: {}", size_str);
-                            continue;
-                        }
-                    };
-
-                    let mut content_buffer = vec![0u8; content_size + 2]; // +2 para CRLF
-                    response_reader.read_exact(&mut content_buffer)?;
-
-                    let content =
-                        String::from_utf8_lossy(&content_buffer[..content_size]).to_string();
-                    println!("Contenido recibido: {}", content);
-                }
-                Some('-') => {
-                    println!("Error de Redis: {}", response_line[1..].trim());
-                }
-                Some(':') => {
-                    println!("Entero recibido: {}", response_line[1..].trim());
-                }
-                Some('+') => {
-                    println!("Respuesta simple: {}", response_line[1..].trim());
-                }
-                Some('*') => {
-                    let array_size_str = response_line.trim_end();
-                    let array_size: usize = match array_size_str[1..].trim().parse() {
-                        Ok(n) => n,
-                        Err(_) => {
-                            eprintln!("Error al parsear tamaño del array: {}", array_size_str);
-                            continue;
-                        }
-                    };
-
-                    println!("Array RESP recibido con {} elementos", array_size);
-                }
-                _ => {
-                    println!("Respuesta desconocida: {}", response_line.trim());
+                if let Err(e) = microservice_socket.write_all(mensaje_final.as_bytes()) {
+                    eprintln!("Error al enviar mensaje de bienvenida: {}", e);
                 }
             }
         }
-
-        println!("Finalizando escucha de Redis");
-        Ok(())
     }
+    Ok(())
 }
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::client::client_run;
-    use std::io::Write;
-    use std::net::TcpListener;
-    use std::sync::mpsc;
-    use std::thread;
-    use std::time::Duration;
 
-    fn format_resp_command(parts: &[&str]) -> String {
-        let mut result = format!("*{}\r\n", parts.len());
-        for part in parts {
-            result.push_str(&format!("${}\r\n{}\r\n", part.len(), part));
-        }
-        result
+pub fn format_resp_command(command_parts: &[&str]) -> String {
+    let mut resp_message = format!("*{}\r\n", command_parts.len());
+
+    for part in command_parts {
+        resp_message.push_str(&format!("${}\r\n{}\r\n", part.len(), part));
     }
 
-    #[test]
-    fn test_format_resp_command() {
-        let parts = vec!["SET", "key", "value"];
-        let result = format_resp_command(&parts);
-        assert_eq!(result, "*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n");
+    resp_message
+}
 
-        let empty: Vec<&str> = vec![];
-        let result = format_resp_command(&empty);
-        assert_eq!(result, "*0\r\n");
+fn connect_to_nodes(
+    sender: MpscSender<TcpStream>,
+    reciever: Receiver<TcpStream>,
+    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+    last_command_sent: Arc<Mutex<String>>,
+) -> std::io::Result<()> {
+    for stream in reciever {
+        let cloned_node_streams = Arc::clone(&node_streams);
+        let cloned_last_command = Arc::clone(&last_command_sent);
+        let cloned_own_sender = sender.clone();
 
-        let single = vec!["PING"];
-        let result = format_resp_command(&single);
-        assert_eq!(result, "*1\r\n$4\r\nPING\r\n");
-
-        // Prueba con caracteres especiales
-        let special = vec!["SET", "key:1", "hello world"];
-        let result = format_resp_command(&special);
-        assert_eq!(
-            result,
-            "*3\r\n$3\r\nSET\r\n$5\r\nkey:1\r\n$11\r\nhello world\r\n"
-        );
-    }
-
-    #[test]
-    fn test_response_parsing() {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
-
-        let (tx, rx) = mpsc::channel();
-
-        let server_thread = thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
-            // Prueba diferentes tipos de respuestas RESP
-            stream.write_all(b"+OK\r\n").unwrap();
-            stream.write_all(b"$5\r\nhello\r\n").unwrap();
-            stream.write_all(b"-Error message\r\n").unwrap();
-            stream.write_all(b":1000\r\n").unwrap();
-            stream
-                .write_all(b"*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n")
-                .unwrap();
-            stream.write_all(b"$-1\r\n").unwrap(); // Valor nulo
+        thread::spawn(move || {
+            if let Err(e) = listen_to_redis_response(
+                stream,
+                cloned_own_sender,
+                cloned_node_streams,
+                cloned_last_command,
+            ) {
+                eprintln!("Error en la conexión con el nodo: {}", e);
+            }
         });
-
-        let client_thread = thread::spawn(move || {
-            client_run(port, rx, None).unwrap();
-        });
-
-        thread::sleep(Duration::from_millis(100));
-        tx.send("CLOSE".to_string()).unwrap();
-
-        assert!(server_thread.join().is_ok());
-        assert!(client_thread.join().is_ok());
     }
 
-    #[test]
-    fn test_connection_errors() {
-        let port = 9999; // Puerto no utilizado
-        let (_tx, rx) = mpsc::channel();
-
-        let result = client_run(port, rx, None);
-        assert!(result.is_err());
-    }
-
-    /*  #[test]
-    TODO: Revisar
-     fn test_multiple_clients() {
-         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-         let port = listener.local_addr().unwrap().port();
-
-         let server_thread = thread::spawn(move || {
-             for _ in 0..3 {
-                 if let Ok((mut stream, _)) = listener.accept() {
-                     stream.write_all(b"+OK\r\n").unwrap();
-                 }
-             }
-         });
-
-         let mut client_threads = vec![];
-         for _ in 0..3 {
-             let (tx, rx) = mpsc::channel();
-             let client_thread = thread::spawn(move || {
-                 let _ = client_run(port, rx, None);
-             });
-             thread::sleep(Duration::from_millis(50));
-             tx.send(ClientCommand::Close).unwrap();
-             client_threads.push(client_thread);
-         }
-
-         for thread in client_threads {
-             assert!(thread.join().is_ok());
-         }
-         assert!(server_thread.join().is_ok());
-     } */
+    Ok(())
 }

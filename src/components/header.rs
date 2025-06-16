@@ -1,7 +1,7 @@
 extern crate gtk4;
 extern crate rand;
 extern crate relm4;
-use self::gtk4::prelude::{ButtonExt, PopoverExt, WidgetExt};
+use self::gtk4::prelude::{ButtonExt,PopoverExt, WidgetExt};
 use self::rand::Rng;
 use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
 

@@ -7,6 +7,8 @@ use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
+use crate::client_info;
+
 
 pub fn execute_command(
     request: CommandRequest,
@@ -14,10 +16,11 @@ pub fn execute_command(
     document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
     shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
     client_addr: String,
+    active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
 ) -> RedisResponse {
     match request.command.as_str() {
         "get" => string::handle_get(&request, docs),
-        "set" => string::handle_set(&request, docs, document_subscribers),
+        "set" => string::handle_set(&request, docs, document_subscribers, active_clients),
         "subscribe" => pub_sub::handle_subscribe(&request, document_subscribers, client_addr),
         "unsubscribe" => pub_sub::handle_unsubscribe(&request, document_subscribers, client_addr),
         "append" => string::handle_append(&request, docs),
@@ -30,8 +33,9 @@ pub fn execute_command(
         "rpush" => list::handle_rpush(&request, docs),
         "lset" => list::handle_lset(&request, docs),
         "linsert" => list::handle_linsert(&request, docs),
+        "welcome" => string::handle_welcome(&request),
         _ => RedisResponse::new(
-            CommandResponse::Error("Unkown".to_string()),
+            CommandResponse::Error("Unknown".to_string()),
             false,
             "".to_string(),
             "".to_string(),
