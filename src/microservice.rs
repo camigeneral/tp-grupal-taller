@@ -1,4 +1,6 @@
 extern crate relm4;
+use self::relm4::Sender;
+use std::collections::HashMap;
 use std::io::Write;
 use std::io::{BufRead, BufReader};
 #[allow(unused_imports)]
@@ -6,6 +8,9 @@ use std::net::TcpListener;
 use std::net::TcpStream;
 #[allow(unused_imports)]
 use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{channel, Sender as MpscSender};
+use std::sync::{Arc, Mutex};
 use std::thread;
 #[allow(unused_imports)]
 use std::time::Duration;
@@ -28,7 +33,11 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(_e) => return Err("Failed to parse arguments".into()),
     };
 
+    let node_streams: Arc<Mutex<HashMap<String, TcpStream>>> = Arc::new(Mutex::new(HashMap::new()));
+    let last_command_sent: Arc<Mutex<String>> = Arc::new(Mutex::new("".to_string()));
+
     let address = format!("127.0.0.1:{}", redis_port);
+    let cloned_address = address.clone();
 
     println!("Conectándome al server de redis en {:?}", address);
     let mut socket: TcpStream = TcpStream::connect(address)?;
@@ -44,12 +53,31 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     socket.write_all(resp_command.as_bytes())?;
 
     let redis_socket = socket.try_clone()?;
+    let redis_socket_clone_for_hashmap = socket.try_clone()?;
+
+    {
+        let mut locked_node_streams = node_streams.lock().unwrap();
+        locked_node_streams.insert(cloned_address, redis_socket_clone_for_hashmap);
+    }
+
+    let cloned_node_streams = Arc::clone(&node_streams);
+    let cloned_last_command = Arc::clone(&last_command_sent);
+
+    let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
+    let connect_node_sender_cloned = connect_node_sender.clone();
 
     thread::spawn(move || {
-        if let Err(e) = listen_to_redis_response(redis_socket) {
-            eprintln!("Error en la conexión con nodo: {}", e);
+        if let Err(e) = connect_to_nodes(
+            connect_node_sender_cloned,
+            connect_nodes_receiver,
+            cloned_node_streams,
+            cloned_last_command,
+        ) {
+            eprintln!("Error en la conexión con el nodo: {}", e);
         }
     });
+
+    let _ = connect_node_sender.send(redis_socket);
 
     loop{
         
@@ -57,7 +85,10 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn listen_to_redis_response(
-    mut microservice_socket: TcpStream
+    mut microservice_socket: TcpStream,
+    connect_node_sender: MpscSender<TcpStream>,
+    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+    last_command_sent: Arc<Mutex<String>>,
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(microservice_socket.try_clone()?);
     loop {
@@ -100,4 +131,30 @@ pub fn format_resp_command(command_parts: &[&str]) -> String {
     }
 
     resp_message
+}
+
+fn connect_to_nodes(
+    sender: MpscSender<TcpStream>,
+    reciever: Receiver<TcpStream>,
+    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+    last_command_sent: Arc<Mutex<String>>,
+) -> std::io::Result<()> {
+    for stream in reciever {
+        let cloned_node_streams = Arc::clone(&node_streams);
+        let cloned_last_command = Arc::clone(&last_command_sent);
+        let cloned_own_sender = sender.clone();
+
+        thread::spawn(move || {
+            if let Err(e) = listen_to_redis_response(
+                stream,
+                cloned_own_sender,
+                cloned_node_streams,
+                cloned_last_command,
+            ) {
+                eprintln!("Error en la conexión con el nodo: {}", e);
+            }
+        });
+    }
+
+    Ok(())
 }
