@@ -39,15 +39,9 @@ pub fn handle_subscribe(
             "".to_string(),
         );
 
-        let notification = format!("Client {} subscribed to {}",client_addr, doc);
+        let notification = format!("Client {} subscribed to {}", client_addr, doc);
 
-        RedisResponse::new(
-            CommandResponse::Null,
-            true,
-            notification,
-            doc.to_string(),
-        )
-
+        RedisResponse::new(CommandResponse::Null, true, notification, doc.to_string())
     } else {
         RedisResponse::new(
             CommandResponse::Error("Document not found".to_string()),

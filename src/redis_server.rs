@@ -1,4 +1,5 @@
 use commands::redis;
+use commands::redis_response::RedisResponse;
 use local_node::LocalNode;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -75,21 +76,24 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Retorna un error si:
 /// - No se puede crear el socket TCP
 /// - Hay problemas al leer el archivo de persistencia
-fn start_server(    
+fn start_server(
     bind_address: &str,
     local_node: Arc<Mutex<LocalNode>>,
     peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
 ) -> std::io::Result<()> {
     let config_path = "redis.conf";
     let log_path = utils::logger::get_log_path_from_config(config_path);
-    
+
     use std::fs;
-    if fs::metadata(&log_path).map(|m| m.len() > 0).unwrap_or(false) {
+    if fs::metadata(&log_path)
+        .map(|m| m.len() > 0)
+        .unwrap_or(false)
+    {
         let _ = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&log_path)
-                .and_then(|mut file| writeln!(file, ""));
+            .create(true)
+            .append(true)
+            .open(&log_path)
+            .and_then(|mut file| writeln!(file, ""));
     }
 
     let persistence_file = "docs.txt".to_string();
@@ -102,7 +106,8 @@ fn start_server(
     };
 
     // Inicializar estructuras de datos compartidas
-    let shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>> = Arc::new(Mutex::new(HashMap::new()));
+    let shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
     let shared_documents = Arc::new(Mutex::new(stored_documents.clone()));
     let document_subscribers = initialize_document_subscribers(&stored_documents);
     let active_clients = Arc::new(Mutex::new(HashMap::new()));
@@ -170,7 +175,6 @@ fn handle_new_client_connection(
     log_path: &str,
 ) -> std::io::Result<()> {
     let client_addr = client_stream.peer_addr()?;
-    
 
     let mut reader = BufReader::new(client_stream.try_clone()?);
     let command_request = match utils::redis_parser::parse_command(&mut reader) {
@@ -198,11 +202,10 @@ fn handle_new_client_connection(
         ClientType::Cliente
     };
 
-
     utils::logger::log_event(log_path, &format!("Cliente conectado: {}", client_addr));
 
     let client_stream_clone = client_stream.try_clone()?;
-    
+
     {
         let client_addr = client_addr.to_string();
         let client = client_info::Client {
@@ -312,7 +315,10 @@ fn handle_client(
                 )?;
                 utils::logger::log_event(
                     log_path,
-                    &format!("Error al parsear comando de {}: No se encontro la key", client_id),
+                    &format!(
+                        "Error al parsear comando de {}: No se encontro la key",
+                        client_id
+                    ),
                 );
                 continue;
             }
@@ -789,16 +795,36 @@ pub fn subscribe_microservice_to_all_docs(
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) {
     let docs_lock = docs.lock().unwrap();
-    let mut clients_on_docs_lock = clients_on_docs.lock().unwrap();
+    let mut map = clients_on_docs.lock().unwrap();
 
     for doc_name in docs_lock.keys() {
-        let subscribers = clients_on_docs_lock
-            .entry(doc_name.clone())
-            .or_insert_with(Vec::new);
+        if let Some(list) = map.get_mut(doc_name) {
+            list.push(addr.clone());
+            RedisResponse::new(
+                CommandResponse::String(format!("Subscribed to {}", doc_name)),
+                false,
+                "".to_string(),
+                "".to_string(),
+            );
+            println!(
+                "Microservicio {} suscripto automáticamente a {}",
+                addr, doc_name
+            );
 
-        if !subscribers.contains(&addr) {
-            subscribers.push(addr.clone());
-            println!("Microservicio {} suscripto automáticamente a {}", addr, doc_name);
+            // let notification = format!("Client {} subscribed to {}", client_addr, doc_name);
+
+            // RedisResponse::new(CommandResponse::Null, true, notification, doc_name.to_string())
         }
+        // let subscribers = clients_on_docs_lock
+        //     .entry(doc_name.clone())
+        //     .or_insert_with(Vec::new);
+
+        // if !subscribers.contains(&addr) {
+        //     subscribers.push(addr.clone());
+        //     println!(
+        //         "Microservicio {} suscripto automáticamente a {}",
+        //         addr, doc_name
+        //     );
+        // }
     }
 }

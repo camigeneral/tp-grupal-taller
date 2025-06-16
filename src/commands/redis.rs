@@ -3,12 +3,11 @@ use super::pub_sub;
 use super::redis_response::RedisResponse;
 use super::set;
 use super::string;
+use crate::client_info;
 use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
-use crate::client_info;
-
 
 pub fn execute_command(
     request: CommandRequest,
