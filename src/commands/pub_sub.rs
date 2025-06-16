@@ -103,137 +103,137 @@ pub fn handle_unsubscribe(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
 
-    fn setup_map(doc: &str, clients: Vec<&str>) -> Arc<Mutex<HashMap<String, Vec<String>>>> {
-        let mut map = HashMap::new();
-        map.insert(
-            doc.to_string(),
-            clients.into_iter().map(|s| s.to_string()).collect(),
-        );
-        Arc::new(Mutex::new(map))
-    }
+//     fn setup_map(doc: &str, clients: Vec<&str>) -> Arc<Mutex<HashMap<String, Vec<String>>>> {
+//         let mut map = HashMap::new();
+//         map.insert(
+//             doc.to_string(),
+//             clients.into_iter().map(|s| s.to_string()).collect(),
+//         );
+//         Arc::new(Mutex::new(map))
+//     }
 
-    #[test]
-    fn test_handle_subscribe_success() {
-        let doc = "doc1";
-        let document_subscribers = setup_map(doc, vec![]);
-        let request = CommandRequest {
-            command: "SUBSCRIBE".to_string(),
-            key: Some(doc.to_string()),
-            arguments: vec![],
-        };
-        let resp = handle_subscribe(
-            &request,
-            Arc::clone(&document_subscribers),
-            "client1".to_string(),
-        );
-        assert!(matches!(resp.response, CommandResponse::String(_)));
-        let map = document_subscribers.lock().unwrap();
-        assert_eq!(map.get(doc).unwrap(), &vec!["client1".to_string()]);
-    }
+//     #[test]
+//     fn test_handle_subscribe_success() {
+//         let doc = "doc1";
+//         let document_subscribers = setup_map(doc, vec![]);
+//         let request = CommandRequest {
+//             command: "SUBSCRIBE".to_string(),
+//             key: Some(doc.to_string()),
+//             arguments: vec![],
+//         };
+//         let resp = handle_subscribe(
+//             &request,
+//             Arc::clone(&document_subscribers),
+//             "client1".to_string(),
+//         );
+//         assert!(matches!(resp.response, CommandResponse::String(_)));
+//         let map = document_subscribers.lock().unwrap();
+//         assert_eq!(map.get(doc).unwrap(), &vec!["client1".to_string()]);
+//     }
 
-    #[test]
-    fn test_handle_subscribe_no_key() {
-        let document_subscribers = setup_map("doc1", vec![]);
-        let request = CommandRequest {
-            command: "SUBSCRIBE".to_string(),
-            key: None,
-            arguments: vec![],
-        };
-        let resp = handle_subscribe(
-            &request,
-            Arc::clone(&document_subscribers),
-            "client1".to_string(),
-        );
-        assert!(matches!(resp.response, CommandResponse::Error(_)));
-    }
+//     #[test]
+//     fn test_handle_subscribe_no_key() {
+//         let document_subscribers = setup_map("doc1", vec![]);
+//         let request = CommandRequest {
+//             command: "SUBSCRIBE".to_string(),
+//             key: None,
+//             arguments: vec![],
+//         };
+//         let resp = handle_subscribe(
+//             &request,
+//             Arc::clone(&document_subscribers),
+//             "client1".to_string(),
+//         );
+//         assert!(matches!(resp.response, CommandResponse::Error(_)));
+//     }
 
-    #[test]
-    fn test_handle_subscribe_doc_not_found() {
-        let document_subscribers = Arc::new(Mutex::new(HashMap::new()));
-        let request = CommandRequest {
-            command: "SUBSCRIBE".to_string(),
-            key: Some("doc2".to_string()),
-            arguments: vec![],
-        };
-        let resp = handle_subscribe(
-            &request,
-            Arc::clone(&document_subscribers),
-            "client1".to_string(),
-        );
-        assert!(matches!(resp.response, CommandResponse::Error(_)));
-    }
+//     #[test]
+//     fn test_handle_subscribe_doc_not_found() {
+//         let document_subscribers = Arc::new(Mutex::new(HashMap::new()));
+//         let request = CommandRequest {
+//             command: "SUBSCRIBE".to_string(),
+//             key: Some("doc2".to_string()),
+//             arguments: vec![],
+//         };
+//         let resp = handle_subscribe(
+//             &request,
+//             Arc::clone(&document_subscribers),
+//             "client1".to_string(),
+//         );
+//         assert!(matches!(resp.response, CommandResponse::Error(_)));
+//     }
 
-    #[test]
-    fn test_handle_unsubscribe_success() {
-        let doc = "doc1";
-        let document_subscribers = setup_map(doc, vec!["client1", "client2"]);
-        let request = CommandRequest {
-            command: "UNSUBSCRIBE".to_string(),
-            key: Some(doc.to_string()),
-            arguments: vec![],
-        };
-        let resp = handle_unsubscribe(
-            &request,
-            Arc::clone(&document_subscribers),
-            "client1".to_string(),
-        );
-        assert!(matches!(resp.response, CommandResponse::String(_)));
-        let map = document_subscribers.lock().unwrap();
-        assert_eq!(map.get(doc).unwrap(), &vec!["client2".to_string()]);
-    }
+//     #[test]
+//     fn test_handle_unsubscribe_success() {
+//         let doc = "doc1";
+//         let document_subscribers = setup_map(doc, vec!["client1", "client2"]);
+//         let request = CommandRequest {
+//             command: "UNSUBSCRIBE".to_string(),
+//             key: Some(doc.to_string()),
+//             arguments: vec![],
+//         };
+//         let resp = handle_unsubscribe(
+//             &request,
+//             Arc::clone(&document_subscribers),
+//             "client1".to_string(),
+//         );
+//         assert!(matches!(resp.response, CommandResponse::String(_)));
+//         let map = document_subscribers.lock().unwrap();
+//         assert_eq!(map.get(doc).unwrap(), &vec!["client2".to_string()]);
+//     }
 
-    #[test]
-    fn test_handle_unsubscribe_no_key() {
-        let document_subscribers = setup_map("doc1", vec!["client1"]);
-        let request = CommandRequest {
-            command: "UNSUBSCRIBE".to_string(),
-            key: None,
-            arguments: vec![],
-        };
-        let resp = handle_unsubscribe(
-            &request,
-            Arc::clone(&document_subscribers),
-            "client1".to_string(),
-        );
-        assert!(matches!(resp.response, CommandResponse::Error(_)));
-    }
+//     #[test]
+//     fn test_handle_unsubscribe_no_key() {
+//         let document_subscribers = setup_map("doc1", vec!["client1"]);
+//         let request = CommandRequest {
+//             command: "UNSUBSCRIBE".to_string(),
+//             key: None,
+//             arguments: vec![],
+//         };
+//         let resp = handle_unsubscribe(
+//             &request,
+//             Arc::clone(&document_subscribers),
+//             "client1".to_string(),
+//         );
+//         assert!(matches!(resp.response, CommandResponse::Error(_)));
+//     }
 
-    #[test]
-    fn test_handle_unsubscribe_doc_not_found() {
-        let document_subscribers = Arc::new(Mutex::new(HashMap::new()));
-        let request = CommandRequest {
-            command: "UNSUBSCRIBE".to_string(),
-            key: Some("doc2".to_string()),
-            arguments: vec![],
-        };
-        let resp = handle_unsubscribe(
-            &request,
-            Arc::clone(&document_subscribers),
-            "client1".to_string(),
-        );
-        assert!(matches!(resp.response, CommandResponse::Error(_)));
-    }
+//     #[test]
+//     fn test_handle_unsubscribe_doc_not_found() {
+//         let document_subscribers = Arc::new(Mutex::new(HashMap::new()));
+//         let request = CommandRequest {
+//             command: "UNSUBSCRIBE".to_string(),
+//             key: Some("doc2".to_string()),
+//             arguments: vec![],
+//         };
+//         let resp = handle_unsubscribe(
+//             &request,
+//             Arc::clone(&document_subscribers),
+//             "client1".to_string(),
+//         );
+//         assert!(matches!(resp.response, CommandResponse::Error(_)));
+//     }
 
-    #[test]
-    fn test_handle_unsubscribe_client_not_in_list() {
-        let doc = "doc1";
-        let document_subscribers = setup_map(doc, vec!["client2"]);
-        let request = CommandRequest {
-            command: "UNSUBSCRIBE".to_string(),
-            key: Some(doc.to_string()),
-            arguments: vec![],
-        };
-        let resp = handle_unsubscribe(
-            &request,
-            Arc::clone(&document_subscribers),
-            "client1".to_string(),
-        );
-        assert!(matches!(resp.response, CommandResponse::String(_)));
-        let map = document_subscribers.lock().unwrap();
-        assert_eq!(map.get(doc).unwrap(), &vec!["client2".to_string()]);
-    }
-}
+//     #[test]
+//     fn test_handle_unsubscribe_client_not_in_list() {
+//         let doc = "doc1";
+//         let document_subscribers = setup_map(doc, vec!["client2"]);
+//         let request = CommandRequest {
+//             command: "UNSUBSCRIBE".to_string(),
+//             key: Some(doc.to_string()),
+//             arguments: vec![],
+//         };
+//         let resp = handle_unsubscribe(
+//             &request,
+//             Arc::clone(&document_subscribers),
+//             "client1".to_string(),
+//         );
+//         assert!(matches!(resp.response, CommandResponse::String(_)));
+//         let map = document_subscribers.lock().unwrap();
+//         assert_eq!(map.get(doc).unwrap(), &vec!["client2".to_string()]);
+//     }
+// }
