@@ -189,6 +189,7 @@ fn handle_node(
 
         match command.as_str() {
             "node" => {
+                println!("00");
                 let node_listening_port = &input[1];
                 let parsed_port = &input[1].trim().parse::<usize>().map_err(|_| {
                     std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid port")
@@ -215,6 +216,7 @@ fn handle_node(
                 })?;
 
                 {
+                    println!("01");
                     let mut lock_nodes = nodes.lock().unwrap();
                     let mut local_node_locked = local_node.lock().unwrap();
                     // no lo conozco -> creo el stream y me guardo todo, y le mando mi info
@@ -234,8 +236,12 @@ fn handle_node(
                         if *hash_range_start == local_node_locked.hash_range.0 && cloned_role != local_node_locked.role {
                             if local_node_locked.role == NodeRole::Master {
                                 local_node_locked.replica_nodes.push(*parsed_port);
+                                println!("02");
                             } else {
+                                // estoy hablando con mi nodo maestro, lo guardo y le pido la info
                                 local_node_locked.master_node = Some(*parsed_port);
+                                stream_to_respond.write_all("sync\n".to_string().as_bytes())?;
+                                println!("03");
                             }
                         }
 
@@ -260,12 +266,15 @@ fn handle_node(
                         peer_node_to_update.role = node_role;
                         peer_node_to_update.hash_range = (*hash_range_start, *hash_range_end);
 
-                        println!(
-                            "hash range actualizado:  {}",
-                            lock_nodes.get_mut(&node_address).unwrap().hash_range.1
-                        );
+                        // si es mi master, le pido la info
+                        if peer_node_to_update.role == NodeRole::Master && peer_node_to_update.hash_range.0 == local_node_locked.hash_range.0 {
+                            peer_node_to_update.stream.write_all("sync\n".to_string().as_bytes())?;
+                        }
                     }
                 }
+            }
+            "sync" => {
+                handle_replica_sync(&shared_sets, &shared_documents, &document_subscribers)?;
             }
             "startreplicacommand" => {
                 saving_command = true;
@@ -347,6 +356,7 @@ pub fn broadcast_to_replicas(
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
     unparsed_command: String
 ) -> std::io::Result<()> {
+    
     let locked_local_node = local_node.lock().unwrap();
     let mut locked_peer_nodes = peer_nodes.lock().unwrap();
     let replicas = &locked_local_node.replica_nodes;
@@ -367,5 +377,11 @@ pub fn broadcast_to_replicas(
         }
     }
 
+    Ok(())
+}
+
+
+fn handle_replica_sync(shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>, shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>, document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>) -> std::io::Result<()> {
+    println!("in handle_replica_sync");
     Ok(())
 }
