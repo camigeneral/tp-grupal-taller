@@ -9,6 +9,11 @@ pub enum NodeRole {
     Unknown,
 }
 
+pub enum NodeState {
+    Active,
+    Inactive,
+}
+
 /// Estructura que representa la instancia de nodo levantada en la consola. Contiene el puerto en el que
 /// escucha nodos entrantes, el tipo (master o replica), y su hash range.
 pub struct LocalNode {

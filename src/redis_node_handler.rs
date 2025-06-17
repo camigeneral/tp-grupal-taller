@@ -7,8 +7,9 @@ use std::net::{TcpListener, TcpStream};
 use std::thread;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::time::{Instant, Duration};
 use commands::redis;
-use local_node::{LocalNode, NodeRole};
+use local_node::{LocalNode, NodeRole, NodeState};
 use peer_node;
 use utils;
 
@@ -64,6 +65,17 @@ pub fn start_node_connection(
             Ok(_) => {}
             Err(_e) => {}
         },
+
+    );
+
+    let cloned_local_node_for_ping_pong = Arc::clone(&mutex_node);
+    let cloned_peer_nodes = Arc::clone(peer_nodes);
+
+    thread::spawn(
+        move || match ping_to_master(cloned_local_node_for_ping_pong, cloned_peer_nodes) {
+            Ok(_) => {}
+            Err(_e) => {}
+        },
     );
 
     {
@@ -97,6 +109,7 @@ pub fn start_node_connection(
                                 connection_port,
                                 NodeRole::Unknown,
                                 (0, 16383),
+                                NodeState::Active,
                             ),
                         );
 
@@ -230,10 +243,12 @@ fn handle_node(
                             *parsed_port,
                             node_role,
                             (*hash_range_start, *hash_range_end),
+                            NodeState::Active,
                         );
 
                         // me fijo si es mi master/replica
                         if *hash_range_start == local_node_locked.hash_range.0 && cloned_role != local_node_locked.role {
+                            println!("ff");
                             if local_node_locked.role == NodeRole::Master {
                                 local_node_locked.replica_nodes.push(*parsed_port);
                                 println!("02");
@@ -268,6 +283,8 @@ fn handle_node(
 
                         // si es mi master, le pido la info
                         if peer_node_to_update.role == NodeRole::Master && peer_node_to_update.hash_range.0 == local_node_locked.hash_range.0 {
+                            println!("03");
+                            local_node_locked.master_node = Some(*parsed_port);
                             peer_node_to_update.stream.write_all("sync\n".to_string().as_bytes())?;
                         }
                     }
@@ -312,6 +329,9 @@ fn handle_node(
                 println!("Replica redis response {:?}", redis_response.response);
 
                 command_string = "".to_string();
+            }
+            "ping" => {
+                writeln!(stream, "Pong")?;
             }
             _ => {
                 if saving_command {
@@ -383,5 +403,69 @@ pub fn broadcast_to_replicas(
 
 fn handle_replica_sync(shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>, shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>, document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>) -> std::io::Result<()> {
     println!("in handle_replica_sync");
+    Ok(())
+}
+
+fn ping_to_master(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>)-> std::io::Result<()> {
+    let ping_interval = Duration::from_secs(3);
+    let error_interval = Duration::from_secs(50);
+    let mut last_sent = Instant::now();
+    
+
+    let mut stream_to_ping = None;
+
+    loop {
+        let mut now = Instant::now();
+        if now.duration_since(last_sent) >= ping_interval {
+            {
+                if stream_to_ping.is_none() {
+                    let locked_local_node = local_node.lock().unwrap();
+                    let mut locked_peer_nodes = peer_nodes.lock().unwrap();
+        
+                    if let Some(port) = locked_local_node.master_node {
+                        let key = format!("127.0.0.1:{}", port);
+                        if let Some(peer_node) = locked_peer_nodes.get_mut(&key) {
+                            let cloned_stream = peer_node.stream.try_clone().ok();
+                            stream_to_ping = cloned_stream;
+                        }
+                    }
+                }
+            }
+            
+            match stream_to_ping.as_ref() {
+                Some(mut stream) => {
+                    let mut reader = BufReader::new(stream.try_clone()?);
+                    stream.write_all("Ping\n".to_string().as_bytes())?;
+                    now = Instant::now();
+
+                    let mut line = String::new();
+                    match reader.read_line(&mut line) {
+                        Ok(0) => {
+                            println!("Connection closed by peer");
+                            break;
+                        }
+                        Ok(_) => {
+                            println!("Received response: {}", line.trim());
+                        }
+
+                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => {
+                            println!("Timeout: no response within {:?}", error_interval);
+                        }
+                        Err(e) => {
+                            println!("Unexpected error: {}", e);
+                            break;
+                        }
+                    }
+        
+                    last_sent = now;
+                },
+                None => {
+                    std::hint::spin_loop();
+                }
+            }
+        }
+        std::hint::spin_loop();
+    }
+
     Ok(())
 }

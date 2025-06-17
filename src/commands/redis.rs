@@ -50,7 +50,7 @@ pub fn execute_replica_command(
 ) -> RedisResponse {
     match request.command.as_str() {
         "get" => string::handle_get(&request, docs),
-        "set" => string::handle_set(&request, docs, document_subscribers),
+        // "set" => string::handle_set(&request, docs, document_subscribers), // to do: arreglar
         "append" => string::handle_append(&request, docs),
         "sadd" => set::handle_sadd(&request, shared_sets),
         "srem" => set::handle_srem(&request, shared_sets),

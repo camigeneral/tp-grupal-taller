@@ -1,6 +1,5 @@
 use commands::redis;
 use commands::redis_response::RedisResponse;
-use local_node::LocalNode;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env::args;
@@ -14,7 +13,6 @@ use std::thread;
 use crate::hashing::get_hash_slots;
 use crate::local_node::NodeRole;
 use crate::utils::redis_parser::CommandResponse;
-use commands::redis;
 mod client_info;
 mod commands;
 mod hashing;
