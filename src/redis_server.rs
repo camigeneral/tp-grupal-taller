@@ -12,6 +12,7 @@ use std::str;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+
 use crate::hashing::get_hash_slots;
 use crate::local_node::NodeRole;
 use crate::utils::redis_parser::CommandResponse;
@@ -111,6 +112,7 @@ fn start_server(
     let shared_documents = Arc::new(Mutex::new(stored_documents.clone()));
     let document_subscribers = initialize_document_subscribers(&stored_documents);
     let active_clients = Arc::new(Mutex::new(HashMap::new()));
+    let logged_clients: Arc<Mutex<HashMap<String, bool>>> = Arc::new(Mutex::new(HashMap::new()));
 
     // Iniciar servidor TCP
     let tcp_listener = TcpListener::bind(bind_address)?;
@@ -130,6 +132,7 @@ fn start_server(
                     &peer_nodes,
                     &shared_sets,
                     &log_path,
+                    &logged_clients
                 )?;
             }
             Err(e) => {
@@ -173,9 +176,9 @@ fn handle_new_client_connection(
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
     shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
     log_path: &str,
+    logged_clients: &Arc<Mutex<HashMap<String, bool>>>
 ) -> std::io::Result<()> {
     let client_addr = client_stream.peer_addr()?;
-
     let mut reader = BufReader::new(client_stream.try_clone()?);
     let command_request = match utils::redis_parser::parse_command(&mut reader) {
         Ok(req) => req,
@@ -202,15 +205,16 @@ fn handle_new_client_connection(
         ClientType::Cliente
     };
 
+
     utils::logger::log_event(log_path, &format!("Cliente conectado: {}", client_addr));
 
     let client_stream_clone = client_stream.try_clone()?;
-
     {
         let client_addr = client_addr.to_string();
         let client = client_info::Client {
             stream: client_stream_clone,
             client_type,
+            username: "".to_string()
         };
         let mut lock_clients = active_clients.lock().unwrap();
         lock_clients.insert(client_addr, client);
@@ -223,7 +227,10 @@ fn handle_new_client_connection(
     let client_addr_str = client_addr.to_string();
     let cloned_node = Arc::clone(local_node);
     let cloned_peer_nodes = Arc::clone(peer_nodes);
+    let cloned_logged_clients = Arc::clone(logged_clients);
     let log_path = log_path.to_string();
+
+    utils::logger::log_event(&log_path, &format!("Cliente conectado: {}", client_addr));
 
     thread::spawn(move || {
         match handle_client(
@@ -236,6 +243,7 @@ fn handle_new_client_connection(
             cloned_node,
             cloned_peer_nodes,
             &log_path,
+            cloned_logged_clients
         ) {
             Ok(_) => {
                 println!("Client {} disconnected.", client_addr);
@@ -277,7 +285,9 @@ fn handle_client(
     local_node: Arc<Mutex<LocalNode>>,
     peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
     log_path: &str,
+    logged_clients: Arc<Mutex<HashMap<String, bool>>>
 ) -> std::io::Result<()> {
+
     let mut reader = BufReader::new(stream.try_clone()?);
 
     loop {
@@ -304,6 +314,27 @@ fn handle_client(
             log_path,
             &format!("Comando recibido de {}: {:?}", client_id, command_request),
         );
+
+        //TODO esto solo se puede resolver con la replicacion, ya que hay informacion que tienen algunos nodos y otros que no
+        // Entonces el estado de las variables no es el mismo en cada instancia
+        /* if command_request.command != "auth" && command_request.command != "connect" {
+            println!("client_id {}", client_id);
+            println!("Usuarios logueados, {:#?}", logged_clients);
+            println!("Verificando autorización para client_id: {}", client_id);
+            let logged_clients_clone = logged_clients.clone();
+            if !is_authorized_client(logged_clients_clone, client_id.clone()) {
+                println!("Cliente no autorizado: {}", client_id);
+                utils::redis_parser::write_response(
+                    stream,
+                    &utils::redis_parser::CommandResponse::Error("Cliente sin autorizacion".to_string()),
+                )?;
+                utils::logger::log_event(
+                    log_path,
+                    &format!("Cliente {} sin autorizacion ", client_id),
+                );
+                continue;
+            }
+        } */
 
         let key = match &command_request.key {
             Some(k) => k.clone(),
@@ -333,6 +364,7 @@ fn handle_client(
                     shared_sets.clone(),
                     client_id.clone(),
                     active_clients.clone(),
+                    logged_clients.clone()
                 );
 
                 if redis_response.publish {
@@ -375,6 +407,30 @@ fn handle_client(
 
     Ok(())
 }
+
+
+fn _is_authorized_client(logged_clients: Arc<Mutex<HashMap<String, bool>>>, client_id: String) -> bool {
+    println!("Verificando autorización para client_id: {}", client_id);
+    println!("Formato exacto del client_id: {:?}", client_id);
+    let locked = logged_clients.lock().unwrap();
+    println!("Estado actual del HashMap: {:#?}", *locked);
+    println!("Claves en el HashMap: {:?}", locked.keys().collect::<Vec<_>>());
+    match locked.get(&client_id) {
+        Some(&true) => {
+            println!("Cliente {} autorizado", client_id);
+            true
+        }
+        Some(&false) => {
+            println!("Cliente {} no autorizado", client_id);
+            false
+        }
+        None => {
+            println!("Cliente {} no encontrado en el HashMap", client_id);
+            false
+        }
+    }
+}
+
 
 /// Determina si la key recibida corresponde al nodo actual o si debe ser redirigida a otro nodo,
 /// a traves del mensaje "ASK *key hasheada* *ip del nodo correspondiente*". En el caso de que
