@@ -109,7 +109,6 @@ fn listen_to_redis_response(
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(microservice_socket);
     loop {
-        let _ =ui_sender;
         let mut line = String::new();
         let bytes_read = reader.read_line(&mut line)?;
 
