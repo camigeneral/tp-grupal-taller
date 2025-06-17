@@ -131,12 +131,6 @@ impl SimpleComponent for AppModel {
             gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
 
-        let mut users = HashMap::new();
-        users.insert("fran".to_string(), "123".to_string());
-        users.insert("cami".to_string(), "123".to_string());
-        users.insert("valen".to_string(), "123".to_string());
-        users.insert("rama".to_string(), "123".to_string());
-
         let header_model = NavbarModel::builder().launch(()).forward(
             sender.input_sender(),
             |output| match output {
@@ -154,7 +148,7 @@ impl SimpleComponent for AppModel {
             },
         );
 
-        let login_form_model = LoginForm::builder().launch(users).forward(
+        let login_form_model = LoginForm::builder().launch(()).forward(
             sender.input_sender(),
             |output| match output {
                 LoginOutput::LoginRequested(username, password) => {
