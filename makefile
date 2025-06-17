@@ -16,7 +16,7 @@ microservice:
 	cargo run --bin microservice 4000
 
 client: 
-	cargo run --bin client
+	cargo run --bin client 4000
 
 
 clean_redis:

@@ -63,7 +63,6 @@ pub fn handle_scard(
     }
 }
 
-
 /// Maneja el comando SMEMBERS que lista todos los suscriptores de un set
 ///
 /// # Argumentos
@@ -107,7 +106,6 @@ pub fn handle_smembers(
         ),
     }
 }
-
 
 // /// Maneja el comando SSCAN que busca suscriptores en un set que coincidan con un patrón
 // ///
@@ -227,7 +225,6 @@ pub fn handle_srem(
 ///
 /// # Retorno
 /// * `RedisResponse` - La respuesta al comando indicando cuántos elementos fueron agregados.
-
 pub fn handle_sadd(
     request: &CommandRequest,
     shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
@@ -256,7 +253,6 @@ pub fn handle_sadd(
         }
     }
 
-
     RedisResponse::new(
         CommandResponse::String(format!("{} miembro(s) agregado(s)", added)),
         false,
@@ -272,7 +268,6 @@ fn extract_string(value: &ValueType) -> Option<String> {
         _ => None, // Podés ampliar los casos si necesitás
     }
 }
-
 
 // #[cfg(test)]
 // mod tests {

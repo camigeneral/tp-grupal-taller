@@ -1,11 +1,11 @@
-use crate::client_info;
 use super::redis;
 use super::redis_response::RedisResponse;
+use crate::client_info;
 #[allow(unused_imports)]
 use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
+use client_info::ClientType;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use client_info::ClientType;
 
 pub fn handle_get(
     request: &CommandRequest,
@@ -95,7 +95,10 @@ pub fn handle_set(
         for (addr, client) in active_clients_lock.iter() {
             if client.client_type == ClientType::Microservicio && !subscribers.contains(addr) {
                 subscribers.push(addr.clone());
-                println!("Microservicio {} suscripto automáticamente a {}", addr, doc_name);
+                println!(
+                    "Microservicio {} suscripto automáticamente a {}",
+                    addr, doc_name
+                );
                 break;
             }
         }
@@ -160,7 +163,7 @@ pub fn handle_append(
     }
 
     // let notification = format!("New content in {}: {} L{}", doc, content, line_number);
-    let notification = format!("L{}: {} ", line_number,content);
+    let notification = format!("L{}: {} ", line_number, content);
     println!("Publishing to subscribers of {}: {}", doc, notification);
 
     RedisResponse::new(
@@ -171,9 +174,7 @@ pub fn handle_append(
     )
 }
 
-pub fn handle_welcome(
-    request: &CommandRequest
-) -> RedisResponse {
+pub fn handle_welcome(request: &CommandRequest) -> RedisResponse {
     let client = redis::extract_string_arguments(&request.arguments);
 
     let doc = match &request.key {
@@ -190,12 +191,7 @@ pub fn handle_welcome(
 
     let notification = format!("Welcome {} to {}", client, doc);
 
-    RedisResponse::new(
-        CommandResponse::Null,
-        true,
-        notification,
-        doc,
-    )
+    RedisResponse::new(CommandResponse::Null, true, notification, doc)
 }
 
 #[cfg(test)]
@@ -258,7 +254,12 @@ mod tests {
             key: Some("doc2".to_string()),
             arguments: vec![ValueType::String("hello world".to_string())],
         };
-        let resp = handle_set(&req, docs.clone(), clients.clone(), Arc::new(Mutex::new(HashMap::new())));
+        let resp = handle_set(
+            &req,
+            docs.clone(),
+            clients.clone(),
+            Arc::new(Mutex::new(HashMap::new())),
+        );
         assert_eq!(resp.response, CommandResponse::Ok);
         let docs_guard = docs.lock().unwrap();
         assert_eq!(

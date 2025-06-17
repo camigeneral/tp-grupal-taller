@@ -11,7 +11,6 @@ use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
 pub struct LoginForm {
     username: String,
     password: String,
-    users: HashMap<String, String>,
     error_message: String,
 }
 
@@ -20,19 +19,19 @@ pub struct LoginForm {
 pub enum LoginMsg {
     UsernameChanged(String),
     PasswordChanged(String),
+    SetErrorForm(String),
     Submit,
 }
 
 /// Resultado del login.
 #[derive(Debug)]
 pub enum LoginOutput {
-    LoginSuccess(String),
-    //LoginFailure(String),
+    LoginRequested(String, String)
 }
 
 #[relm4::component(pub)]
 impl SimpleComponent for LoginForm {
-    type Init = HashMap<String, String>;
+    type Init = ();
 
     type Input = LoginMsg;
 
@@ -87,14 +86,13 @@ impl SimpleComponent for LoginForm {
     }
 
     fn init(
-        users: Self::Init,
+        _users: Self::Init,
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let model = LoginForm {
             username: String::new(),
             password: String::new(),
-            users,
             error_message: "".to_string(),
         };
 
@@ -111,18 +109,12 @@ impl SimpleComponent for LoginForm {
                 self.password = new_password;
             }
             LoginMsg::Submit => {
-                let user_ok = self.users.get(&self.username);
-                match user_ok {
-                    Some(expected_pass) if expected_pass == &self.password => {
-                        self.error_message = "".to_string();
-                        sender
-                            .output(LoginOutput::LoginSuccess(self.username.clone()))
+                sender
+                            .output(LoginOutput::LoginRequested(self.username.clone(), self.password.clone()))
                             .unwrap();
-                    }
-                    _ => {
-                        self.error_message = "Credenciales inválidas".to_string();
-                    }
-                }
+            },
+            LoginMsg::SetErrorForm(error) => {
+                self.error_message = error
             }
         }
     }

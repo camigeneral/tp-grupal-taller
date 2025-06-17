@@ -109,7 +109,6 @@ fn listen_to_redis_response(
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(microservice_socket);
     loop {
-        let _ =ui_sender;
         let mut line = String::new();
         let bytes_read = reader.read_line(&mut line)?;
 
@@ -120,28 +119,74 @@ fn listen_to_redis_response(
         println!("Respuesta de redis: {}", line);
 
         let response: Vec<&str> = line.split_whitespace().collect();
-        if response[0].to_uppercase() == "ASK" {
-            if response.len() < 3 {
-                println!("Nodo de redireccion no disponible");
-            } else {
-                let last_line_cloned = last_command_sent.lock().unwrap().clone();
-                let mut locked_node_streams = node_streams.lock().unwrap();
-                let new_node_address = response[2].to_string();
 
-                if let Some(stream) = locked_node_streams.get_mut(&new_node_address) {
-                    stream.write_all(last_line_cloned.as_bytes())?;
+
+        let first = response[0].to_uppercase();
+        let first_response = first.as_str();
+
+        match first_response {
+            s if s.starts_with("-ERR") => {
+
+                let credenciales = &response[1]; 
+                let invalidas = response[2].trim_end_matches(':');
+
+                if let Some(sender) = &ui_sender {
+                    let _ = sender.send(AppMsg::LoginFailure(format!("{} {}", credenciales, invalidas)));
+                }
+            }
+            "ASK" => { 
+                if response.len() < 3 {
+                    println!("Nodo de redireccion no disponible");
                 } else {
-                    let stream: TcpStream = TcpStream::connect(new_node_address.clone())?;
-                    let mut cloned_stream = stream.try_clone()?;
-                    let cloned_stream_to_connect = stream.try_clone()?;
-                    locked_node_streams.insert(new_node_address, stream);
-
-                    cloned_stream.write_all(last_line_cloned.as_bytes())?;
-
-                    let _ = connect_node_sender.send(cloned_stream_to_connect);
+                    let _ = send_command_to_nodes(ui_sender.clone(), connect_node_sender.clone(),node_streams.clone() ,last_command_sent.clone(), response);
+                }
+            }
+            _ => { 
+                if let Some(sender) = &ui_sender {
+                    let _ = sender.send(AppMsg::ManageResponse(first));
                 }
             }
         }
+    }
+    Ok(())
+}
+
+
+
+fn send_command_to_nodes(    
+    _ui_sender: Option<Sender<AppMsg>>,
+    connect_node_sender: MpscSender<TcpStream>,
+    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+    last_command_sent: Arc<Mutex<String>>,
+    response: Vec<&str>
+) -> Result<(), Box<dyn std::error::Error>> {
+    let last_line_cloned = last_command_sent.lock().unwrap().clone();
+    let mut locked_node_streams = node_streams.lock().unwrap();
+    let new_node_address = response[2].to_string();
+    
+    println!("Ultimo comando ejecutado: {:#?}", last_line_cloned);
+    println!("Redirigiendo a nodo: {}", new_node_address);
+    
+    if let Some(stream) = locked_node_streams.get_mut(&new_node_address) {
+        println!("Usando conexión existente al nodo {}", new_node_address);
+        stream.write_all(last_line_cloned.as_bytes())?;
+    } else {
+        println!("Creando nueva conexión al nodo {}", new_node_address);
+        let parts: Vec<&str> = "connect".split_whitespace().collect();
+        let resp_command = format_resp_command(&parts);
+        let mut final_stream = TcpStream::connect(new_node_address.clone())?;
+        final_stream.write_all(resp_command.as_bytes())?;
+
+        let mut cloned_stream_to_connect = final_stream.try_clone()?;
+        locked_node_streams.insert(new_node_address, final_stream);
+        
+        let _ = connect_node_sender.send(cloned_stream_to_connect.try_clone()?);
+        std::thread::sleep(std::time::Duration::from_millis(2));
+
+        if let Err(e) = cloned_stream_to_connect.write_all(last_line_cloned.as_bytes()) {
+            eprintln!("Error al reenviar el último comando: {}", e);
+        }
+
     }
     Ok(())
 }

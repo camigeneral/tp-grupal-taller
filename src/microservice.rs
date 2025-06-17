@@ -1,6 +1,7 @@
 extern crate relm4;
 // use self::relm4::Sender;
 use std::collections::HashMap;
+use std::env::args;
 use std::io::Write;
 use std::io::{BufRead, BufReader};
 #[allow(unused_imports)]
@@ -14,11 +15,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 #[allow(unused_imports)]
 use std::time::Duration;
-use std::env::args;
-
 
 static REQUIRED_ARGS: usize = 2;
-
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli_args: Vec<String> = args().collect();
@@ -28,60 +26,85 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("Error: Cantidad de argumentos inválida".into());
     }
 
-    let redis_port = match cli_args[1].parse::<usize>() {
-        Ok(n) => n,
-        Err(_e) => return Err("Failed to parse arguments".into()),
-    };
+    let redis_port = cli_args[1].parse::<usize>()?;
+    let main_address = format!("127.0.0.1:{}", redis_port);
 
     let node_streams: Arc<Mutex<HashMap<String, TcpStream>>> = Arc::new(Mutex::new(HashMap::new()));
     let last_command_sent: Arc<Mutex<String>> = Arc::new(Mutex::new("".to_string()));
 
-    let address = format!("127.0.0.1:{}", redis_port);
-    let cloned_address = address.clone();
+    // Canal para conectar y lanzar escuchas por cada nodo
+    let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
 
-    println!("Conectándome al server de redis en {:?}", address);
-    let mut socket: TcpStream = TcpStream::connect(address)?;
+    // Lanza el thread que gestiona los streams recibidos
+    {
+        let cloned_node_streams = Arc::clone(&node_streams);
+        let cloned_last_command = Arc::clone(&last_command_sent);
+        let connect_node_sender_cloned = connect_node_sender.clone();
 
-    let command = "Microservicio\r\n".to_string();
+        thread::spawn(move || {
+            if let Err(e) = connect_to_nodes(
+                connect_node_sender_cloned,
+                connect_nodes_receiver,
+                cloned_node_streams,
+                cloned_last_command,
+            ) {
+                eprintln!("Error en la conexión con el nodo: {}", e);
+            }
+        });
+    }
 
-    println!("Enviando: {:?}", command);
-    let parts: Vec<&str> = command.split_whitespace().collect();
-    let resp_command = format_resp_command(&parts);
-
-    println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
-
-    socket.write_all(resp_command.as_bytes())?;
-
+    // ✅ Conectarse al nodo principal
+    println!("Conectándome al nodo principal en {:?}", main_address);
+    let mut socket = TcpStream::connect(&main_address)?;
     let redis_socket = socket.try_clone()?;
     let redis_socket_clone_for_hashmap = socket.try_clone()?;
 
+    // Insertar en el hashmap de streams
     {
-        let mut locked_node_streams = node_streams.lock().unwrap();
-        locked_node_streams.insert(cloned_address, redis_socket_clone_for_hashmap);
+        node_streams
+            .lock()
+            .unwrap()
+            .insert(main_address.clone(), redis_socket_clone_for_hashmap);
     }
 
-    let cloned_node_streams = Arc::clone(&node_streams);
-    let cloned_last_command = Arc::clone(&last_command_sent);
+    // Identificarse como microservicio
+    let command = "Microservicio\r\n".to_string();
+    let parts: Vec<&str> = command.split_whitespace().collect();
+    let resp_command = format_resp_command(&parts);
+    println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
+    socket.write_all(resp_command.as_bytes())?;
 
-    let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
-    let connect_node_sender_cloned = connect_node_sender.clone();
+    // Enviar al canal para que arranque su listener
+    connect_node_sender.send(redis_socket)?;
 
-    thread::spawn(move || {
-        if let Err(e) = connect_to_nodes(
-            connect_node_sender_cloned,
-            connect_nodes_receiver,
-            cloned_node_streams,
-            cloned_last_command,
-        ) {
-            eprintln!("Error en la conexión con el nodo: {}", e);
+    // ✅ Conectarse a otros nodos adicionales
+    let otros_puertos = vec![4001, 4002]; // <-- agregá más si hace falta
+    for port in otros_puertos {
+        let addr = format!("127.0.0.1:{}", port);
+        match TcpStream::connect(&addr) {
+            Ok(mut extra_socket) => {
+                println!("Microservicio conectado a nodo adicional: {}", addr);
+
+                // Identificarse como microservicio también
+                let parts: Vec<&str> = "Microservicio".split_whitespace().collect();
+                let resp_command = format_resp_command(&parts);
+                extra_socket.write_all(resp_command.as_bytes())?;
+
+                let clone_for_map = extra_socket.try_clone()?;
+                node_streams
+                    .lock()
+                    .unwrap()
+                    .insert(addr.clone(), clone_for_map);
+
+                connect_node_sender.send(extra_socket)?;
+            }
+            Err(e) => {
+                eprintln!("Error al conectar con nodo {}: {}", addr, e);
+            }
         }
-    });
-
-    let _ = connect_node_sender.send(redis_socket);
-
-    loop{
-        
     }
+
+    loop {}
 }
 
 fn listen_to_redis_response(
@@ -111,8 +134,7 @@ fn listen_to_redis_response(
 
                 let doc_name = parts[4];
 
-                let bienvenida = format!("Welcome {} {}",doc_name, client_addr);
-                
+                let bienvenida = format!("Welcome {} {}", doc_name, client_addr);
 
                 let parts: Vec<&str> = bienvenida.split_whitespace().collect();
 
