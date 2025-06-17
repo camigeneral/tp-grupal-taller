@@ -7,7 +7,7 @@ use self::gtk4::{
 use crate::components::login::{LoginForm, LoginOutput};
 use app::gtk4::glib::Propagation;
 use client::client_run;
-use commands::client::ClientCommand;
+// use commands::client::ClientCommand;
 use components::file_workspace::{FileWorkspace, FileWorkspaceMsg, FileWorkspaceOutputMessage};
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
 use std::collections::HashMap;

@@ -24,4 +24,4 @@ path = "src/client_init.rs"
 
 [[bin]]
 name = "microservice"
-path = "src/bin/run_microservice.rs"
+path = "src/microservice.rs"

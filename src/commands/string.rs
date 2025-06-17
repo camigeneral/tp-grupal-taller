@@ -1,11 +1,11 @@
 use super::redis;
 use super::redis_response::RedisResponse;
+use crate::client_info;
 #[allow(unused_imports)]
 use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
+use client_info::ClientType;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-
-
 
 pub fn handle_get(
     request: &CommandRequest,
@@ -54,6 +54,7 @@ pub fn handle_set(
     request: &CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
     document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
 ) -> RedisResponse {
     let doc_name = match &request.key {
         Some(k) => k.clone(),
@@ -81,10 +82,25 @@ pub fn handle_set(
     {
         let mut docs_lock = docs.lock().unwrap();
         docs_lock.insert(doc_name.clone(), vec![content.clone()]);
+    }
 
+    {
         let mut document_subscribers_lock = document_subscribers.lock().unwrap();
-        if !document_subscribers_lock.contains_key(&doc_name) {
-            document_subscribers_lock.insert(doc_name.clone(), Vec::new());
+        let active_clients_lock = active_clients.lock().unwrap();
+
+        let subscribers = document_subscribers_lock
+            .entry(doc_name.clone())
+            .or_insert_with(Vec::new);
+
+        for (addr, client) in active_clients_lock.iter() {
+            if client.client_type == ClientType::Microservicio && !subscribers.contains(addr) {
+                subscribers.push(addr.clone());
+                println!(
+                    "Microservicio {} suscripto automáticamente a {}",
+                    addr, doc_name
+                );
+                break;
+            }
         }
     }
 
@@ -147,7 +163,7 @@ pub fn handle_append(
     }
 
     // let notification = format!("New content in {}: {} L{}", doc, content, line_number);
-    let notification = format!("L{}: {} ", line_number,content);
+    let notification = format!("L{}: {} ", line_number, content);
     println!("Publishing to subscribers of {}: {}", doc, notification);
 
     RedisResponse::new(
@@ -156,6 +172,26 @@ pub fn handle_append(
         notification,
         doc,
     )
+}
+
+pub fn handle_welcome(request: &CommandRequest) -> RedisResponse {
+    let client = redis::extract_string_arguments(&request.arguments);
+
+    let doc = match &request.key {
+        Some(k) => k.clone(),
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Usage: WELCOME <client> <document>".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
+    };
+
+    let notification = format!("Welcome {} to {}", client, doc);
+
+    RedisResponse::new(CommandResponse::Null, true, notification, doc)
 }
 
 #[cfg(test)]
@@ -218,7 +254,12 @@ mod tests {
             key: Some("doc2".to_string()),
             arguments: vec![ValueType::String("hello world".to_string())],
         };
-        let resp = handle_set(&req, docs.clone(), clients.clone());
+        let resp = handle_set(
+            &req,
+            docs.clone(),
+            clients.clone(),
+            Arc::new(Mutex::new(HashMap::new())),
+        );
         assert_eq!(resp.response, CommandResponse::Ok);
         let docs_guard = docs.lock().unwrap();
         assert_eq!(
@@ -238,7 +279,7 @@ mod tests {
             key: None,
             arguments: vec![ValueType::String("something".to_string())],
         };
-        let resp = handle_set(&req, docs, clients);
+        let resp = handle_set(&req, docs, clients, Arc::new(Mutex::new(HashMap::new())));
         assert!(matches!(resp.response, CommandResponse::Error(_)));
     }
 
@@ -251,7 +292,7 @@ mod tests {
             key: Some("doc3".to_string()),
             arguments: vec![],
         };
-        let resp = handle_set(&req, docs, clients);
+        let resp = handle_set(&req, docs, clients, Arc::new(Mutex::new(HashMap::new())));
         assert!(matches!(resp.response, CommandResponse::Error(_)));
     }
 

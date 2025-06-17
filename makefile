@@ -13,7 +13,7 @@ redis:
 	done
 
 microservice:
-	cargo run --bin microservice
+	cargo run --bin microservice 4000
 
 client: 
 	cargo run --bin client
