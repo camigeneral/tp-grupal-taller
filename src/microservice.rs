@@ -1,5 +1,5 @@
 extern crate relm4;
-use self::relm4::Sender;
+// use self::relm4::Sender;
 use std::collections::HashMap;
 use std::io::Write;
 use std::io::{BufRead, BufReader};
@@ -92,6 +92,10 @@ fn listen_to_redis_response(
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(microservice_socket.try_clone()?);
     loop {
+        let _ = connect_node_sender.clone();
+        let _ = last_command_sent.clone();
+        let _ = node_streams.clone();
+
         let mut line = String::new();
         let bytes_read = reader.read_line(&mut line)?;
         if bytes_read == 0 {
