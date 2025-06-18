@@ -1,10 +1,12 @@
 use super::redis;
 use super::redis_response::RedisResponse;
 use crate::client_info;
+use crate::commands::set::handle_scard;
 #[allow(unused_imports)]
 use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use client_info::ClientType;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 pub fn handle_get(
@@ -174,7 +176,7 @@ pub fn handle_append(
     )
 }
 
-pub fn handle_welcome(request: &CommandRequest, active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>) -> RedisResponse {
+pub fn handle_welcome(request: &CommandRequest, active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>, shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>) -> RedisResponse {
     let client_addr_str = redis::extract_string_arguments(&request.arguments);
 
     let doc = match &request.key {
@@ -198,10 +200,21 @@ pub fn handle_welcome(request: &CommandRequest, active_clients: Arc<Mutex<HashMa
     //     Some(username) => format!("Welcome {} to {}", username, doc),
     //     None => format!("Welcome {} to {}", client_addr_str, doc),
     // };
+    let request = CommandRequest {
+        command: "scard".to_string(),
+        key: Some(doc.clone()),
+        arguments: vec![],
+    };
 
+    let response = handle_scard(&request, shared_sets);
 
-    let notification = format!("Welcome {} to {}", client_addr_str, doc);
+    let mut notification= " ".to_string();
 
+    if let CommandResponse::String(ref s) = response.response {
+        if let Some(ultimo) = s.split_whitespace().last() {
+            notification = format!("Welcome {} to {}. Users connected: {:?}", client_addr_str, doc, ultimo);
+        };
+    }
 
     RedisResponse::new(CommandResponse::Null, true, notification, doc)
 }

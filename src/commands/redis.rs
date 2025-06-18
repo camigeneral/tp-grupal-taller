@@ -28,14 +28,14 @@ pub fn execute_command(
         "scard" => set::handle_scard(&request, shared_sets),
         "smembers" => set::handle_smembers(&request, shared_sets),
         // "sscan" => set::handle_sscan(&request, shared_sets),
-        "sadd" => set::handle_sadd(&request, shared_sets),
-        "srem" => set::handle_srem(&request, shared_sets),
+        "sadd" => set::handle_sadd(&request, shared_sets), // subscribe
+        "srem" => set::handle_srem(&request, shared_sets), // unsubscribe
         "llen" => list::handle_llen(&request, docs),
         "rpush" => list::handle_rpush(&request, docs),
         "lset" => list::handle_lset(&request, docs),
         "linsert" => list::handle_linsert(&request, docs),
         "auth" => auth::handle_auth(&request, logged_clients, active_clients, client_addr),
-        "welcome" => string::handle_welcome(&request, active_clients),
+        "welcome" => string::handle_welcome(&request, active_clients,shared_sets),
         _ => RedisResponse::new(
             CommandResponse::Error("Unknown".to_string()),
             false,
