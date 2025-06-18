@@ -42,6 +42,8 @@ pub fn execute_command(
     }
 }
 
+
+#[allow(unused_variables)]
 pub fn execute_replica_command(
     request: CommandRequest,
     docs: Arc<Mutex<HashMap<String, Vec<String>>>>,

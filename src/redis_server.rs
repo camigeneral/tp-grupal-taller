@@ -117,7 +117,7 @@ fn start_server(
 
     // Iniciar servidor TCP
     let tcp_listener = TcpListener::bind(bind_address)?;
-    println!("Servidor Redis escuchando en {}", bind_address);
+    println!("Server listening to clients on: {}", bind_address);
 
     utils::logger::log_event(&log_path, &format!("Servidor iniciado en {}", bind_address));
 

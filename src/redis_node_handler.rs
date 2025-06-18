@@ -142,7 +142,7 @@ fn connect_nodes(
     shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> std::io::Result<()> {
     let listener = TcpListener::bind(address)?;
-    println!("Server listening nodes on {}", address);
+    println!("\nServer listening to nodes on: {}", address);
 
     for stream in listener.incoming() {
         match stream {
@@ -247,18 +247,23 @@ fn handle_node(
                         );
 
                         // me fijo si es mi master/replica
-                        if *hash_range_start == local_node_locked.hash_range.0 && cloned_role != local_node_locked.role {
-                            println!("ff");
-                            if local_node_locked.role == NodeRole::Master {
-                                local_node_locked.replica_nodes.push(*parsed_port);
-                                println!("02");
+                        if *hash_range_start == local_node_locked.hash_range.0 {
+                            if cloned_role != local_node_locked.role {
+                                // estoy hablando con un nodo de otro tipo -> si soy replica, mi master, si soy master, mis replicas
+                                if local_node_locked.role == NodeRole::Master {
+                                    // estoy hablando con mi replica
+                                    local_node_locked.replica_nodes.push(*parsed_port);
+                                } else {
+                                    // estoy hablando con mi master
+                                    local_node_locked.master_node = Some(*parsed_port);
+                                    stream_to_respond.write_all("sync\n".to_string().as_bytes())?;
+                                }
                             } else {
-                                // estoy hablando con mi nodo maestro, lo guardo y le pido la info
-                                local_node_locked.master_node = Some(*parsed_port);
-                                stream_to_respond.write_all("sync\n".to_string().as_bytes())?;
-                                println!("03");
+                               // soy una replica, hablando con la ottra replica de mi master
+                               local_node_locked.replica_nodes.push(*parsed_port);
                             }
                         }
+
 
                         let node_address_to_connect = format!("127.0.0.1:{}", node_listening_port);
 
@@ -281,22 +286,33 @@ fn handle_node(
                         peer_node_to_update.role = node_role;
                         peer_node_to_update.hash_range = (*hash_range_start, *hash_range_end);
 
-                        // si es mi master, le pido la info
-                        if peer_node_to_update.role == NodeRole::Master && peer_node_to_update.hash_range.0 == local_node_locked.hash_range.0 {
-                            println!("03");
-                            local_node_locked.master_node = Some(*parsed_port);
-                            peer_node_to_update.stream.write_all("sync\n".to_string().as_bytes())?;
+                        if peer_node_to_update.hash_range.0 == local_node_locked.hash_range.0 {
+                            if cloned_role != local_node_locked.role {
+                                // estoy hablando con un nodo de otro tipo -> si soy replica, mi master, si soy master, mis replicas
+                                if local_node_locked.role == NodeRole::Master {
+                                    // estoy hablando con mi replica
+                                    local_node_locked.replica_nodes.push(*parsed_port);
+                                } else {
+                                    // estoy hablando con mi master
+                                    local_node_locked.master_node = Some(*parsed_port);
+                                    peer_node_to_update.stream.write_all("sync\n".to_string().as_bytes())?;
+                                }
+                            } else {
+                               // soy una replica, hablando con la ottra replica de mi master
+                               local_node_locked.replica_nodes.push(*parsed_port);
+                            }
                         }
+
                     }
                 }
             }
             "sync" => {
                 handle_replica_sync(&shared_sets, &shared_documents, &document_subscribers)?;
             }
-            "startreplicacommand" => {
+            "start_replica_command" => {
                 saving_command = true;
             }
-            "endreplicacommand" => {
+            "end_replica_command" => {
                 saving_command = false;
                 let cursor = Cursor::new(command_string.clone());
                 let mut reader_for_command = BufReader::new(cursor);
@@ -331,8 +347,9 @@ fn handle_node(
                 command_string = "".to_string();
             }
             "ping" => {
-                writeln!(stream, "Pong")?;
+                writeln!(stream, "pong")?;
             }
+            "confirm_master_down" => {}
             _ => {
                 if saving_command {
                     let formated = format!("{}\r\n", command);
@@ -382,7 +399,7 @@ pub fn broadcast_to_replicas(
     let replicas = &locked_local_node.replica_nodes;
     println!("initial command {}", unparsed_command);
 
-    // to do: guuardarme el stream en localnode
+    // to do: guardarme el stream en localnode
     for replica in replicas {
         let key = format!("127.0.0.1:{}", replica);
         if let Some(peer_node) = locked_peer_nodes.get_mut(&key) {
@@ -391,9 +408,9 @@ pub fn broadcast_to_replicas(
                 "{}",
                 unparsed_command
             );
-            stream.write_all("startReplicaCommand\n".to_string().as_bytes())?;
+            stream.write_all("start_replica_command\n".to_string().as_bytes())?;
             stream.write_all(message.as_bytes())?;
-            stream.write_all("endReplicaCommand\n".to_string().as_bytes())?;
+            stream.write_all("end_replica_command\n".to_string().as_bytes())?;
         }
     }
 
@@ -401,10 +418,11 @@ pub fn broadcast_to_replicas(
 }
 
 
-fn handle_replica_sync(shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>, shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>, document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>) -> std::io::Result<()> {
+fn handle_replica_sync(_shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>, _shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>, _document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>) -> std::io::Result<()> {
     println!("in handle_replica_sync");
     Ok(())
 }
+
 
 fn ping_to_master(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>)-> std::io::Result<()> {
     let ping_interval = Duration::from_secs(3);
@@ -434,25 +452,30 @@ fn ping_to_master(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashM
             
             match stream_to_ping.as_ref() {
                 Some(mut stream) => {
+                    stream.set_read_timeout(Some(error_interval))?;
                     let mut reader = BufReader::new(stream.try_clone()?);
-                    stream.write_all("Ping\n".to_string().as_bytes())?;
+                    stream.write_all("ping\n".to_string().as_bytes())?;
                     now = Instant::now();
 
                     let mut line = String::new();
                     match reader.read_line(&mut line) {
                         Ok(0) => {
                             println!("Connection closed by peer");
+                            initialize_replica_promotion(local_node, peer_nodes);
                             break;
                         }
                         Ok(_) => {
+                            // todo ok
                             println!("Received response: {}", line.trim());
                         }
-
-                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => {
+                        Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
                             println!("Timeout: no response within {:?}", error_interval);
+                            initialize_replica_promotion(local_node, peer_nodes);
+                            break;
                         }
                         Err(e) => {
                             println!("Unexpected error: {}", e);
+                            initialize_replica_promotion(local_node, peer_nodes);
                             break;
                         }
                     }
@@ -468,4 +491,56 @@ fn ping_to_master(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashM
     }
 
     Ok(())
+}
+
+
+fn initialize_replica_promotion(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>)  {
+    println!("replica promotion!!!");
+
+    let master_port_option;
+    let hash_range;
+    {
+        let locked_local_node = local_node.lock().unwrap();
+        if locked_local_node.role != NodeRole::Replica {
+            println!("Master node cannot initiate replica promotion");
+            return;
+        }
+
+        master_port_option = locked_local_node.master_node;
+        hash_range = locked_local_node.hash_range;
+    }
+
+    let master_port = match master_port_option {
+        Some(p) => p,
+        None => {
+            println!("No master node");
+            return;
+        }
+    };
+
+    let mut locked_peer_nodes = peer_nodes.lock().unwrap();
+
+    // marco el master como inactivo
+    for peer in locked_peer_nodes.values_mut() {
+        if peer.port == master_port {
+            peer.state = NodeState::Inactive;
+        }
+    }
+
+    // hablo con la otra replica
+    for (_, peer) in locked_peer_nodes.iter() {
+        if peer.role == NodeRole::Replica && peer.hash_range == hash_range && peer.port != master_port {
+            let message = format!("confirm_master_down {}\n", master_port);
+            match peer.stream.try_clone() {
+                Ok(mut peer_stream) => {
+                    let _ = peer_stream.write_all(message.as_bytes());
+                    println!("message sent to peer");
+                }
+                Err(_) => {
+                    eprintln!("Error cloning stream");
+                }
+            }
+        }
+    }
+
 }
