@@ -3,12 +3,12 @@ use super::pub_sub;
 use super::redis_response::RedisResponse;
 use super::set;
 use super::string;
+use super::auth;
+use crate::client_info;
 use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
-use crate::client_info;
-
 
 pub fn execute_command(
     request: CommandRequest,
@@ -17,6 +17,7 @@ pub fn execute_command(
     shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
     client_addr: String,
     active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
+    logged_clients: Arc<Mutex<HashMap<String, bool>>>
 ) -> RedisResponse {
     match request.command.as_str() {
         "get" => string::handle_get(&request, docs),
@@ -33,7 +34,8 @@ pub fn execute_command(
         "rpush" => list::handle_rpush(&request, docs),
         "lset" => list::handle_lset(&request, docs),
         "linsert" => list::handle_linsert(&request, docs),
-        "welcome" => string::handle_welcome(&request),
+        "auth" => auth::handle_auth(&request, logged_clients, active_clients, client_addr),
+        "welcome" => string::handle_welcome(&request, active_clients),
         _ => RedisResponse::new(
             CommandResponse::Error("Unknown".to_string()),
             false,

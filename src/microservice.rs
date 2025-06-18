@@ -1,6 +1,7 @@
 extern crate relm4;
-use self::relm4::Sender;
+// use self::relm4::Sender;
 use std::collections::HashMap;
+use std::env::args;
 use std::io::Write;
 use std::io::{BufRead, BufReader};
 #[allow(unused_imports)]
@@ -18,21 +19,11 @@ use std::env::args;
 #[path = "utils/logger.rs"]
 mod logger;
 
-static REQUIRED_ARGS: usize = 2;
-
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cli_args: Vec<String> = args().collect();
-    if cli_args.len() != REQUIRED_ARGS {
-        eprintln!("Error: Cantidad de argumentos inválida");
-        eprintln!("Uso: {} <puerto>", cli_args[0]);
-        return Err("Error: Cantidad de argumentos inválida".into());
-    }
 
-    let redis_port = match cli_args[1].parse::<usize>() {
-        Ok(n) => n,
-        Err(_e) => return Err("Failed to parse arguments".into()),
-    };
+    let redis_port = 4000;
+    let main_address = format!("127.0.0.1:{}", redis_port);
 
     let node_streams: Arc<Mutex<HashMap<String, TcpStream>>> = Arc::new(Mutex::new(HashMap::new()));
     let last_command_sent: Arc<Mutex<String>> = Arc::new(Mutex::new("".to_string()));
@@ -94,7 +85,26 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let _ = connect_node_sender.send(redis_socket);
+    // ✅ Conectarse al nodo principal
+    println!("Conectándome al nodo principal en {:?}", main_address);
+    let mut socket = TcpStream::connect(&main_address)?;
+    let redis_socket = socket.try_clone()?;
+    let redis_socket_clone_for_hashmap = socket.try_clone()?;
+
+    // Insertar en el hashmap de streams
+    {
+        node_streams
+            .lock()
+            .unwrap()
+            .insert(main_address.clone(), redis_socket_clone_for_hashmap);
+    }
+
+    // Identificarse como microservicio
+    let command = "Microservicio\r\n".to_string();
+    let parts: Vec<&str> = command.split_whitespace().collect();
+    let resp_command = format_resp_command(&parts);
+    println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
+    socket.write_all(resp_command.as_bytes())?;
 
     loop{
         
@@ -139,6 +149,10 @@ fn listen_to_redis_response(
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(microservice_socket.try_clone()?);
     loop {
+        let _ = connect_node_sender.clone();
+        let _ = last_command_sent.clone();
+        let _ = node_streams.clone();
+
         let mut line = String::new();
         let bytes_read = reader.read_line(&mut line)?;
         if bytes_read == 0 {
@@ -156,8 +170,7 @@ fn listen_to_redis_response(
 
                 let doc_name = parts[4];
 
-                let bienvenida = format!("Welcome {} {}",doc_name, client_addr);
-                
+                let bienvenida = format!("Welcome {} {}", doc_name, client_addr);
 
                 let parts: Vec<&str> = bienvenida.split_whitespace().collect();
 

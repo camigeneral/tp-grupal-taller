@@ -4,10 +4,9 @@ use self::gtk4::{
     prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, WidgetExt},
     CssProvider,
 };
-use crate::components::login::{LoginForm, LoginOutput};
+use crate::components::login::{LoginForm, LoginMsg, LoginOutput};
 use app::gtk4::glib::Propagation;
 use client::client_run;
-use commands::client::ClientCommand;
 use components::file_workspace::{FileWorkspace, FileWorkspaceMsg, FileWorkspaceOutputMessage};
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
 use std::collections::HashMap;
@@ -34,8 +33,8 @@ pub struct AppModel {
     login_form_cont: Controller<LoginForm>,
     is_logged_in: bool,
     command: String,
-    port: u16,
     command_sender: Option<Sender<String>>,
+    username: String
 }
 
 #[derive(Debug)]
@@ -51,6 +50,8 @@ pub enum AppMsg {
     RefreshData,
     CreateFile(String, String),
     SubscribeFile(String),
+    PrepareAndExecuteCommand(String, String),
+    ManageResponse(String),
 }
 
 #[relm4::component(pub)]
@@ -130,12 +131,6 @@ impl SimpleComponent for AppModel {
             gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
 
-        let mut users = HashMap::new();
-        users.insert("fran".to_string(), "123".to_string());
-        users.insert("cami".to_string(), "123".to_string());
-        users.insert("valen".to_string(), "123".to_string());
-        users.insert("rama".to_string(), "123".to_string());
-
         let header_model = NavbarModel::builder().launch(()).forward(
             sender.input_sender(),
             |output| match output {
@@ -153,21 +148,24 @@ impl SimpleComponent for AppModel {
             },
         );
 
-        let login_form_model = LoginForm::builder().launch(users).forward(
+        let login_form_model = LoginForm::builder().launch(()).forward(
             sender.input_sender(),
             |output| match output {
-                LoginOutput::LoginSuccess(username) => AppMsg::LoginSuccess(username),
+                LoginOutput::LoginRequested(username, password) => {
+                    let command = format!("AUTH {} {}", username, password);                    
+                    AppMsg::PrepareAndExecuteCommand(command, username)
+                },
             },
         );
 
-        let model = AppModel {
+        let mut model = AppModel {
             header_cont: header_model,
             files_manager_cont: files_manager_model,
             login_form_cont: login_form_model,
             is_logged_in: false,
             command: "".to_string(),
-            port,
             command_sender: None,
+            username: "".to_string()
         };
 
         let sender_clone = sender.clone();
@@ -178,6 +176,16 @@ impl SimpleComponent for AppModel {
             Propagation::Proceed
         });
         let widgets = view_output!();
+        let ui_sender: relm4::Sender<AppMsg> = sender.input_sender().clone();
+        let (tx, rx) = channel::<String>();
+        let command_sender = Some(tx.clone());
+        model.command_sender = command_sender;
+
+        thread::spawn(move || {
+            if let Err(e) = client_run(port, rx, Some(ui_sender)) {
+                eprintln!("Error al iniciar el cliente: {:?}", e);
+            }
+        });
 
         ComponentParts { model, widgets }
     }
@@ -192,25 +200,19 @@ impl SimpleComponent for AppModel {
                         .unwrap();
                 }
             }
+            AppMsg::PrepareAndExecuteCommand(command, username) => {
+                self.command = command;
+                self.username = username;
+                sender.input(AppMsg::ExecuteCommand);
+            }
             AppMsg::Ignore => {}
             AppMsg::LoginSuccess(username) => {
                 self.header_cont
                     .sender()
                     .send(NavbarMsg::SetLoggedInUser(username))
                     .unwrap();
-                let ui_sender = sender.input_sender().clone();
 
-                let (tx, rx) = channel::<String>();
-                self.command_sender = Some(tx.clone());
-
-                let port = self.port;
                 let files_manager_cont_sender = self.files_manager_cont.sender().clone();
-
-                thread::spawn(move || {
-                    if let Err(e) = client_run(port, rx, Some(ui_sender)) {
-                        eprintln!("Error al iniciar el cliente: {:?}", e);
-                    }
-                });
 
                 files_manager_cont_sender
                     .send(FileWorkspaceMsg::ReloadFiles)
@@ -219,11 +221,11 @@ impl SimpleComponent for AppModel {
                     .sender()
                     .send(NavbarMsg::SetConnectionStatus(true))
                     .unwrap();
+                self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
                 self.is_logged_in = true;
             }
-            AppMsg::LoginFailure(_error) => {
-
-                //seria que valen ya esta conectada
+            AppMsg::LoginFailure(error) => {
+                self.login_form_cont.emit(LoginMsg::SetErrorForm(error));                
             }
             AppMsg::Logout => {
                 self.header_cont
@@ -238,7 +240,19 @@ impl SimpleComponent for AppModel {
 
                 self.is_logged_in = false;
             }
-            AppMsg::CommandChanged(command) => self.command = command,
+            AppMsg::CommandChanged(command) => {
+                self.command = command;
+                println!("comando {}", self.command);
+            },
+
+            AppMsg::ManageResponse(resp) => {
+                if resp != "OK" {
+                    return;
+                }
+                if self.command.contains("AUTH") {
+                    sender.input(AppMsg::LoginSuccess(self.username.clone()));
+                }
+            }
 
             AppMsg::CreateFile(_file_id, _content) => {
                 /* println!("Se ejecuto el siguiente comando: {:#?}", self.command);
@@ -266,8 +280,6 @@ impl SimpleComponent for AppModel {
                 if let Some(channel_sender) = &self.command_sender {
                     if let Err(e) = channel_sender.send(self.command.to_string()) {
                         println!("Error enviando comando: {}", e);
-                    } else {
-                        self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
                     }
                 } else {
                     println!("No hay un canal de comando disponible.");

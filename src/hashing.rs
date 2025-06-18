@@ -20,7 +20,8 @@ fn crc16(data: &[u8]) -> usize {
             }
         }
     }
-    (crc & 0xFFFF) as usize
+    // (crc & 0xFFFF) as usize
+    (crc) as usize
 }
 
 #[cfg(test)]

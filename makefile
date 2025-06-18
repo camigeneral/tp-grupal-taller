@@ -13,10 +13,10 @@ redis:
 	done
 
 microservice:
-	cargo run --bin microservice 4000
+	cargo run --bin microservice
 
 client: 
-	cargo run --bin client
+	cargo run --bin client 4000
 
 
 clean_redis:
