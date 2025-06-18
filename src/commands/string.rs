@@ -189,15 +189,19 @@ pub fn handle_welcome(request: &CommandRequest, active_clients: Arc<Mutex<HashMa
         }
     };
 
-    let username = {
-    let clients = active_clients.lock().unwrap();
-    clients
-        .get(&client_addr_str)
-        .map(|client| client.username.clone())
-    };
-    
+    // let username_opt = {
+    //     let clients = active_clients.lock().unwrap();
+    //     clients.get(&client_addr_str).map(|c| c.username.clone())
+    // };
 
-    let notification = format!("Welcome {} to {}", username, doc);
+    // let notification = match username_opt {
+    //     Some(username) => format!("Welcome {} to {}", username, doc),
+    //     None => format!("Welcome {} to {}", client_addr_str, doc),
+    // };
+
+
+    let notification = format!("Welcome {} to {}", client_addr_str, doc);
+
 
     RedisResponse::new(CommandResponse::Null, true, notification, doc)
 }
