@@ -15,7 +15,8 @@ use std::thread;
 #[allow(unused_imports)]
 use std::time::Duration;
 use std::env::args;
-
+#[path = "utils/logger.rs"]
+mod logger;
 
 static REQUIRED_ARGS: usize = 2;
 
@@ -39,12 +40,26 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let address = format!("127.0.0.1:{}", redis_port);
     let cloned_address = address.clone();
 
+    let config_path = "redis.conf";
+    let log_path = logger::get_log_path_from_config(config_path);
+    
+    use std::fs;
+    if fs::metadata(&log_path).map(|m| m.len() > 0).unwrap_or(false) {
+        let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_path)
+                .and_then(|mut file| writeln!(file, ""));
+    }
+
     println!("Conectándome al server de redis en {:?}", address);
+    logger::log_event(&log_path, &format!("Microservicio conectandose al server de redis en {:?}", address));
     let mut socket: TcpStream = TcpStream::connect(address)?;
 
     let command = "Microservicio\r\n".to_string();
 
     println!("Enviando: {:?}", command);
+    logger::log_event(&log_path, &format!("Microservicio envia {:?}", command));
     let parts: Vec<&str> = command.split_whitespace().collect();
     let resp_command = format_resp_command(&parts);
 
@@ -74,6 +89,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             cloned_last_command,
         ) {
             eprintln!("Error en la conexión con el nodo: {}", e);
+            logger::log_event(&log_path, &format!("Error en la conexión con el nodo: {}", command));
         }
     });
 
