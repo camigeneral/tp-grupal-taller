@@ -87,6 +87,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             connect_nodes_receiver,
             cloned_node_streams,
             cloned_last_command,
+            &log_path,
         ) {
             eprintln!("Error en la conexión con el nodo: {}", e);
             logger::log_event(&log_path, &format!("Error en la conexión con el nodo: {}", command));
@@ -100,11 +101,41 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
+fn connect_to_nodes(
+    sender: MpscSender<TcpStream>,
+    reciever: Receiver<TcpStream>,
+    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+    last_command_sent: Arc<Mutex<String>>,
+    log_path: &str,
+) -> std::io::Result<()> {
+    for stream in reciever {
+        let cloned_node_streams = Arc::clone(&node_streams);
+        let cloned_last_command = Arc::clone(&last_command_sent);
+        let cloned_own_sender = sender.clone();
+        let log_path_clone = log_path.to_string();
+
+        thread::spawn(move || {
+            if let Err(e) = listen_to_redis_response(
+                stream,
+                cloned_own_sender,
+                cloned_node_streams,
+                cloned_last_command,
+                &log_path_clone,
+            ) {
+                eprintln!("Error en la conexión con el nodo: {}", e);
+            }
+        });
+    }
+
+    Ok(())
+}
+
 fn listen_to_redis_response(
     mut microservice_socket: TcpStream,
     connect_node_sender: MpscSender<TcpStream>,
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     last_command_sent: Arc<Mutex<String>>,
+    log_path: &str,
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(microservice_socket.try_clone()?);
     loop {
@@ -115,6 +146,8 @@ fn listen_to_redis_response(
         }
 
         println!("Respuesta de redis: {}", line);
+        logger::log_event(&log_path, &format!("Respuesta de redis: {}", line));
+
 
         if line.starts_with("Client ") && line.contains(" subscribed to ") {
             let parts: Vec<&str> = line.trim().split_whitespace().collect();
@@ -132,6 +165,7 @@ fn listen_to_redis_response(
 
                 if let Err(e) = microservice_socket.write_all(mensaje_final.as_bytes()) {
                     eprintln!("Error al enviar mensaje de bienvenida: {}", e);
+                    logger::log_event(&log_path, &format!("Error al enviar mensaje de bienvenida: {}", e));
                 }
             }
         }
@@ -147,30 +181,4 @@ pub fn format_resp_command(command_parts: &[&str]) -> String {
     }
 
     resp_message
-}
-
-fn connect_to_nodes(
-    sender: MpscSender<TcpStream>,
-    reciever: Receiver<TcpStream>,
-    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
-    last_command_sent: Arc<Mutex<String>>,
-) -> std::io::Result<()> {
-    for stream in reciever {
-        let cloned_node_streams = Arc::clone(&node_streams);
-        let cloned_last_command = Arc::clone(&last_command_sent);
-        let cloned_own_sender = sender.clone();
-
-        thread::spawn(move || {
-            if let Err(e) = listen_to_redis_response(
-                stream,
-                cloned_own_sender,
-                cloned_node_streams,
-                cloned_last_command,
-            ) {
-                eprintln!("Error en la conexión con el nodo: {}", e);
-            }
-        });
-    }
-
-    Ok(())
 }
