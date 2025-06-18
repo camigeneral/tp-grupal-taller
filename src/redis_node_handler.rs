@@ -202,7 +202,6 @@ fn handle_node(
 
         match command.as_str() {
             "node" => {
-                println!("00");
                 let node_listening_port = &input[1];
                 let parsed_port = &input[1].trim().parse::<usize>().map_err(|_| {
                     std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid port")
@@ -229,7 +228,6 @@ fn handle_node(
                 })?;
 
                 {
-                    println!("01");
                     let mut lock_nodes = nodes.lock().unwrap();
                     let mut local_node_locked = local_node.lock().unwrap();
                     // no lo conozco -> creo el stream y me guardo todo, y le mando mi info
@@ -349,7 +347,15 @@ fn handle_node(
             "ping" => {
                 writeln!(stream, "pong")?;
             }
-            "confirm_master_down" => {}
+            "confirm_master_down" => {
+                match confirm_master_state(local_node, nodes.clone()) {
+                    Ok(response) => {
+                        println!("master state: {:?}", response);
+                        stream.write_all("initialize_replica_promotion".as_bytes())?;
+                    }
+                    Err(_) => eprintln!("err"),
+                }
+            }
             _ => {
                 if saving_command {
                     let formated = format!("{}\r\n", command);
@@ -419,7 +425,6 @@ pub fn broadcast_to_replicas(
 
 
 fn handle_replica_sync(_shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>, _shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>, _document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>) -> std::io::Result<()> {
-    println!("in handle_replica_sync");
     Ok(())
 }
 
@@ -461,7 +466,7 @@ fn ping_to_master(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashM
                     match reader.read_line(&mut line) {
                         Ok(0) => {
                             println!("Connection closed by peer");
-                            initialize_replica_promotion(local_node, peer_nodes);
+                            request_master_state_confirmation(local_node, peer_nodes);
                             break;
                         }
                         Ok(_) => {
@@ -470,12 +475,12 @@ fn ping_to_master(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashM
                         }
                         Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
                             println!("Timeout: no response within {:?}", error_interval);
-                            initialize_replica_promotion(local_node, peer_nodes);
+                            request_master_state_confirmation(local_node, peer_nodes);
                             break;
                         }
                         Err(e) => {
                             println!("Unexpected error: {}", e);
-                            initialize_replica_promotion(local_node, peer_nodes);
+                            request_master_state_confirmation(local_node, peer_nodes);
                             break;
                         }
                     }
@@ -494,9 +499,7 @@ fn ping_to_master(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashM
 }
 
 
-fn initialize_replica_promotion(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>)  {
-    println!("replica promotion!!!");
-
+fn request_master_state_confirmation(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>)  {
     let master_port_option;
     let hash_range;
     {
@@ -534,7 +537,6 @@ fn initialize_replica_promotion(local_node: Arc<Mutex<LocalNode>>, peer_nodes: A
             match peer.stream.try_clone() {
                 Ok(mut peer_stream) => {
                     let _ = peer_stream.write_all(message.as_bytes());
-                    println!("message sent to peer");
                 }
                 Err(_) => {
                     eprintln!("Error cloning stream");
@@ -543,4 +545,33 @@ fn initialize_replica_promotion(local_node: Arc<Mutex<LocalNode>>, peer_nodes: A
         }
     }
 
+}
+
+// devuelve true si el nodo master está caido
+fn confirm_master_state(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>) -> std::io::Result<NodeState> {
+    let master_port_option;
+    let mut master_state = NodeState::Active;
+    {
+        let locked_local_node = local_node.lock().unwrap();
+        master_port_option = locked_local_node.master_node;
+    }
+
+    let master_port = match master_port_option {
+        Some(p) => p,
+        None => {
+            
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Master node not set",
+            ));
+        }
+    };
+
+    let peer_nodes_locked = peer_nodes.lock().unwrap();
+    for (_addr, peer_node) in peer_nodes_locked.iter() {
+        if peer_node.port == master_port && peer_node.state == NodeState::Inactive {
+            master_state = NodeState::Inactive;
+        }
+    }
+    Ok(master_state)
 }

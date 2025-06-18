@@ -9,6 +9,7 @@ pub enum NodeRole {
     Unknown,
 }
 
+#[derive(Debug, PartialEq)]
 pub enum NodeState {
     Active,
     Inactive,
