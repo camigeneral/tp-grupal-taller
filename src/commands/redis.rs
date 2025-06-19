@@ -22,8 +22,8 @@ pub fn execute_command(
     match request.command.as_str() {
         "get" => string::handle_get(&request, docs),
         "set" => string::handle_set(&request, docs, document_subscribers, active_clients),
-        "subscribe" => pub_sub::handle_subscribe(&request, document_subscribers, client_addr),
-        "unsubscribe" => pub_sub::handle_unsubscribe(&request, document_subscribers, client_addr),
+        "subscribe" => pub_sub::handle_subscribe(&request, document_subscribers, client_addr, shared_sets),
+        "unsubscribe" => pub_sub::handle_unsubscribe(&request, document_subscribers, client_addr,shared_sets),
         "append" => string::handle_append(&request, docs),
         "scard" => set::handle_scard(&request, shared_sets),
         "smembers" => set::handle_smembers(&request, shared_sets),
