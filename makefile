@@ -9,8 +9,9 @@ redis:
 	for i in $$(seq 1 $(nodes)); do \
 		PORT=$$((4000 + $$i - 1)); \
 		echo "Iniciando Redis Server $$i en puerto $$PORT"; \
-		cargo run --bin redis_server $$PORT & \
+		gnome-terminal -- bash -c "cargo run --bin redis_server $$PORT; exec bash"; \
 	done
+
 
 microservice:
 	cargo run --bin microservice
@@ -20,10 +21,6 @@ client:
 
 
 clean_redis:
-	pkill -f "redis_server" || true
-
-clean:
-	rm -rf target
 	pkill -f "redis_server" || true
 
 .PHONY: redis microservice client clean
