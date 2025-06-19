@@ -162,7 +162,7 @@ fn listen_to_redis_response(
         println!("Respuesta de redis: {}", line);
         logger::log_event(&log_path, &format!("Respuesta de redis: {}", line));
 
-
+        // client-address qty_users
         if line.starts_with("Client ") && line.contains(" subscribed to ") {
             let parts: Vec<&str> = line.trim().split_whitespace().collect();
             if parts.len() >= 5 {
