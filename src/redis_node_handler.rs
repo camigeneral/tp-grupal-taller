@@ -202,6 +202,7 @@ fn handle_node(
 
         match command.as_str() {
             "node" => {
+                println!("00");
                 let node_listening_port = &input[1];
                 let parsed_port = &input[1].trim().parse::<usize>().map_err(|_| {
                     std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid port")
@@ -227,6 +228,7 @@ fn handle_node(
                     std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid end range")
                 })?;
 
+                println!("01");
                 {
                     let mut lock_nodes = nodes.lock().unwrap();
                     let mut local_node_locked = local_node.lock().unwrap();
@@ -243,7 +245,7 @@ fn handle_node(
                             (*hash_range_start, *hash_range_end),
                             NodeState::Active,
                         );
-
+                        println!("02");
                         // me fijo si es mi master/replica
                         if *hash_range_start == local_node_locked.hash_range.0 {
                             if cloned_role != local_node_locked.role {
@@ -277,6 +279,7 @@ fn handle_node(
                         );
 
                         stream_to_respond.write_all(message.as_bytes())?;
+                        println!("03");
                     }
                     // si lo conozco, actualizo todo menos el stream
                     else {
@@ -299,10 +302,12 @@ fn handle_node(
                                // soy una replica, hablando con la ottra replica de mi master
                                local_node_locked.replica_nodes.push(*parsed_port);
                             }
+                            println!("04");
                         }
 
                     }
                 }
+                println!("05");
             }
             "sync" => {
                 handle_replica_sync(&shared_sets, &shared_documents, &document_subscribers)?;
@@ -348,14 +353,40 @@ fn handle_node(
                 writeln!(stream, "pong")?;
             }
             "confirm_master_down" => {
-                match confirm_master_state(local_node, nodes.clone()) {
-                    Ok(response) => {
-                        println!("master state: {:?}", response);
-                        stream.write_all("initialize_replica_promotion".as_bytes())?;
+                match confirm_master_state(local_node, &nodes) {
+                    Ok(master_state) => {
+                        println!("master state: {:?}", master_state);
+                        if master_state == NodeState::Inactive {
+                            let locked_nodes = nodes.lock().unwrap();
+                            let hash_range;
+                            {
+                                let locked_local_node = local_node.lock().unwrap();
+                                if locked_local_node.role != NodeRole::Replica {
+                                    println!("Master node cannot initiate replica promotion");
+                                }
+
+                                hash_range = locked_local_node.hash_range;
+                            }
+
+                            for (_, peer) in locked_nodes.iter() {
+                                if peer.role == NodeRole::Replica && peer.hash_range == hash_range {
+                                    match peer.stream.try_clone() {
+                                        Ok(mut peer_stream) => {
+                                            let message = "initialize_replica_promotion\n";
+                                            let _ = peer_stream.write_all(message.as_bytes());
+                                        }
+                                        Err(_) => {
+                                            eprintln!("Error cloning stream");
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                     Err(_) => eprintln!("err"),
-                }
+                };
             }
+            "initialize_replica_promotion" => { println!("aca") }
             _ => {
                 if saving_command {
                     let formated = format!("{}\r\n", command);
@@ -547,8 +578,8 @@ fn request_master_state_confirmation(local_node: Arc<Mutex<LocalNode>>, peer_nod
 
 }
 
-// devuelve true si el nodo master está caido
-fn confirm_master_state(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>) -> std::io::Result<NodeState> {
+
+fn confirm_master_state(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>) -> std::io::Result<NodeState> {
     let master_port_option;
     let mut master_state = NodeState::Active;
     {
