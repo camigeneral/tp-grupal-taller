@@ -31,6 +31,8 @@ pub struct FileWorkspace {
     editor_visible: bool,
     /// Nombre del archivo actual.
     current_file: String,
+
+    files: HashMap<(String, FileType), HashMap<String, String>>
 }
 
 /// Enum que define los diferentes mensajes que puede recibir el componente `FileWorkspace`.
@@ -38,7 +40,7 @@ pub struct FileWorkspace {
 #[derive(Debug)]
 pub enum FileWorkspaceMsg {
     /// Mensaje para abrir un archivo con nombre, contenido y cantidad de líneas.
-    OpenFile(String, String, i32),
+    OpenFile(String, FileType),
     /// Mensaje para ignorar una acción.
     Ignore,
     /// Mensaje para cerrar el editor de archivos.
@@ -119,11 +121,32 @@ impl SimpleComponent for FileWorkspace {
                 },
             );
 
+        let mut files_map: HashMap<(String, FileType), HashMap<String, String>> = HashMap::new();
+
+        if let Ok(docs) = get_file_content_workspace(&"docs.txt".to_string()) {
+            for (nombre, mensajes) in docs {
+                let file_type = if nombre.ends_with(".xlsx") {
+                    FileType::Sheet
+                } else {
+                    FileType::Text
+                };
+
+                let inner_map: HashMap<String, String> = mensajes
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, msg)| (format!("line_{}", i), msg))
+                    .collect();
+
+                files_map.insert((nombre, file_type), inner_map);
+            }
+        }
+
         let model = FileWorkspace {
             file_list_ctrl: list_files_cont,
             file_editor_ctrl: editor_file_cont,
             editor_visible: false,
             current_file: "".to_string(),
+            files: files_map,
         };
 
         let list_box_widget = model.file_list_ctrl.widget();
@@ -141,13 +164,22 @@ impl SimpleComponent for FileWorkspace {
                     .unwrap();
             }
 
-            FileWorkspaceMsg::OpenFile(file, content, qty) => {
+            FileWorkspaceMsg::OpenFile(file, file_type) => {
                 self.current_file = file.clone();
-                self.file_editor_ctrl
-                    .sender()
-                    .send(FileEditorMessage::UpdateFile(file, qty, content))
-                    .unwrap();
-                self.editor_visible = true;
+
+                if let Some(inner_map) = self.files.get(&(file.clone(), file_type.clone())) {
+                    let content = inner_map.get("content").cloned().unwrap_or_default();
+                    let qty = content.lines().count() as i32;
+
+                    self.file_editor_ctrl
+                        .sender()
+                        .send(FileEditorMessage::UpdateFile(file, qty, content))
+                        .unwrap();
+
+                    self.editor_visible = true;
+                } else {
+                    println!("Archivo no encontrado: {} ({:?})", file, file_type.clone());
+                }
             }
             FileWorkspaceMsg::CloseEditor => {
                 self.file_editor_ctrl
