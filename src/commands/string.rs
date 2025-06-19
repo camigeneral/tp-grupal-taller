@@ -176,7 +176,7 @@ pub fn handle_append(
     )
 }
 
-pub fn handle_welcome(request: &CommandRequest, active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>, shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>) -> RedisResponse {
+pub fn handle_welcome(request: &CommandRequest, _active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>, shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>) -> RedisResponse {
     let client_addr_str = redis::extract_string_arguments(&request.arguments);
 
     let doc = match &request.key {
@@ -191,15 +191,6 @@ pub fn handle_welcome(request: &CommandRequest, active_clients: Arc<Mutex<HashMa
         }
     };
 
-    // let username_opt = {
-    //     let clients = active_clients.lock().unwrap();
-    //     clients.get(&client_addr_str).map(|c| c.username.clone())
-    // };
-
-    // let notification = match username_opt {
-    //     Some(username) => format!("Welcome {} to {}", username, doc),
-    //     None => format!("Welcome {} to {}", client_addr_str, doc),
-    // };
     let request = CommandRequest {
         command: "scard".to_string(),
         key: Some(doc.clone()),
@@ -209,14 +200,15 @@ pub fn handle_welcome(request: &CommandRequest, active_clients: Arc<Mutex<HashMa
     let response = handle_scard(&request, shared_sets);
 
     let mut notification= " ".to_string();
+    println!("response del scard: {:#?}", response);
 
     if let CommandResponse::String(ref s) = response.response {
-        if let Some(ultimo) = s.split_whitespace().last() {
-            notification = format!("Welcome {} to {}. Users connected: {:?}", client_addr_str, doc, ultimo);
+        if let Some(qty_subs) = s.split_whitespace().last() {
+            notification = format!("STATUS {}|{:?}", client_addr_str, qty_subs);
         };
     }
-
-    RedisResponse::new(CommandResponse::Null, true, notification, doc)
+    println!("Llegue aca {}", notification.clone());
+    RedisResponse::new(CommandResponse::String(notification.clone()), true, notification, doc)
 }
 
 #[cfg(test)]
