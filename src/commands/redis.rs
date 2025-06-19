@@ -9,10 +9,11 @@ use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
+use crate::documento::Documento;
 
 pub fn execute_command(
     request: CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    docs: Arc<Mutex<HashMap<String, Documento>>>,
     document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
     shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
     client_addr: String,

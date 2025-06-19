@@ -18,6 +18,7 @@ use crate::components::file_editor::FileEditorOutputMessage;
 use components::file_editor::FileEditorMessage;
 use components::list_files::FileFilterAction;
 use components::types::FileType;
+use crate::documento::Documento;
 
 #[derive(Debug)]
 /// Estructura principal que gestiona el espacio de trabajo de archivos, que incluye una lista de archivos
@@ -198,48 +199,63 @@ fn get_files_list(
     // Convierte el HashMap a la lista que espera FileListView
     let files_list: Vec<(String, FileType, String, u8)> = docs
         .into_iter()
-        .map(|(nombre, mensajes)| {
-            let contenido = mensajes.join("\n");
-            let qty = mensajes.len() as u8;
-            let file_type = if nombre.ends_with(".xlsx") {
-                FileType::Sheet
-            } else {
-                FileType::Text
-            };
-            (nombre, file_type, contenido, qty)
+        .map(|(nombre, doc)| {
+            match doc {
+                Documento::Texto(lineas) => {
+                    let contenido = lineas.join("\n");
+                    let qty = lineas.len() as u8;
+                    (nombre, FileType::Text, contenido, qty)
+                }
+                Documento::Calculo(filas) => {
+                    let contenido = filas.iter().map(|fila| fila.join(",")).collect::<Vec<_>>().join("\n");
+                    let qty = filas.len() as u8;
+                    (nombre, FileType::Sheet, contenido, qty)
+                }
+            }
         })
         .collect();
-
     files_list
 }
 
 pub fn get_file_content_workspace(
     file_path: &String,
-) -> Result<HashMap<String, Vec<String>>, String> {
+) -> Result<HashMap<String, Documento>, String> {
     let file = File::open(file_path).map_err(|_| "file-not-found".to_string())?;
     let reader = BufReader::new(file);
     let lines = reader.lines();
 
-    let mut docs: HashMap<String, Vec<String>> = HashMap::new();
+    let mut docs: HashMap<String, Documento> = HashMap::new();
 
     for line in lines {
         match line {
             Ok(read_line) => {
                 let parts: Vec<&str> = read_line.split("/++/").collect();
-                if parts.len() != 2 {
+                if parts.len() < 3 {
                     continue;
                 }
+                let tipo = parts[0];
+                let doc_name = parts[1].to_string();
+                let data = parts[2];
 
-                let doc_name = parts[0].to_string();
-                let messages_str = parts[1];
-
-                let messages: Vec<String> = messages_str
-                    .split("/--/")
-                    .filter(|s| !s.is_empty())
-                    .map(|s| s.to_string())
-                    .collect();
-
-                docs.insert(doc_name, messages);
+                match tipo {
+                    "TXT" => {
+                        let messages: Vec<String> = data
+                            .split("/--/")
+                            .filter(|s| !s.is_empty())
+                            .map(|s| s.to_string())
+                            .collect();
+                        docs.insert(doc_name, Documento::Texto(messages));
+                    }
+                    "CALC" => {
+                        let filas: Vec<Vec<String>> = data
+                            .split("/--/")
+                            .filter(|s| !s.is_empty())
+                            .map(|fila| fila.split(',').map(|c| c.to_string()).collect())
+                            .collect();
+                        docs.insert(doc_name, Documento::Calculo(filas));
+                    }
+                    _ => {}
+                }
             }
             Err(_) => return Err("unable-to-read-file".to_string()),
         }

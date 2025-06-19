@@ -34,9 +34,9 @@ pub fn handle_auth(request: &CommandRequest,
         )
     } 
 
-    let (password) = match (request.arguments[0].clone()) {
-        (ValueType::String(p)) => {
-            ( p.clone())
+    let password = match request.arguments[0].clone() {
+        ValueType::String(p) => {
+             p.clone()
         }
         _ => {
             return RedisResponse::new(

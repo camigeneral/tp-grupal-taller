@@ -9,7 +9,7 @@ use app::gtk4::glib::Propagation;
 use client::client_run;
 use components::file_workspace::{FileWorkspace, FileWorkspaceMsg, FileWorkspaceOutputMessage};
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
-use std::collections::HashMap;
+// use std::collections::HashMap;
 use std::thread;
 
 use std::sync::mpsc::{channel, Sender};

@@ -1,9 +1,4 @@
-text326769/++/nuevo/--/
-docprueba/++/aaa/--/
-dtext347057/++/nuevo/--/
-text125681/++/nuevo/--/
-text996907/++/nuevo/--/
-text831423/++/nuevo/--/
-doc2/++/hola/--/hola/--/hola/--/hola/--/chau/--/--/hola/--/hola/--/hola/--/
-text8248/++/nuevo/--/
-doc1/++/hola/--/hola/--/hola/--/hola/--/hola/--/hola/--/hla/--/hlaAA/--/hola/--/hola/--/hola/--/hola/--/hola/--/
+CALC/++/mihoja++/1,2,3/--/4,5,6/--/
+TXT/++/doc2++/hola/--/chau/--/
+TXT/++/text326769++/nuevo/--/
+TXT/++/docprueba++/aaa/--/

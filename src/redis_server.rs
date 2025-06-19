@@ -22,7 +22,9 @@ mod hashing;
 mod local_node;
 mod peer_node;
 mod utils;
+mod documento;
 use client_info::ClientType;
+use documento::Documento;
 
 #[derive(Debug)]
 pub enum RedisMessage {
@@ -102,6 +104,7 @@ fn start_server(
         Ok(docs) => docs,
         Err(_) => {
             println!("Iniciando con base de datos vacía");
+            utils::logger::log_event(&log_path, "Iniciando con base de datos vacía");
             HashMap::new()
         }
     };
@@ -156,7 +159,7 @@ fn start_server(
 /// # Retorna
 /// Arc<Mutex<HashMap>> con las listas de suscriptores inicializadas
 fn initialize_document_subscribers(
-    documents: &HashMap<String, Vec<String>>,
+    documents: &HashMap<String, Documento>,
 ) -> Arc<Mutex<HashMap<String, Vec<String>>>> {
     let mut subscriber_map = HashMap::new();
 
@@ -171,7 +174,7 @@ fn handle_new_client_connection(
     mut client_stream: TcpStream,
     active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
     document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
-    shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_documents: &Arc<Mutex<HashMap<String, Documento>>>,
     local_node: &Arc<Mutex<LocalNode>>,
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
     shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
@@ -279,7 +282,7 @@ fn handle_client(
     stream: &mut TcpStream,
     active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
     document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    shared_documents: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_documents: Arc<Mutex<HashMap<String, Documento>>>,
     shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
     client_id: String,
     local_node: Arc<Mutex<LocalNode>>,
@@ -535,7 +538,7 @@ fn cleanup_client_resources(
 ///
 /// # Errores
 /// Retorna un error si hay problemas al escribir en el archivo
-pub fn persist_documents(documents: Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Result<()> {
+pub fn persist_documents(documents: Arc<Mutex<HashMap<String, Documento>>>) -> io::Result<()> {
     let mut persistence_file = OpenOptions::new()
         .create(true)
         .truncate(true)
@@ -546,17 +549,26 @@ pub fn persist_documents(documents: Arc<Mutex<HashMap<String, Vec<String>>>>) ->
     let document_ids: Vec<&String> = documents_guard.keys().collect();
 
     for document_id in document_ids {
-        let mut document_data = document_id.to_string();
-        document_data.push_str("/++/");
-
-        if let Some(messages) = documents_guard.get(document_id) {
-            for message in messages {
-                document_data.push_str(message);
-                document_data.push_str("/--/");
+        if let Some(doc) = documents_guard.get(document_id) {
+            match doc {
+                Documento::Texto(lineas) => {
+                    let mut document_data = format!("TXT/++/{}++/", document_id);
+                    for linea in lineas {
+                        document_data.push_str(linea);
+                        document_data.push_str("/--/");
+                    }
+                    writeln!(persistence_file, "{}", document_data)?;
+                }
+                Documento::Calculo(filas) => {
+                    let mut document_data = format!("CALC/++/{}++/", document_id);
+                    for fila in filas {
+                        document_data.push_str(&fila.join(","));
+                        document_data.push_str("/--/");
+                    }
+                    writeln!(persistence_file, "{}", document_data)?;
+                }
             }
         }
-
-        writeln!(persistence_file, "{}", document_data)?;
     }
 
     Ok(())
@@ -567,36 +579,39 @@ pub fn persist_documents(documents: Arc<Mutex<HashMap<String, Vec<String>>>>) ->
 /// # Retorna
 /// HashMap con los documentos y sus mensajes, o un error si hay problemas
 /// al leer el archivo
-pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Vec<String>>, String> {
-    let file = File::open(file_path).map_err(|_| "archivo-no-encontrado".to_string())?;
-    let reader = BufReader::new(file);
-    let lines = reader.lines();
+pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Documento>, String> {
+    let mut documents = HashMap::new();
+    let file = std::fs::File::open(file_path).map_err(|e| e.to_string())?;
+    let reader = std::io::BufReader::new(file);
 
-    let mut documents: HashMap<String, Vec<String>> = HashMap::new();
+    for line in reader.lines() {
+        let content = line.map_err(|e| e.to_string())?;
+        let parts: Vec<&str> = content.split("/++/").collect();
+        if parts.len() < 3 { continue; }
+        let tipo = parts[0];
+        let nombre = parts[1].to_string();
+        let data = parts[2];
 
-    for line in lines {
-        match line {
-            Ok(content) => {
-                let parts: Vec<&str> = content.split("/++/").collect();
-                if parts.len() != 2 {
-                    continue;
-                }
-
-                let document_id = parts[0].to_string();
-                let messages_data = parts[1];
-
-                let messages: Vec<String> = messages_data
+        match tipo {
+            "TXT" => {
+                let mensajes: Vec<String> = data
                     .split("/--/")
                     .filter(|s| !s.is_empty())
                     .map(|s| s.to_string())
                     .collect();
-
-                documents.insert(document_id, messages);
+                documents.insert(nombre, Documento::Texto(mensajes));
             }
-            Err(_) => return Err("error-al-leer-archivo".to_string()),
+            "CALC" => {
+                let filas: Vec<Vec<String>> = data
+                    .split("/--/")
+                    .filter(|s| !s.is_empty())
+                    .map(|fila| fila.split(',').map(|c| c.to_string()).collect())
+                    .collect();
+                documents.insert(nombre, Documento::Calculo(filas));
+            }
+            _ => {}
         }
     }
-
     Ok(documents)
 }
 
@@ -847,7 +862,7 @@ fn read_node_ports<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<usize>> {
 
 pub fn subscribe_microservice_to_all_docs(
     addr: String,
-    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    docs: Arc<Mutex<HashMap<String, Documento>>>,
     clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) {
     let docs_lock = docs.lock().unwrap();
