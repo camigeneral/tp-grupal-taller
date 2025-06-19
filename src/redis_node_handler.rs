@@ -386,7 +386,55 @@ fn handle_node(
                     Err(_) => eprintln!("err"),
                 };
             }
-            "initialize_replica_promotion" => { println!("aca") }
+            "initialize_replica_promotion" => { 
+                {
+                    // actualizo mi estado
+                    let mut locked_local_node = local_node.lock().unwrap();
+                    let inactive_port = locked_local_node.master_node.unwrap().clone();
+                    locked_local_node.role = NodeRole::Master;
+                    locked_local_node.master_node = None;
+                
+
+                     // le aviso a mis peers
+                    let locked_peer_nodes = nodes.lock().unwrap();
+
+                    let node_info_message = format!(
+                        "{:?} {} {:?} {} {}\n",
+                        RedisMessage::Node,
+                        locked_local_node.port,
+                        locked_local_node.role,
+                        locked_local_node.hash_range.0,
+                        locked_local_node.hash_range.1
+                    );
+
+                    let inactive_node_message = format!("inactive_node {}\n", inactive_port);
+
+                    for (_, peer) in locked_peer_nodes.iter() {
+                        match peer.stream.try_clone() {
+                            Ok(mut peer_stream) => {
+                                let _ = peer_stream.write_all(node_info_message.as_bytes());
+                                let _ = peer_stream.write_all(inactive_node_message.as_bytes());
+                            }
+                            Err(_) => {
+                                eprintln!("Error cloning stream");
+                            }
+                        }
+                        
+                    }
+                }
+
+            }
+            "inactive_node" => {
+                let inactive_node = &input[1];
+                let inactive_node_addr = format!("127.0.0.1:{}", inactive_node);
+
+                {
+                    let mut locked_peer_nodes = nodes.lock().unwrap();
+                    if let Some(peer_node) = locked_peer_nodes.get_mut(&inactive_node_addr) {
+                        peer_node.state = NodeState::Inactive;
+                    }
+                }
+            }
             _ => {
                 if saving_command {
                     let formated = format!("{}\r\n", command);
