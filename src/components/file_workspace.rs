@@ -52,6 +52,7 @@ pub enum FileWorkspaceMsg {
 #[derive(Debug)]
 pub enum FileWorkspaceOutputMessage {
     SubscribeFile(String),
+    UnsubscribeFile(String),
 }
 
 #[relm4::component(pub)]
@@ -182,6 +183,10 @@ impl SimpleComponent for FileWorkspace {
                 }
             }
             FileWorkspaceMsg::CloseEditor => {
+                sender
+                    .output(FileWorkspaceOutputMessage::UnsubscribeFile(self.current_file.clone()))
+                    .unwrap();
+
                 self.file_editor_ctrl
                     .sender()
                     .send(FileEditorMessage::ResetEditor)

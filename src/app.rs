@@ -52,9 +52,11 @@ pub enum AppMsg {
     RefreshData,
     CreateFile(String, String),
     SubscribeFile(String),
+    UnsubscribeFile(String), 
     PrepareAndExecuteCommand(String, String),
     ManageResponse(String),
     ManageSubscribeResponse(String),
+    ManageUnsubscribeResponse(String),
 }
 
 #[relm4::component(pub)]
@@ -148,6 +150,7 @@ impl SimpleComponent for AppModel {
             sender.input_sender(),
             |command: FileWorkspaceOutputMessage| match command {
                 FileWorkspaceOutputMessage::SubscribeFile(file) => AppMsg::SubscribeFile(file),
+                FileWorkspaceOutputMessage::UnsubscribeFile(file) => AppMsg::UnsubscribeFile(file),
             },
         );
 
@@ -292,6 +295,25 @@ impl SimpleComponent for AppModel {
                 
                 sender.input(AppMsg::ExecuteCommand);                
             
+            }
+
+            AppMsg::UnsubscribeFile(file) => {
+                self.current_file = file;
+                self.command = format!("unsubscribe {}", self.current_file);
+                sender.input(AppMsg::ExecuteCommand);
+            }
+
+            AppMsg::ManageUnsubscribeResponse(response) => {
+                if response == "OK" {
+                    // Remover el archivo de los suscritos
+                    self.subscribed_files.remove(&self.current_file);
+                    println!("Desuscrito del archivo: {}", self.current_file);
+                } else {
+                    println!("Error al desuscribirse: {}", response);
+                }
+
+                self.command = "".to_string();
+                self.current_file = "".to_string();
             }
 
             AppMsg::ExecuteCommand => {
