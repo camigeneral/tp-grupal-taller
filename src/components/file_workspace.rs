@@ -38,12 +38,12 @@ pub struct FileWorkspace {
 #[derive(Debug)]
 pub enum FileWorkspaceMsg {
     /// Mensaje para abrir un archivo con nombre, contenido y cantidad de líneas.
-    OpenFile(String, String, u8),
+    OpenFile(String, String, i32),
     /// Mensaje para ignorar una acción.
     Ignore,
     /// Mensaje para cerrar el editor de archivos.
     CloseEditor,
-    SubscribeFile(String, String, u8),
+    SubscribeFile(String, String, i32),
     ReloadFiles,
 }
 
@@ -106,7 +106,7 @@ impl SimpleComponent for FileWorkspace {
                         _file_type,
                         content,
                         qty,
-                    ) => FileWorkspaceMsg::OpenFile(file, content, qty),
+                    ) => FileWorkspaceMsg::SubscribeFile(file, content, qty),
                     _ => FileWorkspaceMsg::Ignore,
                 },
             );
@@ -193,14 +193,14 @@ impl SimpleComponent for FileWorkspace {
 
 fn get_files_list(
     file_path: &String,
-) -> Vec<(std::string::String, FileType, std::string::String, u8)> {
+) -> Vec<(std::string::String, FileType, std::string::String, i32)> {
     let docs = get_file_content_workspace(file_path).unwrap_or_else(|_| HashMap::new());
     // Convierte el HashMap a la lista que espera FileListView
-    let files_list: Vec<(String, FileType, String, u8)> = docs
+    let files_list: Vec<(String, FileType, String, i32)> = docs
         .into_iter()
         .map(|(nombre, mensajes)| {
             let contenido = mensajes.join("\n");
-            let qty = mensajes.len() as u8;
+            let qty = mensajes.len() as i32;
             let file_type = if nombre.ends_with(".xlsx") {
                 FileType::Sheet
             } else {

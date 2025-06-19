@@ -29,7 +29,7 @@ pub struct FileEditorModel {
     /// Nombre del archivo que se está editando.
     file_name: String,
     /// Número de colaboradores que están trabajando en el archivo.
-    num_contributors: u8,
+    num_contributors: i32,
     /// Contenido del archivo.
     content: String,
     content_changed_manually: bool,
@@ -40,7 +40,7 @@ pub struct FileEditorModel {
 pub enum FileEditorMessage {
     ContentAdded(String, i32),
     ContentRemoved(i32, i32),
-    UpdateFile(String, u8, String),
+    UpdateFile(String, i32, String),
     ResetEditor,
 }
 
@@ -55,7 +55,7 @@ pub enum FileEditorOutputMessage {
 impl SimpleComponent for FileEditorModel {
     type Input = FileEditorMessage;
     type Output = FileEditorOutputMessage;
-    type Init = (String, u8, String);
+    type Init = (String, i32, String);
 
     view! {
         gtk::Box {

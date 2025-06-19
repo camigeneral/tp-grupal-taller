@@ -17,7 +17,7 @@ struct FileListItem {
     /// Contenido del archivo.
     content: String,
     /// Cantidad de elementos relacionados con el archivo.
-    qty: u8,
+    qty: i32,
 }
 
 /// Estructura que representa la vista de la lista de archivos. Contiene una lista de archivos
@@ -27,7 +27,7 @@ pub struct FileListView {
     /// Filtro seleccionado para los archivos (todos, texto o cálculo).
     selected_filter: FileType,
     /// Lista completa de archivos.
-    all_filles: Vec<(String, FileType, String, u8)>,
+    all_filles: Vec<(String, FileType, String, i32)>,
     /// Lista filtrada de archivos.
     filtered_files: FactoryVecDeque<FileListItem>,
 }
@@ -42,14 +42,14 @@ pub enum FileFilterAction {
     /// Muestra solo los archivos de tipo hoja de cálculo.
     SpreadsheetFiles,
     /// Selecciona un archivo específico.
-    SelectFile(String, FileType, String, u8),
-    UpdateFiles(Vec<(String, FileType, String, u8)>),
+    SelectFile(String, FileType, String, i32),
+    UpdateFiles(Vec<(String, FileType, String, i32)>),
 }
 
 #[relm4::component(pub)]
 impl SimpleComponent for FileListView {
     type Output = FileFilterAction;
-    type Init = Vec<(String, FileType, String, u8)>;
+    type Init = Vec<(String, FileType, String, i32)>;
     type Input = FileFilterAction;
     view! {
         #[name="container_2"]
@@ -185,7 +185,7 @@ impl FileListView {
 
 #[relm4::factory]
 impl FactoryComponent for FileListItem {
-    type Init = (String, FileType, String, u8);
+    type Init = (String, FileType, String, i32);
     type Input = ();
     type Output = FileFilterAction;
     type CommandOutput = ();
