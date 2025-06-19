@@ -523,12 +523,13 @@ fn ping_to_master(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashM
                 if stream_to_ping.is_none() {
                     let locked_local_node = local_node.lock().unwrap();
                     let mut locked_peer_nodes = peer_nodes.lock().unwrap();
-        
                     if let Some(port) = locked_local_node.master_node {
                         let key = format!("127.0.0.1:{}", port);
                         if let Some(peer_node) = locked_peer_nodes.get_mut(&key) {
-                            let cloned_stream = peer_node.stream.try_clone().ok();
-                            stream_to_ping = cloned_stream;
+                            if peer_node.state == NodeState::Active {
+                                let cloned_stream = peer_node.stream.try_clone().ok();
+                                stream_to_ping = cloned_stream;
+                            }
                         }
                     }
                 }
@@ -545,8 +546,9 @@ fn ping_to_master(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashM
                     match reader.read_line(&mut line) {
                         Ok(0) => {
                             println!("Connection closed by peer");
-                            request_master_state_confirmation(local_node, peer_nodes);
-                            break;
+                            request_master_state_confirmation(&local_node, &peer_nodes);
+                            stream_to_ping = None;
+                            std::hint::spin_loop();
                         }
                         Ok(_) => {
                             // todo ok
@@ -554,13 +556,15 @@ fn ping_to_master(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashM
                         }
                         Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
                             println!("Timeout: no response within {:?}", error_interval);
-                            request_master_state_confirmation(local_node, peer_nodes);
-                            break;
+                            request_master_state_confirmation(&local_node, &peer_nodes);
+                            stream_to_ping = None;
+                            std::hint::spin_loop();
                         }
                         Err(e) => {
                             println!("Unexpected error: {}", e);
-                            request_master_state_confirmation(local_node, peer_nodes);
-                            break;
+                            request_master_state_confirmation(&local_node, &peer_nodes);
+                            stream_to_ping = None;
+                            std::hint::spin_loop();
                         }
                     }
         
@@ -573,12 +577,10 @@ fn ping_to_master(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashM
         }
         std::hint::spin_loop();
     }
-
-    Ok(())
 }
 
 
-fn request_master_state_confirmation(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>)  {
+fn request_master_state_confirmation(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>)  {
     let master_port_option;
     let hash_range;
     {
