@@ -165,7 +165,7 @@ pub fn handle_append(
     }
 
     // let notification = format!("New content in {}: {} L{}", doc, content, line_number);
-    let notification = format!("L{}: {} ", line_number, content);
+    let notification = format!("WRITTEN {}|{}|{} ",doc, line_number, content);
     println!("Publishing to subscribers of {}: {}", doc, notification);
 
     RedisResponse::new(
