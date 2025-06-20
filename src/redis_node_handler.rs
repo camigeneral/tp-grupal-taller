@@ -192,6 +192,9 @@ fn handle_node(
     let mut saving_command = false;
     let mut command_string = String::new();
 
+    let mut serialized_hashmap: Vec<String> = Vec::new();
+    let mut serialized_vec: Vec<String> = Vec::new();
+
     for command in reader.lines().map_while(Result::ok) {
         let input: Vec<String> = command
             .split_whitespace()
@@ -253,7 +256,8 @@ fn handle_node(
                                 } else {
                                     // estoy hablando con mi master
                                     local_node_locked.master_node = Some(*parsed_port);
-                                    stream_to_respond.write_all("sync\n".to_string().as_bytes())?;
+                                    let message = format!("sync_request {}\n", local_node_locked.port);
+                                    stream_to_respond.write_all(message.as_bytes())?;
                                 }
                             } else {
                                // soy una replica, hablando con la ottra replica de mi master
@@ -293,7 +297,8 @@ fn handle_node(
                                 } else {
                                     // estoy hablando con mi master
                                     local_node_locked.master_node = Some(*parsed_port);
-                                    peer_node_to_update.stream.write_all("sync\n".to_string().as_bytes())?;
+                                    let message = format!("sync_request {}\n", local_node_locked.port);
+                                    peer_node_to_update.stream.write_all(message.as_bytes())?;
                                 }
                             } else {
                                // soy una replica, hablando con la ottra replica de mi master
@@ -305,9 +310,23 @@ fn handle_node(
                     }
                 }
             }
-            "sync" => {
-                handle_replica_sync(&shared_sets, &shared_documents, &document_subscribers)?;
+            "sync_request" => {
+                handle_replica_sync(&input[1], &nodes, &shared_sets, &shared_documents)?;
             }
+            "serialize_hashmap" => {
+                serialized_hashmap.push(input[1].clone());
+            }
+            "serialize_vec" => {
+                serialized_vec.push(input[1].clone());
+            }
+            "end_serialize_hashmap" => {
+                deserialize_hashset_hashmap(&serialized_hashmap, &shared_sets);
+                serialized_hashmap = Vec::new();
+            }
+            "end_serialize_vec" => {
+                deserialize_vec_hashmap(&serialized_vec, &shared_documents);
+                serialized_vec = Vec::new();
+            } 
             "start_replica_command" => {
                 saving_command = true;
             }
@@ -499,8 +518,93 @@ pub fn broadcast_to_replicas(
 }
 
 
-fn handle_replica_sync(_shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>, _shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>, _document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>) -> std::io::Result<()> {
+fn handle_replica_sync(replica_port: &String, peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>, shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>, shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>) -> std::io::Result<()> {
+    let replica_addr = format!("127.0.0.1:{}", replica_port);
+    let cloned_sets;
+    let cloned_shared_documents;
+
+    {
+        let locked_shared_sets = shared_sets.lock().unwrap();
+        cloned_sets = locked_shared_sets.clone();
+    }
+    {
+        let locked_shared_documents = shared_documents.lock().unwrap();
+        cloned_shared_documents = locked_shared_documents.clone();
+    }
+    {
+        let mut locked_peer_nodes = peer_nodes.lock().unwrap();
+        if let Some(peer_node) = locked_peer_nodes.get_mut(&replica_addr) {
+            match peer_node.stream.try_clone() {
+                Ok(peer_stream) => {
+                    let _ = serialize_hashset_hashmap(&cloned_sets, peer_stream.try_clone()?);
+                    let _ = serialize_vec_hashmap(&cloned_shared_documents, peer_stream.try_clone()?);
+                }
+                Err(_) => {
+                    eprintln!("Error cloning stream");
+                }
+            }
+        }
+    }
+
+    
+
+
     Ok(())
+}
+
+
+fn serialize_vec_hashmap(map: &HashMap<String, Vec<String>>, mut stream: TcpStream) -> std::io::Result<()> {
+    for (key, values) in map {
+        let line = format!("serialize_vec {}:{}\n", key, values.join(","));
+        stream.write_all(line.as_bytes())?;
+    }
+    stream.write_all(b"end_serialize_vec\n")?;
+    Ok(())
+}
+
+
+fn serialize_hashset_hashmap(map: &HashMap<String, HashSet<String>>, mut stream: TcpStream) -> std::io::Result<()> {
+    for (key, set) in map {
+        let values: Vec<String> = set.iter().cloned().collect();
+        let line = format!("serialize_hashmap {}:{}\n", key, values.join(","));
+        stream.write_all(line.as_bytes())?;
+    }
+    stream.write_all(b"end_serialize_hashmap\n")?;
+    Ok(())
+}
+
+
+fn deserialize_hashset_hashmap(lines: &Vec<String>, shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>) {
+    {
+        let mut locked_sets = shared_sets.lock().unwrap();
+
+        for line in lines {
+            if let Some((key, values_str)) = line.split_once(':') {
+                let values: HashSet<String> = values_str
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .collect();
+                locked_sets.insert(key.to_string(), values);
+            }
+        }
+    }
+}
+
+
+fn deserialize_vec_hashmap(lines: &Vec<String>, shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>){
+    {
+        let mut locked_documents = shared_documents.lock().unwrap();
+
+        for line in lines {
+            if let Some((key, values_str)) = line.split_once(':') {
+                let values: Vec<String> = values_str
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .collect();
+                locked_documents.insert(key.to_string(), values);
+            }
+        }
+    }
 }
 
 
