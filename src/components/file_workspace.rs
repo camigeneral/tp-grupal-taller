@@ -32,6 +32,8 @@ pub struct FileWorkspace {
     editor_visible: bool,
     /// Nombre del archivo actual.
     current_file: String,
+
+    files: HashMap<(String, FileType), HashMap<String, String>>
 }
 
 /// Enum que define los diferentes mensajes que puede recibir el componente `FileWorkspace`.
@@ -39,18 +41,19 @@ pub struct FileWorkspace {
 #[derive(Debug)]
 pub enum FileWorkspaceMsg {
     /// Mensaje para abrir un archivo con nombre, contenido y cantidad de líneas.
-    OpenFile(String, String, u8),
+    OpenFile(String, FileType),
     /// Mensaje para ignorar una acción.
     Ignore,
     /// Mensaje para cerrar el editor de archivos.
     CloseEditor,
-    SubscribeFile(String, String, u8),
+    SubscribeFile(String, String, i32),
     ReloadFiles,
 }
 
 #[derive(Debug)]
 pub enum FileWorkspaceOutputMessage {
     SubscribeFile(String),
+    UnsubscribeFile(String),
 }
 
 #[relm4::component(pub)]
@@ -107,7 +110,7 @@ impl SimpleComponent for FileWorkspace {
                         _file_type,
                         content,
                         qty,
-                    ) => FileWorkspaceMsg::OpenFile(file, content, qty),
+                    ) => FileWorkspaceMsg::SubscribeFile(file, content, qty),
                     _ => FileWorkspaceMsg::Ignore,
                 },
             );
@@ -120,11 +123,32 @@ impl SimpleComponent for FileWorkspace {
                 },
             );
 
+        let mut files_map: HashMap<(String, FileType), HashMap<String, String>> = HashMap::new();
+
+        if let Ok(docs) = get_file_content_workspace(&"docs.txt".to_string()) {
+            for (nombre, mensajes) in docs {
+                let file_type = if nombre.ends_with(".xlsx") {
+                    FileType::Sheet
+                } else {
+                    FileType::Text
+                };
+
+                let inner_map: HashMap<String, String> = mensajes
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, msg)| (format!("line_{}", i), msg))
+                    .collect();
+
+                files_map.insert((nombre, file_type), inner_map);
+            }
+        }
+
         let model = FileWorkspace {
             file_list_ctrl: list_files_cont,
             file_editor_ctrl: editor_file_cont,
             editor_visible: false,
             current_file: "".to_string(),
+            files: files_map,
         };
 
         let list_box_widget = model.file_list_ctrl.widget();
@@ -142,15 +166,28 @@ impl SimpleComponent for FileWorkspace {
                     .unwrap();
             }
 
-            FileWorkspaceMsg::OpenFile(file, content, qty) => {
+            FileWorkspaceMsg::OpenFile(file, file_type) => {
                 self.current_file = file.clone();
-                self.file_editor_ctrl
-                    .sender()
-                    .send(FileEditorMessage::UpdateFile(file, qty, content))
-                    .unwrap();
-                self.editor_visible = true;
+
+                if let Some(inner_map) = self.files.get(&(file.clone(), file_type.clone())) {
+                    let content = inner_map.get("content").cloned().unwrap_or_default();
+                    let qty = content.lines().count() as i32;
+
+                    self.file_editor_ctrl
+                        .sender()
+                        .send(FileEditorMessage::UpdateFile(file, qty, content))
+                        .unwrap();
+
+                    self.editor_visible = true;
+                } else {
+                    println!("Archivo no encontrado: {} ({:?})", file, file_type.clone());
+                }
             }
             FileWorkspaceMsg::CloseEditor => {
+                sender
+                    .output(FileWorkspaceOutputMessage::UnsubscribeFile(self.current_file.clone()))
+                    .unwrap();
+
                 self.file_editor_ctrl
                     .sender()
                     .send(FileEditorMessage::ResetEditor)
@@ -194,10 +231,10 @@ impl SimpleComponent for FileWorkspace {
 
 fn get_files_list(
     file_path: &String,
-) -> Vec<(std::string::String, FileType, std::string::String, u8)> {
+) -> Vec<(std::string::String, FileType, std::string::String, i32)> {
     let docs = get_file_content_workspace(file_path).unwrap_or_else(|_| HashMap::new());
     // Convierte el HashMap a la lista que espera FileListView
-    let files_list: Vec<(String, FileType, String, u8)> = docs
+    let files_list: Vec<(String, FileType, String, i32)> = docs
         .into_iter()
         .map(|(nombre, doc)| {
             match doc {

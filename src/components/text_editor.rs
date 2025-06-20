@@ -13,7 +13,7 @@ pub struct TextEditorModel {
     /// Nombre del archivo que se está editando.
     file_name: String,
     /// Número de colaboradores que están trabajando en el archivo.
-    num_contributors: u8,
+    num_contributors: i32,
     /// Contenido del archivo.
     content: String,
     /// Buffer de texto usado para mostrar el contenido en el editor.
@@ -27,7 +27,7 @@ pub struct TextEditorModel {
 pub enum TextEditorMessage {
     ContentAdded(String, i32),
     ContentRemoved(i32, i32),
-    UpdateFile(String, u8, String),
+    UpdateFile(String, i32, String),
     ResetEditor,
 }
 
@@ -42,7 +42,7 @@ pub enum TextEditorOutputMessage {
 impl SimpleComponent for TextEditorModel {
     type Input = TextEditorMessage;
     type Output = TextEditorOutputMessage;
-    type Init = (String, u8, String);
+    type Init = (String, i32, String);
 
     view! {
         gtk::Box {
