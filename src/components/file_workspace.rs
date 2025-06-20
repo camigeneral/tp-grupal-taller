@@ -33,7 +33,7 @@ pub struct FileWorkspace {
     /// Nombre del archivo actual.
     current_file: String,
 
-    files: HashMap<(String, FileType), HashMap<String, String>>
+    files: HashMap<(String, FileType), Documento>
 }
 
 /// Enum que define los diferentes mensajes que puede recibir el componente `FileWorkspace`.
@@ -100,7 +100,7 @@ impl SimpleComponent for FileWorkspace {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let list_files_cont = FileListView::builder()
+        let list_files_cont: Controller<FileListView> = FileListView::builder()
             .launch(get_files_list(&"docs.txt".to_string()))
             .forward(
                 sender.input_sender(),
@@ -123,7 +123,7 @@ impl SimpleComponent for FileWorkspace {
                 },
             );
 
-        let mut files_map: HashMap<(String, FileType), HashMap<String, String>> = HashMap::new();
+        let mut files_map: HashMap<(String, FileType), Documento> = HashMap::new();
 
         if let Ok(docs) = get_file_content_workspace(&"docs.txt".to_string()) {
             for (nombre, mensajes) in docs {
@@ -132,17 +132,10 @@ impl SimpleComponent for FileWorkspace {
                 } else {
                     FileType::Text
                 };
-
-                let inner_map: HashMap<String, String> = mensajes
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, msg)| (format!("line_{}", i), msg))
-                    .collect();
-
-                files_map.insert((nombre, file_type), inner_map);
+                files_map.insert((nombre, file_type), mensajes);
             }
         }
-
+        println!("files_map: {:#?}", files_map);
         let model = FileWorkspace {
             file_list_ctrl: list_files_cont,
             file_editor_ctrl: editor_file_cont,
@@ -169,7 +162,7 @@ impl SimpleComponent for FileWorkspace {
             FileWorkspaceMsg::OpenFile(file, file_type) => {
                 self.current_file = file.clone();
 
-                if let Some(inner_map) = self.files.get(&(file.clone(), file_type.clone())) {
+                /* if let Some(inner_map) = self.files.get(&(file.clone(), file_type.clone())) {
                     let content = inner_map.get("content").cloned().unwrap_or_default();
                     let qty = content.lines().count() as i32;
 
@@ -181,7 +174,7 @@ impl SimpleComponent for FileWorkspace {
                     self.editor_visible = true;
                 } else {
                     println!("Archivo no encontrado: {} ({:?})", file, file_type.clone());
-                }
+                } */
             }
             FileWorkspaceMsg::CloseEditor => {
                 sender
@@ -229,6 +222,7 @@ impl SimpleComponent for FileWorkspace {
     }
 }
 
+
 fn get_files_list(
     file_path: &String,
 ) -> Vec<(std::string::String, FileType, std::string::String, i32)> {
@@ -240,12 +234,12 @@ fn get_files_list(
             match doc {
                 Documento::Texto(lineas) => {
                     let contenido = lineas.join("\n");
-                    let qty = lineas.len() as u8;
+                    let qty = lineas.len() as i32;
                     (nombre, FileType::Text, contenido, qty)
                 }
                 Documento::Calculo(filas) => {
                     let contenido = filas.iter().map(|fila| fila.join(",")).collect::<Vec<_>>().join("\n");
-                    let qty = filas.len() as u8;
+                    let qty = filas.len() as i32;
                     (nombre, FileType::Sheet, contenido, qty)
                 }
             }
@@ -270,11 +264,11 @@ pub fn get_file_content_workspace(
                 if parts.len() < 3 {
                     continue;
                 }
-                let tipo = parts[0];
+                let doc_type = parts[0];
                 let doc_name = parts[1].to_string();
                 let data = parts[2];
 
-                match tipo {
+                match doc_type {
                     "TXT" => {
                         let messages: Vec<String> = data
                             .split("/--/")
