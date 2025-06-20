@@ -1,9 +1,9 @@
 doc1/++/inicial/--/hola/--/replicas/--/
 doc2/++/hola/--/
-text326769/++/nuevo/--/
 text8248/++/nuevo/--/
-text996907/++/nuevo/--/
 dtext347057/++/nuevo/--/
+text996907/++/nuevo/--/
 docprueba/++/aaa/--/
 text831423/++/nuevo/--/
 text125681/++/nuevo/--/
+text326769/++/nuevo/--/aaaaaaa/--/?/--/

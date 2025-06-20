@@ -103,10 +103,8 @@ fn start_server(
     };
 
     // Inicializar estructuras de datos compartidas
-    
-    let shared_documents = Arc::new(Mutex::new(stored_documents.clone()));
-    let document_subscribers = initialize_document_subscribers(&stored_documents);
-    let shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>> = initialize_document_sets(&stored_documents);
+    let shared_documents: Arc<Mutex<HashMap<String, Vec<String>>>> = Arc::new(Mutex::new(stored_documents));
+    let (document_subscribers, shared_sets) = initialize_datasets(&shared_documents);
     let active_clients = Arc::new(Mutex::new(HashMap::new()));
     let logged_clients: Arc<Mutex<HashMap<String, bool>>> = Arc::new(Mutex::new(HashMap::new()));
 
@@ -150,47 +148,37 @@ fn start_server(
     Ok(())
 }
 
-/// Inicializa el mapa de suscriptores para cada documento.
+/// Inicializa el mapa de suscriptores para cada documento y los sets para cada documento.
 ///
-/// Crea una entrada vacía en el mapa de suscriptores para cada documento
-/// existente en la base de datos.
+/// Crea una entrada vacía en el mapa y en el set de suscriptores para cada documento
+/// existente en la base de datos
 ///
 /// # Argumentos
 /// * `documents` - HashMap con los documentos existentes
 ///
 /// # Retorna
-/// Arc<Mutex<HashMap>> con las listas de suscriptores inicializadas
-fn initialize_document_subscribers(
-    documents: &HashMap<String, Vec<String>>,
-) -> Arc<Mutex<HashMap<String, Vec<String>>>> {
-    let mut subscriber_map = HashMap::new();
-
-    for document_id in documents.keys() {
-        subscriber_map.insert(document_id.clone(), Vec::new());
+/// (Arc::new(Mutex::new(subscriber_map)), Arc::new(Mutex::new(doc_set))) con las listas de suscriptores 
+/// inicializadas y los sets iniciales 
+fn initialize_datasets(documents: &Arc<Mutex<HashMap<String, Vec<String>>>>) -> (Arc<Mutex<HashMap<String, Vec<String>>>>, Arc<Mutex<HashMap<String, HashSet<String>>>>) {
+    let document_keys: Vec<String>;
+    {
+        let locked_documents = documents.lock().unwrap();
+        document_keys = locked_documents.keys().cloned().collect();
     }
-
-    Arc::new(Mutex::new(subscriber_map))
-}
-
-/// Inicializa los sets para cada documento.
-///
-/// Crea una entrada vacía en el set de suscriptores para cada documento
-/// existente en la base de datos.
-///
-/// # Argumentos
-/// * `documents` - HashMap con los sets vacios
-///
-fn initialize_document_sets(
-    documents: &HashMap<String, Vec<String>>,
-) -> Arc<Mutex<HashMap<String, HashSet<String>>>> {
+    let mut subscriber_map: HashMap<String, Vec<_>> = HashMap::new();
     let mut doc_set: HashMap<String, HashSet<String>> = HashMap::new();
 
-    for document_id in documents.keys() {
-        doc_set.insert(document_id.clone(), HashSet::new());
+    for document_id in document_keys {
+        subscriber_map.insert(document_id.clone(), Vec::new());
+        doc_set.insert(document_id, HashSet::new());
     }
 
-    Arc::new(Mutex::new(doc_set))
+    (Arc::new(Mutex::new(subscriber_map)), Arc::new(Mutex::new(doc_set)))
 }
+
+
+
+
 
 fn handle_new_client_connection(
     mut client_stream: TcpStream,
@@ -395,8 +383,8 @@ fn handle_client(
 
                 if redis_response.publish {
                     if let Err(e) = publish_update(
-                        active_clients.clone(),
-                        document_subscribers.clone(),
+                        &active_clients,
+                        &document_subscribers,
                         redis_response.message,
                         redis_response.doc,
                     ) {
@@ -425,7 +413,7 @@ fn handle_client(
             &format!("Respuesta enviada a {}: {:?}", client_id, response),
         );
 
-        if let Err(e) = persist_documents(shared_documents.clone()) {
+        if let Err(e) = persist_documents(&shared_documents) {
             eprintln!("Error al persistir documentos: {}", e);
         }
     }
@@ -519,8 +507,8 @@ pub fn resolve_key_location(
 /// # Errores
 /// Retorna un error si hay problemas al escribir en algún stream de cliente
 pub fn publish_update(
-    active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
-    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
+    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
     update_message: String,
     document_id: String,
 ) -> std::io::Result<()> {
@@ -565,7 +553,7 @@ fn cleanup_client_resources(
 ///
 /// # Errores
 /// Retorna un error si hay problemas al escribir en el archivo
-pub fn persist_documents(documents: Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Result<()> {
+pub fn persist_documents(documents: &Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Result<()> {
     let mut persistence_file = OpenOptions::new()
         .create(true)
         .truncate(true)
