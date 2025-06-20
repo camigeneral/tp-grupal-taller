@@ -12,12 +12,12 @@ use std::sync::{Arc, Mutex};
 
 pub fn execute_command(
     request: CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
     client_addr: String,
-    active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
-    logged_clients: Arc<Mutex<HashMap<String, bool>>>
+    active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
+    logged_clients: &Arc<Mutex<HashMap<String, bool>>>
 ) -> RedisResponse {
     match request.command.as_str() {
         "get" => string::handle_get(&request, docs),
@@ -35,7 +35,7 @@ pub fn execute_command(
         "lset" => list::handle_lset(&request, docs),
         "linsert" => list::handle_linsert(&request, docs),
         "auth" => auth::handle_auth(&request, logged_clients, active_clients, client_addr),
-        "welcome" => string::handle_welcome(&request, active_clients,shared_sets),
+        "welcome" => string::handle_welcome(&request, active_clients, shared_sets),
         _ => RedisResponse::new(
             CommandResponse::Error("Unknown".to_string()),
             false,
@@ -49,9 +49,9 @@ pub fn execute_command(
 #[allow(unused_variables)]
 pub fn execute_replica_command(
     request: CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> RedisResponse {
     match request.command.as_str() {
         "get" => string::handle_get(&request, docs),

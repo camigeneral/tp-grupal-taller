@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 pub fn handle_get(
     request: &CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) -> RedisResponse {
     let key = match &request.key {
         Some(k) => k,
@@ -54,9 +54,9 @@ pub fn handle_get(
 /// - `RedisResponse::Ok` con notificación activa y nombre del documento.
 pub fn handle_set(
     request: &CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
+    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
 ) -> RedisResponse {
     let doc_name = match &request.key {
         Some(k) => k.clone(),
@@ -131,7 +131,7 @@ pub fn handle_set(
 /// - `RedisResponse::Integer(line_number)` con notificación activa y nombre del documento.
 pub fn handle_append(
     request: &CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
@@ -176,7 +176,7 @@ pub fn handle_append(
     )
 }
 
-pub fn handle_welcome(request: &CommandRequest, _active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>, shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>) -> RedisResponse {
+pub fn handle_welcome(request: &CommandRequest, _active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>, shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>) -> RedisResponse {
     let client_addr_str = redis::extract_string_arguments(&request.arguments);
 
     let doc = match &request.key {
@@ -195,7 +195,9 @@ pub fn handle_welcome(request: &CommandRequest, _active_clients: Arc<Mutex<HashM
         command: "scard".to_string(),
         key: Some(doc.clone()),
         arguments: vec![],
+        unparsed_command: "".to_string(),
     };
+    // to do: unparsed command?
 
     let response = handle_scard(&request, shared_sets);
 
@@ -232,6 +234,7 @@ mod tests {
             command: "GET".to_string(),
             key: Some("doc1".to_string()),
             arguments: vec![],
+            unparsed_command: "".to_string(),
         };
         let resp = handle_get(&req, docs);
         let com_resp = CommandResponse::String("line1\nline2".to_string());
@@ -245,6 +248,7 @@ mod tests {
             command: "GET".to_string(),
             key: Some("missing".to_string()),
             arguments: vec![],
+            unparsed_command: "".to_string(),
         };
         let resp = handle_get(&req, docs);
         assert_eq!(resp.response, CommandResponse::Null);
@@ -257,6 +261,7 @@ mod tests {
             command: "GET".to_string(),
             key: None,
             arguments: vec![],
+            unparsed_command: "".to_string(),
         };
         let resp = handle_get(&req, docs);
         assert!(matches!(resp.response, CommandResponse::Error(_)));
@@ -270,12 +275,13 @@ mod tests {
             command: "SET".to_string(),
             key: Some("doc2".to_string()),
             arguments: vec![ValueType::String("hello world".to_string())],
+            unparsed_command: "".to_string(),
         };
         let resp = handle_set(
             &req,
             docs.clone(),
             clients.clone(),
-            Arc::new(Mutex::new(HashMap::new())),
+            &Arc::new(Mutex::new(HashMap::new())),
         );
         assert_eq!(resp.response, CommandResponse::Ok);
         let docs_guard = docs.lock().unwrap();
@@ -295,6 +301,7 @@ mod tests {
             command: "SET".to_string(),
             key: None,
             arguments: vec![ValueType::String("something".to_string())],
+            unparsed_command: "".to_string(),
         };
         let resp = handle_set(&req, docs, clients, Arc::new(Mutex::new(HashMap::new())));
         assert!(matches!(resp.response, CommandResponse::Error(_)));
@@ -308,6 +315,7 @@ mod tests {
             command: "SET".to_string(),
             key: Some("doc3".to_string()),
             arguments: vec![],
+            unparsed_command: "".to_string(),
         };
         let resp = handle_set(&req, docs, clients, Arc::new(Mutex::new(HashMap::new())));
         assert!(matches!(resp.response, CommandResponse::Error(_)));
@@ -323,6 +331,7 @@ mod tests {
             command: "APPEND".to_string(),
             key: Some("doc4".to_string()),
             arguments: vec![ValueType::String("second".to_string())],
+            unparsed_command: "".to_string(),
         };
         let resp = handle_append(&req, docs.clone());
         assert_eq!(resp.response, CommandResponse::Integer(2));
@@ -340,6 +349,7 @@ mod tests {
             command: "APPEND".to_string(),
             key: Some("doc5".to_string()),
             arguments: vec![ValueType::String("line".to_string())],
+            unparsed_command: "".to_string(),
         };
         let resp = handle_append(&req, docs.clone());
         assert_eq!(resp.response, CommandResponse::Integer(1));
@@ -354,6 +364,7 @@ mod tests {
             command: "APPEND".to_string(),
             key: None,
             arguments: vec![ValueType::String("text".to_string())],
+            unparsed_command: "".to_string(),
         };
         let resp = handle_append(&req, docs);
         assert!(matches!(resp.response, CommandResponse::Error(_)));
@@ -366,6 +377,7 @@ mod tests {
             command: "APPEND".to_string(),
             key: Some("doc6".to_string()),
             arguments: vec![],
+            unparsed_command: "".to_string(),
         };
         let resp = handle_append(&req, docs);
         assert!(matches!(resp.response, CommandResponse::Error(_)));

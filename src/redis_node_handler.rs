@@ -355,9 +355,9 @@ fn handle_node(
 
                 let redis_response = redis::execute_replica_command(
                     command_request,
-                    shared_documents.clone(),
-                    document_subscribers.clone(),
-                    shared_sets.clone(),
+                    &shared_documents,
+                    &document_subscribers,
+                    &shared_sets,
                 );
 
                 println!("Replica redis response {:?}", redis_response.response);

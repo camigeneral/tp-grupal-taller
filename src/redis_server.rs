@@ -385,12 +385,12 @@ fn handle_client(
                 let unparsed_command = command_request.unparsed_command.clone();
                 let redis_response = redis::execute_command(
                     command_request,
-                    shared_documents.clone(),
-                    document_subscribers.clone(),
-                    shared_sets.clone(),
+                    &shared_documents,
+                    &document_subscribers,
+                    &shared_sets,
                     client_id.clone(),
-                    active_clients.clone(),
-                    logged_clients.clone()
+                    &active_clients,
+                    &logged_clients
                 );
 
                 if redis_response.publish {
