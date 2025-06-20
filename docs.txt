@@ -1,4 +1,4 @@
-CALC/++/mihoja++/1,2,3/--/4,5,6/--/
-TXT/++/doc2++/hola/--/chau/--/
-TXT/++/text326769++/nuevo/--/
-TXT/++/docprueba++/aaa/--/
+CALC/++/mihoja/++/1,2,3/--/4,5,6/--/
+TXT/++/doc2/++/hola/--/chau/--/
+TXT/++/docprueba/++/aaa/--/
+TXT/++/text326769/++/nuevo/--/
