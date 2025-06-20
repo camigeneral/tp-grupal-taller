@@ -180,7 +180,7 @@ fn initialize_document_subscribers(
 /// * `documents` - HashMap con los sets vacios
 ///
 fn initialize_document_sets(
-    documents: &HashMap<String, Vec<String>>,
+    documents: &HashMap<String, Documento>,
 ) -> Arc<Mutex<HashMap<String, HashSet<String>>>> {
     let mut doc_set: HashMap<String, HashSet<String>> = HashMap::new();
 
@@ -573,7 +573,7 @@ pub fn persist_documents(documents: Arc<Mutex<HashMap<String, Documento>>>) -> i
         if let Some(doc) = documents_guard.get(document_id) {
             match doc {
                 Documento::Texto(lineas) => {
-                    let mut document_data = format!("TXT/++/{}++/", document_id);
+                    let mut document_data = format!("TXT/++/{}/++/", document_id);
                     for linea in lineas {
                         document_data.push_str(linea);
                         document_data.push_str("/--/");
@@ -581,7 +581,7 @@ pub fn persist_documents(documents: Arc<Mutex<HashMap<String, Documento>>>) -> i
                     writeln!(persistence_file, "{}", document_data)?;
                 }
                 Documento::Calculo(filas) => {
-                    let mut document_data = format!("CALC/++/{}++/", document_id);
+                    let mut document_data = format!("CALC/++/{}/++/", document_id);
                     for fila in filas {
                         document_data.push_str(&fila.join(","));
                         document_data.push_str("/--/");
@@ -602,8 +602,8 @@ pub fn persist_documents(documents: Arc<Mutex<HashMap<String, Documento>>>) -> i
 /// al leer el archivo
 pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Documento>, String> {
     let mut documents = HashMap::new();
-    let file = std::fs::File::open(file_path).map_err(|e| e.to_string())?;
-    let reader = std::io::BufReader::new(file);
+    let file = File::open(file_path).map_err(|_| "archivo-no-encontrado".to_string())?;
+    let reader = BufReader::new(file);
 
     for line in reader.lines() {
         let content = line.map_err(|e| e.to_string())?;
