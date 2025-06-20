@@ -12,6 +12,7 @@ use std::thread;
 
 use crate::hashing::get_hash_slots;
 use crate::local_node::NodeRole;
+use crate::local_node::NodeState;
 use crate::utils::redis_parser::CommandResponse;
 mod client_info;
 mod commands;
@@ -408,6 +409,7 @@ pub fn resolve_key_location(
         if hashed_key < lower_hash_bound || hashed_key >= upper_hash_bound {
             if let Some(peer_node) = locked_peer_nodes.values().find(|p| {
                 p.role == NodeRole::Master
+                    && p.state == NodeState::Active
                     && p.hash_range.0 <= hashed_key
                     && p.hash_range.1 > hashed_key
             }) {

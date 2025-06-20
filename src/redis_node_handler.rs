@@ -202,7 +202,6 @@ fn handle_node(
 
         match command.as_str() {
             "node" => {
-                println!("00");
                 let node_listening_port = &input[1];
                 let parsed_port = &input[1].trim().parse::<usize>().map_err(|_| {
                     std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid port")
@@ -228,7 +227,6 @@ fn handle_node(
                     std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid end range")
                 })?;
 
-                println!("01");
                 {
                     let mut lock_nodes = nodes.lock().unwrap();
                     let mut local_node_locked = local_node.lock().unwrap();
@@ -245,7 +243,6 @@ fn handle_node(
                             (*hash_range_start, *hash_range_end),
                             NodeState::Active,
                         );
-                        println!("02");
                         // me fijo si es mi master/replica
                         if *hash_range_start == local_node_locked.hash_range.0 {
                             if cloned_role != local_node_locked.role {
@@ -302,12 +299,11 @@ fn handle_node(
                                // soy una replica, hablando con la ottra replica de mi master
                                local_node_locked.replica_nodes.push(*parsed_port);
                             }
-                            println!("04");
+
                         }
 
                     }
                 }
-                println!("05");
             }
             "sync" => {
                 handle_replica_sync(&shared_sets, &shared_documents, &document_subscribers)?;
