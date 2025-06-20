@@ -288,7 +288,7 @@ fn handle_node(
                         peer_node_to_update.role = node_role;
                         peer_node_to_update.hash_range = (*hash_range_start, *hash_range_end);
 
-                        if peer_node_to_update.hash_range.0 == local_node_locked.hash_range.0 {
+                        if peer_node_to_update.hash_range.0 == local_node_locked.hash_range.0 && peer_node_to_update.hash_range.1 == local_node_locked.hash_range.1 {
                             if cloned_role != local_node_locked.role {
                                 // estoy hablando con un nodo de otro tipo -> si soy replica, mi master, si soy master, mis replicas
                                 if local_node_locked.role == NodeRole::Master {

@@ -410,6 +410,7 @@ pub fn resolve_key_location(
             if let Some(peer_node) = locked_peer_nodes.values().find(|p| {
                 p.role == NodeRole::Master
                     && p.state == NodeState::Active
+                    
                     && p.hash_range.0 <= hashed_key
                     && p.hash_range.1 > hashed_key
             }) {
