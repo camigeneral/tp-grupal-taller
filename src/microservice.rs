@@ -163,14 +163,49 @@ fn listen_to_redis_response(
         logger::log_event(&log_path, &format!("Respuesta de redis: {}", line));
 
         // client-address qty_users
-        if line.starts_with("Client ") && line.contains(" subscribed to ") {
-            let parts: Vec<&str> = line.trim().split_whitespace().collect();
-            if parts.len() >= 5 {
-                let client_addr = parts[1];
+        // if line.starts_with("Client ") && line.contains(" subscribed to ") {
+        //     let parts: Vec<&str> = line.trim().split_whitespace().collect();
+        //     if parts.len() >= 5 {
+        //         let client_addr = parts[1];
 
-                let doc_name = parts[4];
+        //         let doc_name = parts[4];
 
-                let bienvenida = format!("Welcome {} {}", doc_name, client_addr);
+        //         let bienvenida = format!("Welcome {} {}", doc_name, client_addr);
+
+        //         let parts: Vec<&str> = bienvenida.split_whitespace().collect();
+
+        //         let mensaje_final = format_resp_command(&parts);
+
+        //         if let Err(e) = microservice_socket.write_all(mensaje_final.as_bytes()) {
+        //             eprintln!("Error al enviar mensaje de bienvenida: {}", e);
+        //             logger::log_event(&log_path, &format!("Error al enviar mensaje de bienvenida: {}", e));
+        //         }
+        //     }
+        // }
+
+        let response: Vec<&str> = line.split_whitespace().collect();
+
+
+        let first = response[0].to_uppercase();
+        let first_response = first.as_str();
+
+        match first_response {
+            s if s.starts_with("-ERR") => {
+
+                let credenciales = &response[1]; 
+                let invalidas = response[2].trim_end_matches(':');
+
+                if let Some(sender) = &ui_sender {
+                    let _ = sender.send(AppMsg::LoginFailure(format!("{} {}", credenciales, invalidas)));
+                }
+            }
+            "CLIENT" => {
+                // se va a procesar lo que otro agrego 
+                let response_client: Vec<&str> = response[1].split('|').collect();
+                let client_address = response_client[0];
+                let doc_name = response_client[1];
+
+                let bienvenida = format!("Welcome {} {}", doc_name, client_address);
 
                 let parts: Vec<&str> = bienvenida.split_whitespace().collect();
 
@@ -179,6 +214,22 @@ fn listen_to_redis_response(
                 if let Err(e) = microservice_socket.write_all(mensaje_final.as_bytes()) {
                     eprintln!("Error al enviar mensaje de bienvenida: {}", e);
                     logger::log_event(&log_path, &format!("Error al enviar mensaje de bienvenida: {}", e));
+                }
+            }
+            "WRITTEN" => {
+                // se va a procesasr lo que otro agrego 
+                let response_written: Vec<&str> = response[1].split('|').collect();
+                let doc = response_written[0];
+                let line = response_written[1];
+                let content = response_written[2];
+                
+                if let Some(sender) = &ui_sender {
+                    let _ = sender.send(AppMsg::ManageSubscribeResponse(response_written[1].to_string()));
+                }
+            } 
+            _ => { 
+                if let Some(sender) = &ui_sender {
+                    let _ = sender.send(AppMsg::ManageResponse(first));
                 }
             }
         }
