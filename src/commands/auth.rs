@@ -23,7 +23,6 @@ pub fn handle_auth(request: &CommandRequest,
         }
     };
     
-    println!("credenciales_: {:#?}", request.arguments);
     if request.arguments.len() >= 2 || request.arguments.len() < 1  {
             println!("Cantidad de credenciales_: {:#?}", request.arguments.len());
         return RedisResponse::new(
@@ -34,9 +33,9 @@ pub fn handle_auth(request: &CommandRequest,
         )
     } 
 
-    let (password) = match (request.arguments[0].clone()) {
-        (ValueType::String(p)) => {
-            ( p.clone())
+    let password = match request.arguments[0].clone() {
+        ValueType::String(p) => {
+            p.clone()
         }
         _ => {
             return RedisResponse::new(
@@ -72,13 +71,7 @@ pub fn handle_auth(request: &CommandRequest,
     }
 
     let mut logged_clients_lock = logged_clients.lock().unwrap();
-    println!("Intentando autenticar cliente con addr: {}", client_addr);
-    println!("Formato exacto del client_addr: {:?}", client_addr);
-    println!("Estado del HashMap antes de insertar: {:#?}", *logged_clients_lock);
     logged_clients_lock.insert(client_addr.clone(), true);
-    println!("Cliente autenticado. Estado actual de logged_clients: {:#?}", *logged_clients_lock);
-    println!("Verificando que el cliente fue insertado: {:?}", logged_clients_lock.get(&client_addr));
-    
     RedisResponse::new(
         CommandResponse::Ok,
         false,       

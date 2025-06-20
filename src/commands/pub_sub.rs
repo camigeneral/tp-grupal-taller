@@ -1,6 +1,9 @@
 use super::redis_response::RedisResponse;
-use crate::utils::redis_parser::{CommandRequest, CommandResponse};
+use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
+use commands::set::handle_sadd;
+use commands::set::handle_srem;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 /// Maneja el comando SUBSCRIBE que permite a un cliente suscribirse a un documento
@@ -16,6 +19,7 @@ pub fn handle_subscribe(
     request: &CommandRequest,
     document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
     client_addr: String,
+    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k,
@@ -38,6 +42,14 @@ pub fn handle_subscribe(
             "".to_string(),
             "".to_string(),
         );
+
+            let request = CommandRequest {
+                command: "sadd".to_string(),
+                key: Some(doc.clone()),
+                arguments: vec![ValueType::String(client_addr.clone())],
+            };
+
+            let _ = handle_sadd(&request, shared_sets);
 
         let notification = format!("Client {} subscribed to {}", client_addr, doc);
 
@@ -65,6 +77,7 @@ pub fn handle_unsubscribe(
     request: &CommandRequest,
     document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
     client_addr: String,
+    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k,
@@ -81,6 +94,15 @@ pub fn handle_unsubscribe(
     let mut map = document_subscribers.lock().unwrap();
     if let Some(list) = map.get_mut(doc) {
         list.retain(|x| x != &client_addr);
+
+        let request = CommandRequest {
+            command: "srem".to_string(),
+            key: Some(doc.clone()),
+            arguments: vec![ValueType::String(client_addr.clone())],
+        };
+
+        let _ = handle_srem(&request, shared_sets);
+
         RedisResponse::new(
             CommandResponse::String(format!("Unsubscribed from {}", doc)),
             false,

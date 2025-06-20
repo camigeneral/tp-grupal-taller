@@ -1,5 +1,6 @@
 use crate::utils::redis_parser::CommandResponse;
 
+#[derive(Debug)]
 pub struct RedisResponse {
     pub response: CommandResponse,
     pub publish: bool,

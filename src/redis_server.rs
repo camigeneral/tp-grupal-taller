@@ -11,6 +11,8 @@ use std::path::Path;
 use std::str;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::fs;
+
 
 
 use crate::hashing::get_hash_slots;
@@ -85,7 +87,6 @@ fn start_server(
     let config_path = "redis.conf";
     let log_path = utils::logger::get_log_path_from_config(config_path);
 
-    use std::fs;
     if fs::metadata(&log_path)
         .map(|m| m.len() > 0)
         .unwrap_or(false)
@@ -107,10 +108,10 @@ fn start_server(
     };
 
     // Inicializar estructuras de datos compartidas
-    let shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
+    
     let shared_documents = Arc::new(Mutex::new(stored_documents.clone()));
     let document_subscribers = initialize_document_subscribers(&stored_documents);
+    let shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>> = initialize_document_sets(&stored_documents);
     let active_clients = Arc::new(Mutex::new(HashMap::new()));
     let logged_clients: Arc<Mutex<HashMap<String, bool>>> = Arc::new(Mutex::new(HashMap::new()));
 
@@ -165,6 +166,26 @@ fn initialize_document_subscribers(
     }
 
     Arc::new(Mutex::new(subscriber_map))
+}
+
+/// Inicializa los sets para cada documento.
+///
+/// Crea una entrada vacía en el set de suscriptores para cada documento
+/// existente en la base de datos.
+///
+/// # Argumentos
+/// * `documents` - HashMap con los sets vacios
+///
+fn initialize_document_sets(
+    documents: &HashMap<String, Vec<String>>,
+) -> Arc<Mutex<HashMap<String, HashSet<String>>>> {
+    let mut doc_set: HashMap<String, HashSet<String>> = HashMap::new();
+
+    for document_id in documents.keys() {
+        doc_set.insert(document_id.clone(), HashSet::new());
+    }
+
+    Arc::new(Mutex::new(doc_set))
 }
 
 fn handle_new_client_connection(

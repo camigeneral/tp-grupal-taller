@@ -9,7 +9,7 @@ use app::gtk4::glib::Propagation;
 use client::client_run;
 use components::file_workspace::{FileWorkspace, FileWorkspaceMsg, FileWorkspaceOutputMessage};
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
-use std::collections::HashMap;
+use std::{collections::HashMap};
 use std::thread;
 
 use std::sync::mpsc::{channel, Sender};
@@ -34,7 +34,9 @@ pub struct AppModel {
     is_logged_in: bool,
     command: String,
     command_sender: Option<Sender<String>>,
-    username: String
+    username: String,
+    current_file:String,
+    subscribed_files: HashMap<String, bool>
 }
 
 #[derive(Debug)]
@@ -50,8 +52,11 @@ pub enum AppMsg {
     RefreshData,
     CreateFile(String, String),
     SubscribeFile(String),
+    UnsubscribeFile(String), 
     PrepareAndExecuteCommand(String, String),
     ManageResponse(String),
+    ManageSubscribeResponse(String),
+    ManageUnsubscribeResponse(String),
 }
 
 #[relm4::component(pub)]
@@ -145,6 +150,7 @@ impl SimpleComponent for AppModel {
             sender.input_sender(),
             |command: FileWorkspaceOutputMessage| match command {
                 FileWorkspaceOutputMessage::SubscribeFile(file) => AppMsg::SubscribeFile(file),
+                FileWorkspaceOutputMessage::UnsubscribeFile(file) => AppMsg::UnsubscribeFile(file),
             },
         );
 
@@ -165,13 +171,15 @@ impl SimpleComponent for AppModel {
             is_logged_in: false,
             command: "".to_string(),
             command_sender: None,
-            username: "".to_string()
+            username: "".to_string(),
+            current_file: "".to_string(),
+            subscribed_files: HashMap::new()
         };
 
         let sender_clone = sender.clone();
 
         root.connect_close_request(move |_| {
-            sender_clone.input(AppMsg::CommandChanged("CLOSE".to_string()));
+            sender_clone.input(AppMsg::CommandChanged("close".to_string()));
             sender_clone.input(AppMsg::ExecuteCommand);
             Propagation::Proceed
         });
@@ -251,7 +259,22 @@ impl SimpleComponent for AppModel {
                 }
                 if self.command.contains("AUTH") {
                     sender.input(AppMsg::LoginSuccess(self.username.clone()));
+                }        
+            },
+            AppMsg::ManageSubscribeResponse(qty_subs) => {
+            
+                let qty_subs_int = match qty_subs.parse::<i32>() {
+                    Ok(n) => n,
+                    Err(_e) => -1,
+                };
+
+                if qty_subs_int == -1 {
+                    println!("Error");
                 }
+
+                self.subscribed_files.insert(self.current_file.clone(), true);
+                println!("Archivos suscriptos : {:#?}", self.subscribed_files);
+                self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(self.current_file.clone(), crate::components::types::FileType::Text));
             }
 
             AppMsg::CreateFile(_file_id, _content) => {
@@ -265,14 +288,32 @@ impl SimpleComponent for AppModel {
                 } */
             }
 
-            AppMsg::SubscribeFile(_file) => {
-                /* if let Some(channel_sender) = &self.command_sender {
-                    if let Err(e) = channel_sender.send("SUBSCRIBE ".to_string() + &file) {
-                        println!("Error enviando comando: {}", e);
-                    } else {
-                    }
-                } */
-                /* self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(file.clone(), "".to_string(), 1)); */
+            AppMsg::SubscribeFile(file) => {
+                self.current_file = file;                          
+
+                self.command = format!("subscribe {}", self.current_file);                
+                
+                sender.input(AppMsg::ExecuteCommand);                
+            
+            }
+
+            AppMsg::UnsubscribeFile(file) => {
+                self.current_file = file;
+                self.command = format!("unsubscribe {}", self.current_file);
+                sender.input(AppMsg::ExecuteCommand);
+            }
+
+            AppMsg::ManageUnsubscribeResponse(response) => {
+                if response == "OK" {
+                    // Remover el archivo de los suscritos
+                    self.subscribed_files.remove(&self.current_file);
+                    println!("Desuscrito del archivo: {}", self.current_file);
+                } else {
+                    println!("Error al desuscribirse: {}", response);
+                }
+
+                self.command = "".to_string();
+                self.current_file = "".to_string();
             }
 
             AppMsg::ExecuteCommand => {
@@ -292,7 +333,7 @@ impl SimpleComponent for AppModel {
             AppMsg::CloseApplication => {
                 if let Some(channel_sender) = &self.command_sender {
                     println!("Enviando comando de cierre al servidor");
-                    if let Err(e) = channel_sender.send("CLOSE".to_string()) {
+                    if let Err(e) = channel_sender.send("close".to_string()) {
                         eprintln!("Error al enviar comando de cierre: {:?}", e);
                     }
                 }
