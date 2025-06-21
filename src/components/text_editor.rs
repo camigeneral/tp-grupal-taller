@@ -29,6 +29,8 @@ pub enum TextEditorMessage {
     ContentRemoved(i32, i32),
     UpdateFile(String, i32, String),
     ResetEditor,
+    EnterPressed(i32),  // Nuevo mensaje para Enter
+    TabPressed(i32),    // Nuevo mensaje para Tab
 }
 
 /// Enum que define los posibles mensajes de salida del editor de archivos.
@@ -85,16 +87,22 @@ impl SimpleComponent for TextEditorModel {
 
         let sender = sender.clone();
 
-        // Pensar como hacer para que al resetear no mande el mensaje a la api para borrar el contenido
-
         let sender_insert = sender.clone();
         model
             .buffer
             .connect_insert_text(move |_buffer, iter, text| {
-                sender_insert.input(TextEditorMessage::ContentAdded(
-                    text.to_string(),
-                    iter.offset(),
-                ));
+                let offset = iter.offset();
+                
+                if text == "\n" {
+                    sender_insert.input(TextEditorMessage::EnterPressed(offset));
+                } else if text == "\t" {
+                    sender_insert.input(TextEditorMessage::TabPressed(offset));
+                } else {
+                    sender_insert.input(TextEditorMessage::ContentAdded(
+                        text.to_string(),
+                        offset,
+                    ));
+                }
             });
 
         let sender_delete = sender.clone();
@@ -113,12 +121,19 @@ impl SimpleComponent for TextEditorModel {
 
     fn update(&mut self, message: TextEditorMessage, _sender: ComponentSender<Self>) {
         match message {
-            TextEditorMessage::ContentAdded(_new_text, _offset) => {
-                println!("new text {} offset: {}", _new_text, _offset);
-                
+            TextEditorMessage::ContentAdded(new_text, offset) => {
+                println!("Texto añadido: '{}' en posición: {}", new_text, offset);
             }
-            TextEditorMessage::ContentRemoved(_start_offset, _end_offset) => {
-                println!("principio {} offset: {}", _start_offset, _end_offset);
+            TextEditorMessage::ContentRemoved(start_offset, end_offset) => {
+                println!("Texto eliminado desde: {} hasta: {}", start_offset, end_offset);
+            }
+            TextEditorMessage::EnterPressed(offset) => {
+                println!("¡Enter presionado! en posición: {}", offset);
+                // Aquí puedes agregar tu lógica específica para Enter
+            }
+            TextEditorMessage::TabPressed(offset) => {
+                println!("¡Tab presionado! en posición: {}", offset);
+                // Aquí puedes agregar tu lógica específica para Tab
             }
             TextEditorMessage::UpdateFile(file_name, contributors, content) => {
                 self.file_name = file_name;
