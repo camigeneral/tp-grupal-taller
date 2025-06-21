@@ -20,20 +20,7 @@ pub enum RedisMessage {
 }
 
 
-/// Intenta establecer una primera conexion con los otros nodos del servidor
-///
-/// # Errores
-/// Retorna un error si el puerto no corresponde a uno definido en los archivos de configuracion.
-pub fn start_node_connection(
-    port: usize,
-    node_address: String,
-    peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
-    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
-    shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>,
-    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
-) -> Result<Arc<Mutex<LocalNode>>, std::io::Error> {
-    let cloned_nodes = Arc::clone(peer_nodes);
-
+pub fn get_config_path(port: usize) -> Result<String, std::io::Error> {
     let config_path = match port {
         4000 => "redis0.conf",
         4001 => "redis1.conf",
@@ -52,23 +39,47 @@ pub fn start_node_connection(
         }
     };
 
+    Ok(config_path.to_string())
+}
+
+
+pub fn create_local_node(port: usize) -> Result<Arc<Mutex<LocalNode>>, std::io::Error> {
+    let config_path = get_config_path(port)?;
+
     let local_node = LocalNode::new_from_config(config_path)?;
-    let mutex_node = Arc::new(Mutex::new(local_node));
-    let cloned_mutex_node = Arc::clone(&mutex_node);
+    Ok(Arc::new(Mutex::new(local_node)))
+} 
+
+
+/// Intenta establecer una primera conexion con los otros nodos del servidor
+///
+/// # Errores
+/// Retorna un error si el puerto no corresponde a uno definido en los archivos de configuracion.
+pub fn start_node_connection(
+    port: usize,
+    node_address: String,
+    local_node: &Arc<Mutex<LocalNode>>,
+    peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
+    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
+) -> Result<(), std::io::Error> {
+    let cloned_nodes = Arc::clone(peer_nodes);
+    let config_path =  get_config_path(port)?;
+    let cloned_local_node = Arc::clone(local_node);
     let cloned_document_subscribers = Arc::clone(&document_subscribers);
     let cloned_shared_documents = Arc::clone(&shared_documents);
     let cloned_shared_sets = Arc::clone(&shared_sets);
     let node_ports = read_node_ports(config_path)?;
 
     thread::spawn(
-        move || match connect_nodes(&node_address, cloned_nodes, cloned_mutex_node, cloned_document_subscribers, cloned_shared_documents, cloned_shared_sets) {
+        move || match connect_nodes(&node_address, cloned_nodes, cloned_local_node, cloned_document_subscribers, cloned_shared_documents, cloned_shared_sets) {
             Ok(_) => {}
             Err(_e) => {}
         },
-
     );
 
-    let cloned_local_node_for_ping_pong = Arc::clone(&mutex_node);
+    let cloned_local_node_for_ping_pong = Arc::clone(&local_node);
     let cloned_peer_nodes = Arc::clone(peer_nodes);
 
     thread::spawn(
@@ -79,25 +90,26 @@ pub fn start_node_connection(
     );
 
     {
-        let mut lock_peer_nodes: std::sync::MutexGuard<'_, HashMap<String, peer_node::PeerNode>> =
-            peer_nodes.lock().unwrap();
-        let locked_mutex_node = mutex_node.lock().unwrap();
+        let locked_local_node = local_node.lock().unwrap();
+        let mut lock_peer_nodes: std::sync::MutexGuard<'_, HashMap<String, peer_node::PeerNode>> = peer_nodes.lock().unwrap();
 
         for connection_port in node_ports {
-            if connection_port != locked_mutex_node.port {
+            if connection_port != locked_local_node.port {
                 let node_address_to_connect = format!("127.0.0.1:{}", connection_port);
                 let peer_addr = format!("127.0.0.1:{}", connection_port);
                 match TcpStream::connect(node_address_to_connect) {
                     Ok(stream) => {
                         let mut cloned_stream = stream.try_clone()?;
 
+                        // mando node
+                        println!("mando node desde start_node_connection\n");
                         let message = format!(
                             "{:?} {} {:?} {} {}\n",
                             RedisMessage::Node,
-                            locked_mutex_node.port,
-                            locked_mutex_node.role,
-                            locked_mutex_node.hash_range.0,
-                            locked_mutex_node.hash_range.1
+                            locked_local_node.port,
+                            locked_local_node.role,
+                            locked_local_node.hash_range.0,
+                            locked_local_node.hash_range.1
                         );
 
                         cloned_stream.write_all(message.as_bytes())?;
@@ -121,7 +133,7 @@ pub fn start_node_connection(
         }
     }
 
-    Ok(mutex_node)
+    Ok(())
 }
 
 
@@ -201,10 +213,11 @@ fn handle_node(
             .map(|s| s.to_string().to_lowercase())
             .collect();
         let command = &input[0];
-        println!("Recibido: {:?}", input);
+        // println!("Recibido: {:?}", input);
 
         match command.as_str() {
             "node" => {
+                println!("recibi el comando node");
                 let node_listening_port = &input[1];
                 let parsed_port = &input[1].trim().parse::<usize>().map_err(|_| {
                     std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid port")
@@ -231,10 +244,11 @@ fn handle_node(
                 })?;
 
                 {
-                    let mut lock_nodes = nodes.lock().unwrap();
                     let mut local_node_locked = local_node.lock().unwrap();
-                    // no lo conozco -> creo el stream y me guardo todo, y le mando mi info
+                    let mut lock_nodes = nodes.lock().unwrap();                  
+                    // no lo conozco -> creo el stream y me guardo todo, y le mando mi info                    
                     if !lock_nodes.contains_key(&node_address) {
+                        println!("node listening port: {}", node_listening_port);
                         let node_address_to_connect = format!("127.0.0.1:{}", node_listening_port);
                         let new_stream = TcpStream::connect(node_address_to_connect)?;
                         let mut stream_to_respond = new_stream.try_clone()?;
@@ -260,7 +274,7 @@ fn handle_node(
                                     stream_to_respond.write_all(message.as_bytes())?;
                                 }
                             } else {
-                               // soy una replica, hablando con la ottra replica de mi master
+                               // soy una replica, hablando con la otra replica de mi master
                                local_node_locked.replica_nodes.push(*parsed_port);
                             }
                         }
@@ -270,6 +284,7 @@ fn handle_node(
 
                         lock_nodes.insert(node_address_to_connect.to_string(), node_client);
 
+                        // mando node
                         let message = format!(
                             "{:?} {} {:?} {} {}\n",
                             RedisMessage::Node,
@@ -280,10 +295,10 @@ fn handle_node(
                         );
 
                         stream_to_respond.write_all(message.as_bytes())?;
-                        println!("03");
                     }
                     // si lo conozco, actualizo todo menos el stream
                     else {
+                        println!("Recibido: {:?}", input);
                         let peer_node_to_update = lock_nodes.get_mut(&node_address).unwrap();
                         peer_node_to_update.role = node_role;
                         peer_node_to_update.hash_range = (*hash_range_start, *hash_range_end);
@@ -355,9 +370,9 @@ fn handle_node(
 
                 let redis_response = redis::execute_replica_command(
                     command_request,
-                    shared_documents.clone(),
-                    document_subscribers.clone(),
-                    shared_sets.clone(),
+                    &shared_documents,
+                    &document_subscribers,
+                    &shared_sets,
                 );
 
                 println!("Replica redis response {:?}", redis_response.response);
@@ -401,44 +416,7 @@ fn handle_node(
                     Err(_) => eprintln!("err"),
                 };
             }
-            "initialize_replica_promotion" => { 
-                {
-                    // actualizo mi estado
-                    let mut locked_local_node = local_node.lock().unwrap();
-                    let inactive_port = locked_local_node.master_node.unwrap().clone();
-                    locked_local_node.role = NodeRole::Master;
-                    locked_local_node.master_node = None;
-                
-
-                     // le aviso a mis peers
-                    let locked_peer_nodes = nodes.lock().unwrap();
-
-                    let node_info_message = format!(
-                        "{:?} {} {:?} {} {}\n",
-                        RedisMessage::Node,
-                        locked_local_node.port,
-                        locked_local_node.role,
-                        locked_local_node.hash_range.0,
-                        locked_local_node.hash_range.1
-                    );
-
-                    let inactive_node_message = format!("inactive_node {}\n", inactive_port);
-
-                    for (_, peer) in locked_peer_nodes.iter() {
-                        match peer.stream.try_clone() {
-                            Ok(mut peer_stream) => {
-                                let _ = peer_stream.write_all(node_info_message.as_bytes());
-                                let _ = peer_stream.write_all(inactive_node_message.as_bytes());
-                            }
-                            Err(_) => {
-                                eprintln!("Error cloning stream");
-                            }
-                        }
-                        
-                    }
-                }
-
-            }
+            "initialize_replica_promotion" => {initialize_replica_promotion(local_node, &nodes)}
             "inactive_node" => {
                 let inactive_node = &input[1];
                 let inactive_node_addr = format!("127.0.0.1:{}", inactive_node);
@@ -449,6 +427,8 @@ fn handle_node(
                         peer_node.state = NodeState::Inactive;
                     }
                 }
+
+                println!("inactive node: {}", inactive_node);
             }
             _ => {
                 if saving_command {
@@ -609,7 +589,7 @@ fn deserialize_vec_hashmap(lines: &Vec<String>, shared_documents: &Arc<Mutex<Has
 
 
 fn ping_to_master(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>)-> std::io::Result<()> {
-    let ping_interval = Duration::from_secs(3);
+    let ping_interval = Duration::from_secs(5);
     let error_interval = Duration::from_secs(50);
     let mut last_sent = Instant::now();
     
@@ -702,34 +682,48 @@ fn request_master_state_confirmation(local_node: &Arc<Mutex<LocalNode>>, peer_no
         }
     };
 
-    let mut locked_peer_nodes = peer_nodes.lock().unwrap();
+    let mut contacted_replica = false;
 
-    // marco el master como inactivo
-    for peer in locked_peer_nodes.values_mut() {
-        if peer.port == master_port {
-            peer.state = NodeState::Inactive;
+    {
+        let mut locked_peer_nodes = peer_nodes.lock().unwrap();
+    
+        // marco el master como inactivo
+        for peer in locked_peer_nodes.values_mut() {
+            if peer.port == master_port {
+                peer.state = NodeState::Inactive;
+            }
         }
-    }
-
-    // hablo con la otra replica
-    for (_, peer) in locked_peer_nodes.iter() {
-        if peer.role == NodeRole::Replica && peer.hash_range == hash_range && peer.port != master_port {
-            let message = format!("confirm_master_down {}\n", master_port);
-            match peer.stream.try_clone() {
-                Ok(mut peer_stream) => {
-                    let _ = peer_stream.write_all(message.as_bytes());
-                }
-                Err(_) => {
-                    eprintln!("Error cloning stream");
+    
+        // hablo con la otra replica    
+        for (_, peer) in locked_peer_nodes.iter() {
+            if peer.role == NodeRole::Replica && peer.hash_range == hash_range && peer.port != master_port {
+                let message = format!("confirm_master_down {}\n", master_port);
+                match peer.stream.try_clone() {
+                    Ok(mut peer_stream) => {
+                        if let Err(_) = peer_stream.write_all(message.as_bytes()) {
+                            eprintln!("Error writing to replica");
+                        } else {
+                            contacted_replica = true;
+                        }
+                    }
+                    Err(_) => {
+                        eprintln!("Error cloning stream");
+                    }
                 }
             }
         }
+    }
+
+
+    if !contacted_replica {
+        initialize_replica_promotion(local_node, peer_nodes);
     }
 
 }
 
 
 fn confirm_master_state(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>) -> std::io::Result<NodeState> {
+
     let master_port_option;
     let mut master_state = NodeState::Active;
     {
@@ -755,4 +749,50 @@ fn confirm_master_state(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mut
         }
     }
     Ok(master_state)
+}
+
+
+fn initialize_replica_promotion(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>) {
+    println!("initializing replica promotion");
+    {
+        // actualizo mi estado
+        let mut locked_local_node = local_node.lock().unwrap();
+        println!("1");
+        let locked_peer_nodes = peer_nodes.lock().unwrap();
+        println!("2");
+        let inactive_port = locked_local_node.master_node.unwrap().clone();
+        println!("inactive port: {}", inactive_port);
+        locked_local_node.role = NodeRole::Master;
+        locked_local_node.master_node = None;
+    
+
+         // le aviso a mis peers
+
+        let node_info_message = format!(
+            "{:?} {} {:?} {} {}\n",
+            RedisMessage::Node,
+            locked_local_node.port,
+            locked_local_node.role,
+            locked_local_node.hash_range.0,
+            locked_local_node.hash_range.1
+        );
+
+        let inactive_node_message = format!("inactive_node {}\n", inactive_port);
+
+        println!("3");
+        for (_, peer) in locked_peer_nodes.iter() {
+            println!("sending to: {}", peer.port);
+            match peer.stream.try_clone() {
+                Ok(mut peer_stream) => {
+                    let _ = peer_stream.write_all(node_info_message.as_bytes());
+                    let _ = peer_stream.write_all(inactive_node_message.as_bytes());
+                    println!("sent");
+                }
+                Err(_) => {
+                    eprintln!("Error cloning stream");
+                }
+            }
+            
+        }
+    }
 }

@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 pub fn handle_get(
     request: &CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) -> RedisResponse {
     let key = match &request.key {
         Some(k) => k,
@@ -54,9 +54,9 @@ pub fn handle_get(
 /// - `RedisResponse::Ok` con notificación activa y nombre del documento.
 pub fn handle_set(
     request: &CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
+    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
 ) -> RedisResponse {
     let doc_name = match &request.key {
         Some(k) => k.clone(),
@@ -131,7 +131,7 @@ pub fn handle_set(
 /// - `RedisResponse::Integer(line_number)` con notificación activa y nombre del documento.
 pub fn handle_append(
     request: &CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
@@ -176,7 +176,7 @@ pub fn handle_append(
     )
 }
 
-pub fn handle_welcome(request: &CommandRequest, _active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>, shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>) -> RedisResponse {
+pub fn handle_welcome(request: &CommandRequest, _active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>, shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>) -> RedisResponse {
     let client_addr_str = redis::extract_string_arguments(&request.arguments);
 
     let doc = match &request.key {
@@ -197,6 +197,7 @@ pub fn handle_welcome(request: &CommandRequest, _active_clients: Arc<Mutex<HashM
         arguments: vec![],
         unparsed_command: "".to_string(),
     };
+    // to do: unparsed command?
 
     let response = handle_scard(&request, shared_sets);
 
