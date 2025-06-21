@@ -14,5 +14,7 @@ Cargo.lock
 *.pdb
 
 docs.txt
-
+redis_node_0_5460.rdb
+redis_node_5460_10921.rdb
+redis_node_10921_16383.rdb
 server.log

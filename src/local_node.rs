@@ -9,12 +9,20 @@ pub enum NodeRole {
     Unknown,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum NodeState {
+    Active,
+    Inactive,
+}
+
 /// Estructura que representa la instancia de nodo levantada en la consola. Contiene el puerto en el que
 /// escucha nodos entrantes, el tipo (master o replica), y su hash range.
 pub struct LocalNode {
     pub port: usize,
     pub role: NodeRole,
     pub hash_range: (usize, usize),
+    pub master_node: Option<usize>,
+    pub replica_nodes: Vec<usize>,
 }
 
 impl LocalNode {
@@ -60,6 +68,8 @@ impl LocalNode {
             port,
             role,
             hash_range: (hash_range_start, hash_range_end),
+            master_node: None,
+            replica_nodes: Vec::new(),
         })
     }
 }
