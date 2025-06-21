@@ -36,26 +36,25 @@ pub fn handle_subscribe(
     let mut map = document_subscribers.lock().unwrap();
     if let Some(list) = map.get_mut(doc) {
         list.push(client_addr.clone());
-        RedisResponse::new(
-            CommandResponse::String(format!("Subscribed to {}", doc)),
-            false,
-            "".to_string(),
-            "".to_string(),
-        );
 
-            let request = CommandRequest {
-                command: "sadd".to_string(),
-                key: Some(doc.clone()),
-                arguments: vec![ValueType::String(client_addr.clone())],
-                unparsed_command: "".to_string(),
-            };
-            // to do: unparsed command?
-
-            let _ = handle_sadd(&request, shared_sets);
+        // Actualiza el set de suscriptores si es necesario
+        let request = CommandRequest {
+            command: "sadd".to_string(),
+            key: Some(doc.clone()),
+            arguments: vec![ValueType::String(client_addr.clone())],
+            unparsed_command: "".to_string(),
+        };
+        let _ = handle_sadd(&request, shared_sets);
 
         let notification = format!("Client {} subscribed to {}", client_addr, doc);
 
-        RedisResponse::new(CommandResponse::Null, true, notification, doc.to_string())
+        // RETORNAR la respuesta de éxito aquí
+        return RedisResponse::new(
+            CommandResponse::String(notification),
+            false,
+            "".to_string(),
+            doc.to_string(),
+        );
     } else {
         RedisResponse::new(
             CommandResponse::Error("Document not found".to_string()),
@@ -79,7 +78,7 @@ pub fn handle_unsubscribe(
     request: &CommandRequest,
     document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
     client_addr: String,
-    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>
+    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k,

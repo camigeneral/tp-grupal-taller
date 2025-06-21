@@ -1,6 +1,8 @@
 use super::redis;
 use super::redis_response::RedisResponse;
 use crate::client_info;
+use crate::commands::set::handle_scard;
+use crate::documento::Documento;
 #[allow(unused_imports)]
 use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use client_info::ClientType;
@@ -9,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 pub fn handle_get(
     request: &CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
     let key = match &request.key {
         Some(k) => k,
@@ -26,7 +28,7 @@ pub fn handle_get(
     let docs = docs.lock().unwrap();
     match docs.get(key) {
         Some(value) => RedisResponse::new(
-            CommandResponse::String(value.join("\n")),
+            CommandResponse::String(value.join("\n").unwrap_or_default()),
             false,
             "".to_string(),
             "".to_string(),
@@ -52,7 +54,7 @@ pub fn handle_get(
 /// - `RedisResponse::Ok` con notificación activa y nombre del documento.
 pub fn handle_set(
     request: &CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    docs: &Arc<Mutex<HashMap<String, Documento>>>,
     document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
     active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
 ) -> RedisResponse {
@@ -81,7 +83,17 @@ pub fn handle_set(
 
     {
         let mut docs_lock = docs.lock().unwrap();
-        docs_lock.insert(doc_name.clone(), vec![content.clone()]);
+        if doc_name.ends_with(".xlsx") {
+            // Si es hoja de cálculo, crea Documento::Calculo vacío
+            docs_lock.insert(doc_name.clone(), Documento::Calculo(vec![]));
+        } else {
+            // Si es texto, crea Documento::Texto vacío o con contenido
+            if content.trim().is_empty() {
+                docs_lock.insert(doc_name.clone(), Documento::Texto(vec![]));
+            } else {
+                docs_lock.insert(doc_name.clone(), Documento::Texto(vec![content.clone()]));
+            }
+        }
     }
 
     {
@@ -129,7 +141,7 @@ pub fn handle_set(
 /// - `RedisResponse::Integer(line_number)` con notificación activa y nombre del documento.
 pub fn handle_append(
     request: &CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
