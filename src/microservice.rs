@@ -1,7 +1,4 @@
-extern crate relm4;
-// use self::relm4::Sender;
 use std::collections::HashMap;
-use std::env::args;
 use std::io::Write;
 use std::io::{BufRead, BufReader};
 #[allow(unused_imports)]
@@ -85,7 +82,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     connect_node_sender.send(redis_socket)?;
 
     
-    let otros_puertos = vec![4001, 4002]; // <-- agregá más si hace falta
+    let otros_puertos = vec![4001, 4002]; 
     for port in otros_puertos {
         let addr = format!("127.0.0.1:{}", port);
         match TcpStream::connect(&addr) {

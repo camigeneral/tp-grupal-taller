@@ -200,17 +200,14 @@ pub fn handle_welcome(request: &CommandRequest, _active_clients: Arc<Mutex<HashM
     let response = handle_scard(&request, shared_sets);
 
     let mut notification= " ".to_string();
-    println!("response del scard: {:#?}", response);
 
     if let CommandResponse::String(ref s) = response.response {
         if let Some(qty_subs) = s.split_whitespace().last() {
             notification = format!("STATUS {}|{:?}", client_addr_str, qty_subs);
         };
     }
-    println!("Llegue aca {}", notification.clone());
     RedisResponse::new(CommandResponse::String(notification.clone()), true, notification, doc)
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
