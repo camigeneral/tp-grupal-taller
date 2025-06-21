@@ -56,3 +56,6 @@ pub mod text_editor;
 /// Este módulo define el formulario del ingreso, validaciones y los usuarios permitidos para el manejo de la aplicacion.
 ///
 pub mod login;
+
+// Modulo que maneja el modal de error
+pub mod error_modal;
