@@ -582,9 +582,11 @@ pub fn persist_documents(documents: Arc<Mutex<HashMap<String, Documento>>>) -> i
                 }
                 Documento::Calculo(filas) => {
                     let mut document_data = format!("{}/++/", document_id); 
-                    for fila in filas {
-                        document_data.push_str(&fila.join(","));
-                        document_data.push_str("/--/");
+                    if !filas.is_empty() {
+                        for fila in filas {
+                            document_data.push_str(&fila.join(","));
+                            document_data.push_str("/--/");
+                        }
                     }
                     writeln!(persistence_file, "{}", document_data)?;
                 }

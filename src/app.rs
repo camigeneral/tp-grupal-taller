@@ -253,6 +253,7 @@ impl SimpleComponent for AppModel {
 
             AppMsg::ManageResponse(resp) => {
                 if resp != "OK" {
+                    self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
                     return;
                 }
                 if self.command.contains("AUTH") {
@@ -278,7 +279,7 @@ impl SimpleComponent for AppModel {
             AppMsg::CreateFile(file_id, content) => {
                 self.command = format!("SET {} \"{}\"", file_id, content);
                 sender.input(AppMsg::ExecuteCommand);
-                self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
+                // self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
             }
 
             AppMsg::SubscribeFile(file) => {

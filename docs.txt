@@ -1,3 +1,6 @@
-docprueba.txt/++/aaa/--/
+funciona?.xlsx/++/
 holaa.txt/++/""/--/
 mihoja.xlsx/++/1,2,3/--/4,5,6/--/
+nuevo_archivo.xlsx/++/
+docprueba.txt/++/aaa/--/
+nuevonuevo.xlsx/++/

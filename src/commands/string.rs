@@ -84,10 +84,16 @@ pub fn handle_set(
 
     {
         let mut docs_lock = docs.lock().unwrap();
-        if content.trim().is_empty() {
-            docs_lock.insert(doc_name.clone(), Documento::Texto(vec![]));
+        if doc_name.ends_with(".xlsx") {
+            // Si es hoja de cálculo, crea Documento::Calculo vacío
+            docs_lock.insert(doc_name.clone(), Documento::Calculo(vec![]));
         } else {
-            docs_lock.insert(doc_name.clone(), Documento::Texto(vec![content.clone()]));
+            // Si es texto, crea Documento::Texto vacío o con contenido
+            if content.trim().is_empty() {
+                docs_lock.insert(doc_name.clone(), Documento::Texto(vec![]));
+            } else {
+                docs_lock.insert(doc_name.clone(), Documento::Texto(vec![content.clone()]));
+            }
         }
     }
 
