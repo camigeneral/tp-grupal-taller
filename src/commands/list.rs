@@ -282,6 +282,105 @@ pub fn handle_rpush(
     )
 }
 
+pub fn handle_lrange(
+    request: &CommandRequest,
+    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+) -> RedisResponse {
+    let doc = match &request.key {
+        Some(k) => k.clone(),
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Usage: LRANGE <doc> <start> <stop>".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
+    };
+
+    if request.arguments.len() < 2 {
+        return RedisResponse::new(
+            CommandResponse::Error("Wrong number of arguments for LRANGE".to_string()),
+            false,
+            "".to_string(),
+            doc.clone(),
+        );
+    }
+
+    let (start_raw, stop_raw) = (&request.arguments[0], &request.arguments[1]);
+
+    let (start_offset, stop_offset) = match (start_raw, stop_raw) {
+        (ValueType::Integer(start), ValueType::Integer(stop)) => (*start as isize, *stop as isize),
+        _ => {
+            return RedisResponse::new(
+                CommandResponse::Error("Invalid arguments for LRANGE".to_string()),
+                false,
+                "".to_string(),
+                doc,
+            )
+        }
+    };
+
+    let mut docs_lock = docs.lock().unwrap();
+    let list: &mut Vec<String> = docs_lock.entry(doc.clone()).or_default();
+        let list_len = list.len() as isize;
+
+    let mut start = if start_offset < 0 {
+        list_len + start_offset
+    } else {
+        start_offset
+    };
+
+    let mut stop = if stop_offset < 0 {
+        list_len + stop_offset
+    } else {
+        stop_offset
+    };
+
+    if start < 0 {
+        start = 0;
+    }
+    if stop < 0 {
+        stop = 0;
+    }
+
+    if start >= list_len || start > stop {
+        return RedisResponse::new(
+            CommandResponse::Array(vec![]),
+            true,
+            "".to_string(),
+            doc,
+        );
+    }
+
+    if stop >= list_len {
+        stop = list_len - 1;
+    }
+
+    let slice = &list[start as usize..=stop as usize];
+
+    let mut message = String::new();
+    let mut vec_response = vec![];
+
+    for (i, item) in slice.iter().enumerate() {
+        let line = format!(r#"{}) "{}" \n"#, i + 1, item);
+        message.push_str(&line);
+        vec_response.push(CommandResponse::String(item.clone()));
+    }
+
+    RedisResponse::new(
+        CommandResponse::Array(vec_response),
+        true,
+        message,
+        doc,
+    )
+}
+
+pub fn handle_ltrim() {
+    
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -378,6 +477,130 @@ mod tests {
         let response = handle_llen(&request, Arc::clone(&docs));
         assert!(matches!(response.response, CommandResponse::Integer(1)));
     }
+
+    #[test]
+    fn test_handle_lrange() {
+        let docs = setup();
+        {
+            let mut docs_lock = docs.lock().unwrap();
+            docs_lock.insert(
+                "test".to_string(),
+                vec!["pivot".to_string(), "new".to_string(), "before".to_string()],
+            );
+        }
+
+        // Caso 1: índices positivos [0..1]
+        let request = CommandRequest {
+            command: "LRANGE".to_string(),
+            key: Some("test".to_string()),
+            arguments: vec![ValueType::Integer(0), ValueType::Integer(1)],
+        };
+
+        let response = handle_lrange(&request, docs.clone());
+        let expected = vec![
+            CommandResponse::String("pivot".to_string()),
+            CommandResponse::String("new".to_string()),
+        ];
+        if let CommandResponse::Array(ref items) = response.response {
+            assert_eq!(items, &expected);
+        } else {
+            panic!("Expected CommandResponse::Array");
+        }
+
+        // Caso 2: mezcla positivos y negativos [1..-1]
+        let request = CommandRequest {
+            command: "LRANGE".to_string(),
+            key: Some("test".to_string()),
+            arguments: vec![ValueType::Integer(1), ValueType::Integer(-1)],
+        };
+
+        let response = handle_lrange(&request, docs.clone());
+        let expected = vec![
+            CommandResponse::String("new".to_string()),
+            CommandResponse::String("before".to_string()),
+        ];
+        if let CommandResponse::Array(ref items) = response.response {
+            assert_eq!(items, &expected);
+        } else {
+            panic!("Expected CommandResponse::Array");
+        }
+
+        // Caso 3: start > stop → []
+        let request = CommandRequest {
+            command: "LRANGE".to_string(),
+            key: Some("test".to_string()),
+            arguments: vec![ValueType::Integer(2), ValueType::Integer(1)],
+        };
+
+        let response = handle_lrange(&request, docs.clone());
+        if let CommandResponse::Array(ref items) = response.response {
+            assert!(items.is_empty());
+        } else {
+            panic!("Expected CommandResponse::Array");
+        }
+
+        // Caso 4: índices fuera de rango
+        let request = CommandRequest {
+            command: "LRANGE".to_string(),
+            key: Some("test".to_string()),
+            arguments: vec![ValueType::Integer(10), ValueType::Integer(20)],
+        };
+
+        let response = handle_lrange(&request, docs.clone());
+        if let CommandResponse::Array(ref items) = response.response {
+            assert!(items.is_empty());
+        } else {
+            panic!("Expected CommandResponse::Array");
+        }
+
+        // Caso 5: negativos extremos [-3..-1] → lista completa
+        let request = CommandRequest {
+            command: "LRANGE".to_string(),
+            key: Some("test".to_string()),
+            arguments: vec![ValueType::Integer(-3), ValueType::Integer(-1)],
+        };
+
+        let response = handle_lrange(&request, docs.clone());
+        let expected = vec![
+            CommandResponse::String("pivot".to_string()),
+            CommandResponse::String("new".to_string()),
+            CommandResponse::String("before".to_string()),
+        ];
+        if let CommandResponse::Array(ref items) = response.response {
+            assert_eq!(items, &expected);
+        } else {
+            panic!("Expected CommandResponse::Array");
+        }
+
+        // Caso 6: lista inexistente → []
+        let request = CommandRequest {
+            command: "LRANGE".to_string(),
+            key: Some("nonexistent".to_string()),
+            arguments: vec![ValueType::Integer(0), ValueType::Integer(1)],
+        };
+
+        let response = handle_lrange(&request, docs.clone());
+        if let CommandResponse::Array(ref items) = response.response {
+            assert!(items.is_empty());
+        } else {
+            panic!("Expected CommandResponse::Array");
+        }
+
+        // Caso 7: sin argumentos → error
+        let request = CommandRequest {
+            command: "LRANGE".to_string(),
+            key: Some("test".to_string()),
+            arguments: vec![],
+        };
+
+        let response = handle_lrange(&request, docs.clone());
+        if let CommandResponse::Error(msg) = response.response {
+            assert!(msg.contains("Wrong number of arguments"));
+        } else {
+            panic!("Expected CommandResponse::Error");
+        }
+    }
+
 
     #[test]
     fn test_handle_rpush() {
