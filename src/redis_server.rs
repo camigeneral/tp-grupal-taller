@@ -93,8 +93,16 @@ fn start_server(
             .and_then(|mut file| writeln!(file, ""));
     }
 
-    let persistence_file = "docs.txt".to_string();
-    let stored_documents = match load_persisted_data(&persistence_file) {
+    let local_node = redis_node_handler::create_local_node(port)?;
+
+    // Leo los archivos de persistencia
+    let file_name;
+    {
+        let locked_node = local_node.lock().unwrap();
+        file_name = format!("redis_node_{}_{}.rdb", locked_node.hash_range.0, locked_node.hash_range.1);
+    }
+    println!("file name: {}", file_name);
+    let stored_documents = match load_persisted_data(&file_name) {
         Ok(docs) => docs,
         Err(_) => {
             println!("Iniciando con base de datos vacía");
@@ -108,9 +116,10 @@ fn start_server(
     let active_clients = Arc::new(Mutex::new(HashMap::new()));
     let logged_clients: Arc<Mutex<HashMap<String, bool>>> = Arc::new(Mutex::new(HashMap::new()));
 
-    let local_node = redis_node_handler::start_node_connection(
+    let _ = redis_node_handler::start_node_connection(
         port,
         node_address,
+        &local_node,
         &peer_nodes,
         &document_subscribers,
         &shared_documents,
@@ -413,7 +422,7 @@ fn handle_client(
             &format!("Respuesta enviada a {}: {:?}", client_id, response),
         );
 
-        if let Err(e) = persist_documents(&shared_documents) {
+        if let Err(e) = persist_documents(&shared_documents, &local_node) {
             eprintln!("Error al persistir documentos: {}", e);
         }
     }
@@ -553,12 +562,18 @@ fn cleanup_client_resources(
 ///
 /// # Errores
 /// Retorna un error si hay problemas al escribir en el archivo
-pub fn persist_documents(documents: &Arc<Mutex<HashMap<String, Vec<String>>>>) -> io::Result<()> {
+pub fn persist_documents(documents: &Arc<Mutex<HashMap<String, Vec<String>>>>, local_node: &Arc<Mutex<local_node::LocalNode>>) -> io::Result<()> {
+    let file_name;
+    {
+        let locked_node = local_node.lock().unwrap();
+        file_name = format!("redis_node_{}_{}.rdb", locked_node.hash_range.0, locked_node.hash_range.1);
+    }
+
     let mut persistence_file = OpenOptions::new()
         .create(true)
         .truncate(true)
         .write(true)
-        .open("docs.txt")?;
+        .open(file_name)?;
 
     let documents_guard = documents.lock().unwrap();
     let document_ids: Vec<&String> = documents_guard.keys().collect();

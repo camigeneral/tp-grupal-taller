@@ -20,20 +20,7 @@ pub enum RedisMessage {
 }
 
 
-/// Intenta establecer una primera conexion con los otros nodos del servidor
-///
-/// # Errores
-/// Retorna un error si el puerto no corresponde a uno definido en los archivos de configuracion.
-pub fn start_node_connection(
-    port: usize,
-    node_address: String,
-    peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
-    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
-    shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>,
-    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
-) -> Result<Arc<Mutex<LocalNode>>, std::io::Error> {
-    let cloned_nodes = Arc::clone(peer_nodes);
-
+pub fn get_config_path(port: usize) -> Result<String, std::io::Error> {
     let config_path = match port {
         4000 => "redis0.conf",
         4001 => "redis1.conf",
@@ -52,23 +39,47 @@ pub fn start_node_connection(
         }
     };
 
+    Ok(config_path.to_string())
+}
+
+
+pub fn create_local_node(port: usize) -> Result<Arc<Mutex<LocalNode>>, std::io::Error> {
+    let config_path = get_config_path(port)?;
+
     let local_node = LocalNode::new_from_config(config_path)?;
-    let mutex_node = Arc::new(Mutex::new(local_node));
-    let cloned_mutex_node = Arc::clone(&mutex_node);
+    Ok(Arc::new(Mutex::new(local_node)))
+} 
+
+
+/// Intenta establecer una primera conexion con los otros nodos del servidor
+///
+/// # Errores
+/// Retorna un error si el puerto no corresponde a uno definido en los archivos de configuracion.
+pub fn start_node_connection(
+    port: usize,
+    node_address: String,
+    local_node: &Arc<Mutex<LocalNode>>,
+    peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
+    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_documents: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
+) -> Result<(), std::io::Error> {
+    let cloned_nodes = Arc::clone(peer_nodes);
+    let config_path =  get_config_path(port)?;
+    let cloned_local_node = Arc::clone(local_node);
     let cloned_document_subscribers = Arc::clone(&document_subscribers);
     let cloned_shared_documents = Arc::clone(&shared_documents);
     let cloned_shared_sets = Arc::clone(&shared_sets);
     let node_ports = read_node_ports(config_path)?;
 
     thread::spawn(
-        move || match connect_nodes(&node_address, cloned_nodes, cloned_mutex_node, cloned_document_subscribers, cloned_shared_documents, cloned_shared_sets) {
+        move || match connect_nodes(&node_address, cloned_nodes, cloned_local_node, cloned_document_subscribers, cloned_shared_documents, cloned_shared_sets) {
             Ok(_) => {}
             Err(_e) => {}
         },
-
     );
 
-    let cloned_local_node_for_ping_pong = Arc::clone(&mutex_node);
+    let cloned_local_node_for_ping_pong = Arc::clone(&local_node);
     let cloned_peer_nodes = Arc::clone(peer_nodes);
 
     thread::spawn(
@@ -81,10 +92,10 @@ pub fn start_node_connection(
     {
         let mut lock_peer_nodes: std::sync::MutexGuard<'_, HashMap<String, peer_node::PeerNode>> =
             peer_nodes.lock().unwrap();
-        let locked_mutex_node = mutex_node.lock().unwrap();
+        let locked_local_node = local_node.lock().unwrap();
 
         for connection_port in node_ports {
-            if connection_port != locked_mutex_node.port {
+            if connection_port != locked_local_node.port {
                 let node_address_to_connect = format!("127.0.0.1:{}", connection_port);
                 let peer_addr = format!("127.0.0.1:{}", connection_port);
                 match TcpStream::connect(node_address_to_connect) {
@@ -94,10 +105,10 @@ pub fn start_node_connection(
                         let message = format!(
                             "{:?} {} {:?} {} {}\n",
                             RedisMessage::Node,
-                            locked_mutex_node.port,
-                            locked_mutex_node.role,
-                            locked_mutex_node.hash_range.0,
-                            locked_mutex_node.hash_range.1
+                            locked_local_node.port,
+                            locked_local_node.role,
+                            locked_local_node.hash_range.0,
+                            locked_local_node.hash_range.1
                         );
 
                         cloned_stream.write_all(message.as_bytes())?;
@@ -121,7 +132,7 @@ pub fn start_node_connection(
         }
     }
 
-    Ok(mutex_node)
+    Ok(())
 }
 
 
