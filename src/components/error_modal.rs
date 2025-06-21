@@ -2,7 +2,7 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::{
-    prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, WidgetExt},
+    prelude::{BoxExt, ButtonExt, GtkWindowExt, OrientableExt, WidgetExt},
     
 };
 

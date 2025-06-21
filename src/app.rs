@@ -221,7 +221,6 @@ impl SimpleComponent for AppModel {
                 }
             }
             AppMsg::Error(error_message) => {
-                // Mostrar el modal de error
                 self.error_modal.emit(ErrorModalMsg::Show(error_message));
             }
             AppMsg::PrepareAndExecuteCommand(command, username) => {
