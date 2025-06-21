@@ -9,5 +9,5 @@ pub enum ClientType {
 pub struct Client {
     pub stream: TcpStream,
     pub client_type: ClientType,
-    pub username: String
+    pub username: String,
 }

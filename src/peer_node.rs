@@ -14,13 +14,19 @@ pub struct PeerNode {
 }
 
 impl PeerNode {
-    pub fn new(stream: TcpStream, port: usize, role: NodeRole, hash_range: (usize, usize), state: NodeState) -> Self {
+    pub fn new(
+        stream: TcpStream,
+        port: usize,
+        role: NodeRole,
+        hash_range: (usize, usize),
+        state: NodeState,
+    ) -> Self {
         PeerNode {
             stream,
             port,
             role,
             hash_range,
-            state
+            state,
         }
     }
 }
