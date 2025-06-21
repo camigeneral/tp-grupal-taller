@@ -176,7 +176,7 @@ pub fn handle_lset(
 
     let message = format!("Updated index {} with '{}'", index_i32, element_str);
     RedisResponse::new(
-        CommandResponse::String("OK".to_string()),
+        CommandResponse::String("Ok".to_string()),
         false,
         message,
         doc,
@@ -376,9 +376,85 @@ pub fn handle_lrange(
     )
 }
 
-pub fn handle_ltrim() {
-    
+pub fn handle_ltrim(
+    request: &CommandRequest,
+    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+) -> RedisResponse {
+    let doc = match &request.key {
+        Some(k) => k.clone(),
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Usage: LTRIM <key> <start> <stop>".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
+    };
+
+    if request.arguments.len() < 2 {
+        return RedisResponse::new(
+            CommandResponse::Error("Wrong number of arguments for LTRIM".to_string()),
+            false,
+            "".to_string(),
+            doc.clone(),
+        );
+    }
+
+    let (start_raw, stop_raw) = (&request.arguments[0], &request.arguments[1]);
+
+    let (start_idx, stop_idx) = match (start_raw, stop_raw) {
+        (ValueType::Integer(start), ValueType::Integer(stop)) => (*start as isize, *stop as isize),
+        _ => {
+            return RedisResponse::new(
+                CommandResponse::Error("Invalid arguments for LTRIM".to_string()),
+                false,
+                "".to_string(),
+                doc,
+            )
+        }
+    };
+
+    let mut docs_lock = docs.lock().unwrap();
+    let list = docs_lock.entry(doc.clone()).or_default();
+
+    let list_len = list.len() as isize;
+
+    let mut start = if start_idx < 0 {
+        list_len + start_idx
+    } else {
+        start_idx
+    };
+    let mut stop = if stop_idx < 0 {
+        list_len + stop_idx
+    } else {
+        stop_idx
+    };
+
+    if start < 0 {
+        start = 0;
+    }
+    if stop < 0 {
+        stop = 0;
+    }
+    if start > stop || start >= list_len {
+        // Vaciar la lista
+        list.clear();
+        docs_lock.remove(&doc); // Comportamiento Redis: se elimina la key si queda vacía
+        return RedisResponse::new(CommandResponse::Ok, true, "Ok".to_string(), doc);
+    }
+
+    if stop >= list_len {
+        stop = list_len - 1;
+    }
+
+    let slice = list[start as usize..=stop as usize].to_vec();
+    *list = slice;
+
+    RedisResponse::new(CommandResponse::Ok, true, "Ok".to_string(), doc)
 }
+
+
 
 
 #[cfg(test)]
@@ -600,6 +676,105 @@ mod tests {
             panic!("Expected CommandResponse::Error");
         }
     }
+
+    #[test]
+/* fn test_handle_ltrim() {
+    let docs = setup();
+
+    {
+        let mut docs_lock = docs.lock().unwrap();
+        docs_lock.insert(
+            "test".to_string(),
+            vec!["a".to_string(), "b".to_string(), "c".to_string(), "d".to_string()],
+        );
+    }
+
+    // Caso 1: LTRIM 1 -1 => conserva desde "b" hasta "d"
+    let request = CommandRequest {
+        command: "LTRIM".to_string(),
+        key: Some("test".to_string()),
+        arguments: vec![ValueType::Integer(1), ValueType::Integer(-1)],
+    };
+
+    let response = handle_ltrim(&request, docs.clone());
+    assert!(matches!(response.response, CommandResponse::Ok));
+
+    let docs_lock = docs.lock().unwrap();
+    let result = docs_lock.get("test").unwrap();
+    assert_eq!(result, &vec!["b".to_string(), "c".to_string(), "d".to_string()]);
+
+    // Caso 2: LTRIM -2 -1 => ["c", "d"]
+    let request = CommandRequest {
+        command: "LTRIM".to_string(),
+        key: Some("test".to_string()),
+        arguments: vec![ValueType::Integer(-2), ValueType::Integer(-1)],
+    };
+
+    let response = handle_ltrim(&request, docs.clone());
+    assert!(matches!(response.response, CommandResponse::Ok));
+    let docs_lock = docs.lock().unwrap();
+    let result = docs_lock.get("test").unwrap();
+    assert_eq!(result, &vec!["c".to_string(), "d".to_string()]);
+
+    // Caso 3: LTRIM 0 0 => ["c"]
+    let request = CommandRequest {
+        command: "LTRIM".to_string(),
+        key: Some("test".to_string()),
+        arguments: vec![ValueType::Integer(0), ValueType::Integer(0)],
+    };
+
+    let response = handle_ltrim(&request, docs.clone());
+    assert!(matches!(response.response, CommandResponse::Ok));
+    let docs_lock = docs.lock().unwrap();
+    let result = docs_lock.get("test").unwrap();
+    assert_eq!(result, &vec!["a".to_string()]);
+
+    // Caso 4: LTRIM 5 10 => lista vacía → clave eliminada
+    let request = CommandRequest {
+        command: "LTRIM".to_string(),
+        key: Some("test".to_string()),
+        arguments: vec![ValueType::Integer(5), ValueType::Integer(10)],
+    };
+
+    let response = handle_ltrim(&request, docs.clone());
+    assert!(matches!(response.response, CommandResponse::Ok));
+    let docs_lock = docs.lock().unwrap();
+    assert!(!docs_lock.contains_key("test"));
+
+    // Caso 5: lista inexistente → se crea vacía, luego LTRIM hace remove (por estar vacía)
+    let request = CommandRequest {
+        command: "LTRIM".to_string(),
+        key: Some("nonexistent".to_string()),
+        arguments: vec![ValueType::Integer(0), ValueType::Integer(1)],
+    };
+
+    let response = handle_ltrim(&request, docs.clone());
+    assert!(matches!(response.response, CommandResponse::Ok));
+    let docs_lock = docs.lock().unwrap();
+    assert!(!docs_lock.contains_key("nonexistent"));
+
+
+    // Caso 6: argumentos inválidos → error
+    let request = CommandRequest {
+        command: "LTRIM".to_string(),
+        key: Some("test2".to_string()),
+        arguments: vec![ValueType::String("abc".to_string()), ValueType::Integer(2)],
+    };
+
+    let response = handle_ltrim(&request, docs.clone());
+    assert!(matches!(response.response, CommandResponse::Error(_)));
+
+    // Caso 7: sin argumentos → error
+    let request = CommandRequest {
+        command: "LTRIM".to_string(),
+        key: Some("test2".to_string()),
+        arguments: vec![],
+    };
+
+    let response = handle_ltrim(&request, docs.clone());
+    assert!(matches!(response.response, CommandResponse::Error(_)));
+}
+ */
 
 
     #[test]

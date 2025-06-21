@@ -35,7 +35,7 @@ pub fn execute_command(
         "lset" => list::handle_lset(&request, docs),
         "linsert" => list::handle_linsert(&request, docs),
         "lrange" => list::handle_lrange(&request, docs),
-        //"ltrim" => list::ltrim(&request, docs),
+        "ltrim" => list::handle_ltrim(&request, docs),
         "auth" => auth::handle_auth(&request, logged_clients, active_clients, client_addr),
         "welcome" => string::handle_welcome(&request, active_clients,shared_sets),
         _ => RedisResponse::new(
