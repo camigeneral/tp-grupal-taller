@@ -1,4 +1,5 @@
 use super::redis;
+use documento::Documento;
 use super::redis_response::RedisResponse;
 use crate::client_info;
 use crate::commands::set::handle_scard;
@@ -44,7 +45,8 @@ pub fn handle_welcome(request: &CommandRequest, _active_clients: &Arc<Mutex<Hash
 
 
 pub fn set_content_file( request: &CommandRequest,
-    _docs: &Arc<Mutex<HashMap<String, Vec<String>>>>) -> RedisResponse {
+     _docs: &Arc<Mutex<HashMap<String, Documento>>>,
+) -> RedisResponse {
     // valor, posición. lset(posicion, valor)
     //Written CommandResponse valor|posicion
     let doc = match &request.key {
@@ -64,7 +66,9 @@ pub fn set_content_file( request: &CommandRequest,
 
 
 pub fn delete_content_file( request: &CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>) -> RedisResponse {
+         _docs: &Arc<Mutex<HashMap<String, Documento>>>,
+) 
+    -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
         None => {

@@ -290,9 +290,9 @@ pub fn handle_rpush(
     )
 }
 
-pub fn handle_lrange(
+/* pub fn handle_lrange(
     request: &CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
@@ -386,7 +386,7 @@ pub fn handle_lrange(
 
 pub fn handle_ltrim(
     request: &CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
@@ -462,7 +462,7 @@ pub fn handle_ltrim(
     RedisResponse::new(CommandResponse::Ok, true, "Ok".to_string(), doc)
 }
 
-
+ */
 
 /* 
 #[cfg(test)]
