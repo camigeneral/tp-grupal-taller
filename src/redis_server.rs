@@ -573,15 +573,15 @@ pub fn persist_documents(documents: Arc<Mutex<HashMap<String, Documento>>>) -> i
         if let Some(doc) = documents_guard.get(document_id) {
             match doc {
                 Documento::Texto(lineas) => {
-                    let mut document_data = format!("TXT/++/{}/++/", document_id);
+                    let mut document_data = format!("{}/++/", document_id); 
                     for linea in lineas {
                         document_data.push_str(linea);
                         document_data.push_str("/--/");
                     }
-                    writeln!(persistence_file, "{}", document_data)?;
+                    writeln!(persistence_file, "{}", document_data)?; 
                 }
                 Documento::Calculo(filas) => {
-                    let mut document_data = format!("CALC/++/{}/++/", document_id);
+                    let mut document_data = format!("{}/++/", document_id); 
                     for fila in filas {
                         document_data.push_str(&fila.join(","));
                         document_data.push_str("/--/");
@@ -608,29 +608,24 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Documen
     for line in reader.lines() {
         let content = line.map_err(|e| e.to_string())?;
         let parts: Vec<&str> = content.split("/++/").collect();
-        if parts.len() < 3 { continue; }
-        let tipo = parts[0];
-        let nombre = parts[1].to_string();
-        let data = parts[2];
+        if parts.len() < 2 { continue; }
+        let nombre = parts[0].to_string();
+        let data = parts[1];
 
-        match tipo {
-            "TXT" => {
-                let mensajes: Vec<String> = data
-                    .split("/--/")
-                    .filter(|s| !s.is_empty())
-                    .map(|s| s.to_string())
-                    .collect();
-                documents.insert(nombre, Documento::Texto(mensajes));
-            }
-            "CALC" => {
-                let filas: Vec<Vec<String>> = data
-                    .split("/--/")
-                    .filter(|s| !s.is_empty())
-                    .map(|fila| fila.split(',').map(|c| c.to_string()).collect())
-                    .collect();
-                documents.insert(nombre, Documento::Calculo(filas));
-            }
-            _ => {}
+        if nombre.ends_with(".txt") {
+            let mensajes: Vec<String> = data
+                .split("/--/")
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .collect();
+            documents.insert(nombre, Documento::Texto(mensajes));
+        } else if nombre.ends_with(".xlsx") {
+            let filas: Vec<Vec<String>> = data
+                .split("/--/")
+                .filter(|s| !s.is_empty())
+                .map(|fila| fila.split(',').map(|c| c.to_string()).collect())
+                .collect();
+            documents.insert(nombre, Documento::Calculo(filas));
         }
     }
     Ok(documents)

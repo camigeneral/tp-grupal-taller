@@ -9,6 +9,7 @@ use self::relm4::{
 use components::spreadsheet::SpreadsheetModel;
 use components::text_editor::TextEditorMessage;
 use components::text_editor::TextEditorModel;
+use components::types::FileType;
 
 /// Estructura que representa el modelo del editor de archivos. Contiene información sobre el archivo
 /// que se está editando, el contenido del archivo y el estado de cambios manuales en el contenido.
@@ -40,7 +41,7 @@ pub struct FileEditorModel {
 pub enum FileEditorMessage {
     ContentAdded(String, i32),
     ContentRemoved(i32, i32),
-    UpdateFile(String, i32, String),
+    UpdateFile(String, i32, String, FileType),
     ResetEditor,
 }
 
@@ -140,7 +141,7 @@ impl SimpleComponent for FileEditorModel {
                 //Llamado a la api para insertar caracter
             }
             FileEditorMessage::ContentRemoved(_start_offset, _end_offset) => {}
-            FileEditorMessage::UpdateFile(file_name, contributors, content) => {
+            FileEditorMessage::UpdateFile(file_name, contributors, content, file_type) => {
                 let _ = self.text_editor_ctrl.emit(TextEditorMessage::UpdateFile(
                     file_name.clone(),
                     contributors,
@@ -149,8 +150,22 @@ impl SimpleComponent for FileEditorModel {
                 self.file_name = file_name.clone();
                 self.num_contributors = contributors;
                 self.content = content.clone();
-
                 self.content_changed_manually = true;
+
+                match file_type {
+                    FileType::Text => {
+                        self.text_editor_visible = true;
+                        self.spreadsheet_visible = false;
+                    }
+                    FileType::Sheet => {
+                        self.text_editor_visible = false;
+                        self.spreadsheet_visible = true;
+                    }
+                    _ => {
+                        self.text_editor_visible = true;
+                        self.spreadsheet_visible = false;
+                    }
+                }
             }
             FileEditorMessage::ResetEditor => {
                 let _ = self.text_editor_ctrl.emit(TextEditorMessage::ResetEditor);

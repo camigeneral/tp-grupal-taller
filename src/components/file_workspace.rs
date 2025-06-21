@@ -155,26 +155,41 @@ impl SimpleComponent for FileWorkspace {
         match message {
             FileWorkspaceMsg::SubscribeFile(file, _content, _qty) => {
                 sender
-                    .output(FileWorkspaceOutputMessage::SubscribeFile(file))
+                    .output(FileWorkspaceOutputMessage::SubscribeFile(file.clone()))
                     .unwrap();
+
+                // Determina el tipo de archivo según el sufijo
+                let file_type = if file.ends_with(".xlsx") {
+                    FileType::Sheet
+                } else {
+                    FileType::Text
+                };
+
+                // Envía el mensaje para abrir el editor
+                sender.input(FileWorkspaceMsg::OpenFile(file, file_type));
             }
 
             FileWorkspaceMsg::OpenFile(file, file_type) => {
                 self.current_file = file.clone();
 
-                /* if let Some(inner_map) = self.files.get(&(file.clone(), file_type.clone())) {
-                    let content = inner_map.get("content").cloned().unwrap_or_default();
-                    let qty = content.lines().count() as i32;
+                if let Some(doc) = self.files.get(&(file.clone(), file_type.clone())) {
+                    let (content, qty) = match doc {
+                        Documento::Texto(lineas) => (lineas.join("\n"), lineas.len() as i32),
+                        Documento::Calculo(filas) => (
+                            filas.iter().map(|fila| fila.join(",")).collect::<Vec<_>>().join("\n"),
+                            filas.len() as i32,
+                        ),
+                    };
 
                     self.file_editor_ctrl
                         .sender()
-                        .send(FileEditorMessage::UpdateFile(file, qty, content))
+                        .send(FileEditorMessage::UpdateFile(file, qty, content, file_type))
                         .unwrap();
 
                     self.editor_visible = true;
                 } else {
                     println!("Archivo no encontrado: {} ({:?})", file, file_type.clone());
-                } */
+                }
             }
             FileWorkspaceMsg::CloseEditor => {
                 sender
@@ -200,7 +215,7 @@ impl SimpleComponent for FileWorkspace {
                         .send(FileFilterAction::UpdateFiles(new_files.clone()))
                         .unwrap();
 
-                    if let Some((file_name, _, new_content, qty)) = new_files
+                    if let Some((file_name, file_type, new_content, qty)) = new_files
                         .iter()
                         .find(|(name, _, _, _)| *name == current_file)
                     {
@@ -209,6 +224,7 @@ impl SimpleComponent for FileWorkspace {
                                 file_name.clone(),
                                 *qty,
                                 new_content.clone(),
+                                file_type.clone(),
                             ))
                             .unwrap();
                     }
@@ -261,31 +277,26 @@ pub fn get_file_content_workspace(
         match line {
             Ok(read_line) => {
                 let parts: Vec<&str> = read_line.split("/++/").collect();
-                if parts.len() < 3 {
+                if parts.len() < 2 {
                     continue;
                 }
-                let doc_type = parts[0];
-                let doc_name = parts[1].to_string();
-                let data = parts[2];
+                let doc_name = parts[0].to_string();
+                let data = parts[1];
 
-                match doc_type {
-                    "TXT" => {
-                        let messages: Vec<String> = data
-                            .split("/--/")
-                            .filter(|s| !s.is_empty())
-                            .map(|s| s.to_string())
-                            .collect();
-                        docs.insert(doc_name, Documento::Texto(messages));
-                    }
-                    "CALC" => {
-                        let filas: Vec<Vec<String>> = data
-                            .split("/--/")
-                            .filter(|s| !s.is_empty())
-                            .map(|fila| fila.split(',').map(|c| c.to_string()).collect())
-                            .collect();
-                        docs.insert(doc_name, Documento::Calculo(filas));
-                    }
-                    _ => {}
+                if doc_name.ends_with(".txt") {
+                    let messages: Vec<String> = data
+                        .split("/--/")
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string())
+                        .collect();
+                    docs.insert(doc_name, Documento::Texto(messages));
+                } else if doc_name.ends_with(".xlsx") {
+                    let filas: Vec<Vec<String>> = data
+                        .split("/--/")
+                        .filter(|s| !s.is_empty())
+                        .map(|fila| fila.split(',').map(|c| c.to_string()).collect())
+                        .collect();
+                    docs.insert(doc_name, Documento::Calculo(filas));
                 }
             }
             Err(_) => return Err("unable-to-read-file".to_string()),
