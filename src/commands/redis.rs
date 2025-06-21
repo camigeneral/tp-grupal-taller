@@ -13,12 +13,12 @@ use std::sync::{Arc, Mutex};
 
 pub fn execute_command(
     request: CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
     client_addr: String,
-    active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
-    logged_clients: Arc<Mutex<HashMap<String, bool>>>
+    active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
+    logged_clients: &Arc<Mutex<HashMap<String, bool>>>
 ) -> RedisResponse {
     match request.command.as_str() {
         "get" => string::handle_get(&request, docs),
@@ -40,7 +40,33 @@ pub fn execute_command(
         "auth" => auth::handle_auth(&request, logged_clients, active_clients, client_addr),
         "add_content" => client_action::set_content_file(&request, docs),
         "remove_content" => client_action::delete_content_file(&request, docs),
-        "welcome" => client_action::handle_welcome(&request, active_clients,shared_sets),
+        "welcome" => client_action::handle_welcome(&request, active_clients,shared_sets),    
+        _ => RedisResponse::new(
+            CommandResponse::Error("Unknown".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        ),
+    }
+}
+
+
+#[allow(unused_variables)]
+pub fn execute_replica_command(
+    request: CommandRequest,
+    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
+) -> RedisResponse {
+    match request.command.as_str() {
+        "get" => string::handle_get(&request, docs),
+        // "set" => string::handle_set(&request, docs, document_subscribers), // to do: arreglar
+        "append" => string::handle_append(&request, docs),
+        "sadd" => set::handle_sadd(&request, shared_sets),
+        "srem" => set::handle_srem(&request, shared_sets),
+        "rpush" => list::handle_rpush(&request, docs),
+        "lset" => list::handle_lset(&request, docs),
+        "linsert" => list::handle_linsert(&request, docs),
         _ => RedisResponse::new(
             CommandResponse::Error("Unknown".to_string()),
             false,

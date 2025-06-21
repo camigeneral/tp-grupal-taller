@@ -17,9 +17,9 @@ use std::sync::{Arc, Mutex};
 /// * `RedisResponse` - La respuesta al comando, que incluye si la suscripción fue exitosa
 pub fn handle_subscribe(
     request: &CommandRequest,
-    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
     client_addr: String,
-    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k,
@@ -47,7 +47,9 @@ pub fn handle_subscribe(
                 command: "sadd".to_string(),
                 key: Some(doc.clone()),
                 arguments: vec![ValueType::String(client_addr.clone())],
+                unparsed_command: "".to_string(),
             };
+            // to do: unparsed command?
 
             let _ = handle_sadd(&request, shared_sets);
 
@@ -75,9 +77,9 @@ pub fn handle_subscribe(
 /// * `RedisResponse` - La respuesta al comando, que incluye si la cancelación de suscripción fue exitosa
 pub fn handle_unsubscribe(
     request: &CommandRequest,
-    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
     client_addr: String,
-    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>
+    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k,
@@ -99,7 +101,9 @@ pub fn handle_unsubscribe(
             command: "srem".to_string(),
             key: Some(doc.clone()),
             arguments: vec![ValueType::String(client_addr.clone())],
+            unparsed_command: "".to_string(),
         };
+        // to do: unparsed command?
 
         let _ = handle_srem(&request, shared_sets);
 

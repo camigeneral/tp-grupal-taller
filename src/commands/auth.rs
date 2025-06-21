@@ -7,8 +7,8 @@ use client_info;
 
 
 pub fn handle_auth(request: &CommandRequest, 
-    logged_clients: Arc<Mutex<HashMap<String, bool>>>, 
-    active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
+    logged_clients: &Arc<Mutex<HashMap<String, bool>>>, 
+    active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
     client_addr: String,
 ) -> RedisResponse {
     let username = match &request.key {
