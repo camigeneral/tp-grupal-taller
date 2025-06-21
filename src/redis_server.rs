@@ -95,20 +95,31 @@ fn start_server(
 
     let local_node = redis_node_handler::create_local_node(port)?;
 
-    // Leo los archivos de persistencia
+    // Leo los archivos de persistencia solo si soy master
+
     let file_name;
+    let node_role: local_node::NodeRole;
+    let mut stored_documents = HashMap::new();
     {
         let locked_node = local_node.lock().unwrap();
         file_name = format!("redis_node_{}_{}.rdb", locked_node.hash_range.0, locked_node.hash_range.1);
+        node_role = match locked_node.role {
+            local_node::NodeRole::Master => local_node::NodeRole::Master,
+            local_node::NodeRole::Replica => local_node::NodeRole::Replica,
+            local_node::NodeRole::Unknown => local_node::NodeRole::Unknown,
+        }
     }
     println!("file name: {}", file_name);
-    let stored_documents = match load_persisted_data(&file_name) {
-        Ok(docs) => docs,
-        Err(_) => {
-            println!("Iniciando con base de datos vacía");
-            HashMap::new()
-        }
-    };
+
+    if node_role == NodeRole::Master {
+        stored_documents = match load_persisted_data(&file_name) {
+            Ok(docs) => docs,
+            Err(_) => {
+                println!("Iniciando con base de datos vacía");
+                HashMap::new()
+            }
+        };
+    }
 
     // Inicializar estructuras de datos compartidas
     let shared_documents: Arc<Mutex<HashMap<String, Vec<String>>>> = Arc::new(Mutex::new(stored_documents));
@@ -184,9 +195,6 @@ fn initialize_datasets(documents: &Arc<Mutex<HashMap<String, Vec<String>>>>) -> 
 
     (Arc::new(Mutex::new(subscriber_map)), Arc::new(Mutex::new(doc_set)))
 }
-
-
-
 
 
 fn handle_new_client_connection(

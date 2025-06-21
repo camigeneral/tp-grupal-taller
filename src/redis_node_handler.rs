@@ -90,8 +90,7 @@ pub fn start_node_connection(
     );
 
     {
-        let mut lock_peer_nodes: std::sync::MutexGuard<'_, HashMap<String, peer_node::PeerNode>> =
-            peer_nodes.lock().unwrap();
+        let mut lock_peer_nodes: std::sync::MutexGuard<'_, HashMap<String, peer_node::PeerNode>> = peer_nodes.lock().unwrap();
         let locked_local_node = local_node.lock().unwrap();
 
         for connection_port in node_ports {
@@ -102,6 +101,8 @@ pub fn start_node_connection(
                     Ok(stream) => {
                         let mut cloned_stream = stream.try_clone()?;
 
+                        // mando node
+                        println!("mando node desde start_node_connection\n");
                         let message = format!(
                             "{:?} {} {:?} {} {}\n",
                             RedisMessage::Node,
@@ -216,6 +217,7 @@ fn handle_node(
 
         match command.as_str() {
             "node" => {
+                println!("recibi el comando node");
                 let node_listening_port = &input[1];
                 let parsed_port = &input[1].trim().parse::<usize>().map_err(|_| {
                     std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid port")
@@ -241,11 +243,18 @@ fn handle_node(
                     std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid end range")
                 })?;
 
+                println!("print pre lock");
                 {
-                    let mut lock_nodes = nodes.lock().unwrap();
+                    println!("print dentro del lock");
                     let mut local_node_locked = local_node.lock().unwrap();
+                    println!("print post local_node.lock");
+                    let mut lock_nodes = nodes.lock().unwrap();
+                    println!("print post peer_nodes.lock");
+                    
                     // no lo conozco -> creo el stream y me guardo todo, y le mando mi info
+                    
                     if !lock_nodes.contains_key(&node_address) {
+                        println!("no conozco al nodo");
                         let node_address_to_connect = format!("127.0.0.1:{}", node_listening_port);
                         let new_stream = TcpStream::connect(node_address_to_connect)?;
                         let mut stream_to_respond = new_stream.try_clone()?;
@@ -259,20 +268,24 @@ fn handle_node(
                         );
                         // me fijo si es mi master/replica
                         if *hash_range_start == local_node_locked.hash_range.0 {
+                            println!("este nodo es mi master/replica");
                             if cloned_role != local_node_locked.role {
                                 // estoy hablando con un nodo de otro tipo -> si soy replica, mi master, si soy master, mis replicas
                                 if local_node_locked.role == NodeRole::Master {
                                     // estoy hablando con mi replica
                                     local_node_locked.replica_nodes.push(*parsed_port);
+                                    println!("es mi replica");
                                 } else {
                                     // estoy hablando con mi master
                                     local_node_locked.master_node = Some(*parsed_port);
                                     let message = format!("sync_request {}\n", local_node_locked.port);
                                     stream_to_respond.write_all(message.as_bytes())?;
+                                    println!("es mi master");
                                 }
                             } else {
-                               // soy una replica, hablando con la ottra replica de mi master
+                               // soy una replica, hablando con la otra replica de mi master
                                local_node_locked.replica_nodes.push(*parsed_port);
+                               println!("ambos somos replicas del mismo master");
                             }
                         }
 
@@ -281,6 +294,8 @@ fn handle_node(
 
                         lock_nodes.insert(node_address_to_connect.to_string(), node_client);
 
+                        // mando node
+                        println!("mando node desde handle_node\n");
                         let message = format!(
                             "{:?} {} {:?} {} {}\n",
                             RedisMessage::Node,
@@ -291,10 +306,10 @@ fn handle_node(
                         );
 
                         stream_to_respond.write_all(message.as_bytes())?;
-                        println!("03");
                     }
                     // si lo conozco, actualizo todo menos el stream
                     else {
+                        println!("ya conozco al nodo, no le mando nada\n");
                         let peer_node_to_update = lock_nodes.get_mut(&node_address).unwrap();
                         peer_node_to_update.role = node_role;
                         peer_node_to_update.hash_range = (*hash_range_start, *hash_range_end);
