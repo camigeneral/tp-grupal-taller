@@ -17,7 +17,7 @@ pub mod set;
 pub mod string;
 
 /// Módulo que define los comandos que pueden ser enviados por los clientes.
-pub mod client;
+pub mod client_action;
 
 //Modulo para el manejo del auth
 pub mod auth;

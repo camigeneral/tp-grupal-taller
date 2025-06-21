@@ -4,6 +4,7 @@ use super::redis_response::RedisResponse;
 use super::set;
 use super::string;
 use super::auth;
+use super::client_action;
 use crate::client_info;
 use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
@@ -37,7 +38,7 @@ pub fn execute_command(
         "lrange" => list::handle_lrange(&request, docs),
         "ltrim" => list::handle_ltrim(&request, docs),
         "auth" => auth::handle_auth(&request, logged_clients, active_clients, client_addr),
-        "welcome" => string::handle_welcome(&request, active_clients,shared_sets),
+        "welcome" => client_action::handle_welcome(&request, active_clients,shared_sets),
         _ => RedisResponse::new(
             CommandResponse::Error("Unknown".to_string()),
             false,
