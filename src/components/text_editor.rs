@@ -114,9 +114,12 @@ impl SimpleComponent for TextEditorModel {
     fn update(&mut self, message: TextEditorMessage, _sender: ComponentSender<Self>) {
         match message {
             TextEditorMessage::ContentAdded(_new_text, _offset) => {
-                //Llamado a la api para insertar caracter
+                println!("new text {} offset: {}", _new_text, _offset);
+                
             }
-            TextEditorMessage::ContentRemoved(_start_offset, _end_offset) => {}
+            TextEditorMessage::ContentRemoved(_start_offset, _end_offset) => {
+                println!("principio {} offset: {}", _start_offset, _end_offset);
+            }
             TextEditorMessage::UpdateFile(file_name, contributors, content) => {
                 self.file_name = file_name;
                 self.num_contributors = contributors;

@@ -775,9 +775,6 @@ mod tests {
     assert!(matches!(response.response, CommandResponse::Error(_)));
 }
  */
-
-
-    #[test]
     fn test_handle_rpush() {
         let docs = setup();
 

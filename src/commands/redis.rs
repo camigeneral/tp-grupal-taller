@@ -38,6 +38,8 @@ pub fn execute_command(
         "lrange" => list::handle_lrange(&request, docs),
         "ltrim" => list::handle_ltrim(&request, docs),
         "auth" => auth::handle_auth(&request, logged_clients, active_clients, client_addr),
+        "add_content" => client_action::set_content_file(&request, docs),
+        "remove_content" => client_action::delete_content_file(&request, docs),
         "welcome" => client_action::handle_welcome(&request, active_clients,shared_sets),
         _ => RedisResponse::new(
             CommandResponse::Error("Unknown".to_string()),

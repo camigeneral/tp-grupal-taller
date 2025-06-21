@@ -40,3 +40,42 @@ pub fn handle_welcome(request: &CommandRequest, _active_clients: Arc<Mutex<HashM
     }
     RedisResponse::new(CommandResponse::String(notification.clone()), true, notification, doc)
 }
+
+
+pub fn set_content_file( request: &CommandRequest,
+    docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> RedisResponse {
+    // valor, posición. lset(posicion, valor)
+    //Written CommandResponse valor|posicion
+    let doc = match &request.key {
+        Some(k) => k.clone(),
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Usage: LTRIM <key> <start> <stop>".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
+    };
+
+    RedisResponse::new(CommandResponse::Ok, true, "Ok".to_string(), doc)
+}
+
+
+pub fn delete_content_file( request: &CommandRequest,
+    docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> RedisResponse {
+    let doc = match &request.key {
+        Some(k) => k.clone(),
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Usage: LTRIM <key> <start> <stop>".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
+    };
+
+    RedisResponse::new(CommandResponse::Ok, true, "Ok".to_string(), doc)
+}
+
