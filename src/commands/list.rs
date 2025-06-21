@@ -14,7 +14,7 @@ use crate::documento::Documento;
 /// * `RedisResponse` - La respuesta al comando, que incluye la longitud actualizada de la lista
 pub fn handle_linsert(
     request: &CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Documento>>>,
+    docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
@@ -111,7 +111,7 @@ pub fn handle_linsert(
 /// * `RedisResponse` - La respuesta al comando confirmando la actualización o un error
 pub fn handle_lset(
     request: &CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Documento>>>,
+    docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
@@ -199,7 +199,7 @@ pub fn handle_lset(
 /// * `RedisResponse` - La respuesta al comando con la longitud de la lista
 pub fn handle_llen(
     request: &CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Documento>>>,
+    docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
@@ -239,7 +239,7 @@ pub fn handle_llen(
 /// * `RedisResponse` - La respuesta al comando con la longitud actualizada de la lista
 pub fn handle_rpush(
     request: &CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Documento>>>,
+    docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),

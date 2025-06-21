@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 /// * `RedisResponse` - La respuesta al comando con el número de suscriptores en el set
 pub fn handle_scard(
     request: &CommandRequest,
-    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> RedisResponse {
     // Validar que se haya pasado una clave
     let set_key = match &request.key {
@@ -73,7 +73,7 @@ pub fn handle_scard(
 /// * `RedisResponse` - La respuesta al comando con la lista de suscriptores del set
 pub fn handle_smembers(
     request: &CommandRequest,
-    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> RedisResponse {
     let key = match &request.key {
         Some(k) => k,
@@ -175,7 +175,7 @@ pub fn handle_smembers(
 /// * `RedisResponse` - La respuesta al comando indicando cuántos elementos fueron eliminados.
 pub fn handle_srem(
     request: &CommandRequest,
-    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> RedisResponse {
     let key = match &request.key {
         Some(k) => k,
@@ -227,7 +227,7 @@ pub fn handle_srem(
 /// * `RedisResponse` - La respuesta al comando indicando cuántos elementos fueron agregados.
 pub fn handle_sadd(
     request: &CommandRequest,
-    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> RedisResponse {
     let key = match &request.key {
         Some(k) => k,

@@ -1,8 +1,6 @@
 extern crate gtk4;
 extern crate relm4;
 
-// use std::collections::HashMap;
-
 use self::gtk::prelude::*;
 use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
 

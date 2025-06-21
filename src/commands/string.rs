@@ -55,9 +55,9 @@ pub fn handle_get(
 /// - `RedisResponse::Ok` con notificación activa y nombre del documento.
 pub fn handle_set(
     request: &CommandRequest,
-    docs: Arc<Mutex<HashMap<String,Documento>>>,
-    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
+    docs: &Arc<Mutex<HashMap<String,Documento>>>,
+    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
 ) -> RedisResponse {
     let doc_name = match &request.key {
         Some(k) => k.clone(),
@@ -142,7 +142,7 @@ pub fn handle_set(
 /// - `RedisResponse::Integer(line_number)` con notificación activa y nombre del documento.
 pub fn handle_append(
     request: &CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Documento>>>,
+    docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
@@ -187,7 +187,7 @@ pub fn handle_append(
     )
 }
 
-pub fn handle_welcome(request: &CommandRequest, _active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>, shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>) -> RedisResponse {
+pub fn handle_welcome(request: &CommandRequest, _active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>, shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>) -> RedisResponse {
     let client_addr_str = redis::extract_string_arguments(&request.arguments);
 
     let doc = match &request.key {
@@ -206,9 +206,10 @@ pub fn handle_welcome(request: &CommandRequest, _active_clients: Arc<Mutex<HashM
         command: "scard".to_string(),
         key: Some(doc.clone()),
         arguments: vec![],
+		unparsed_command: "".to_string(),
     };
 
-    let response = handle_scard(&request, shared_sets);
+	let response = handle_scard(&request, shared_sets);
 
     let mut notification= " ".to_string();
     println!("response del scard: {:#?}", response);
@@ -382,3 +383,4 @@ pub fn handle_welcome(request: &CommandRequest, _active_clients: Arc<Mutex<HashM
 //         assert!(matches!(resp.response, CommandResponse::Error(_)));
 //     }
 // }
+
