@@ -4,7 +4,8 @@ use self::gtk4::{
     prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, WidgetExt},
     CssProvider,
 };
-use crate::components::login::{LoginForm, LoginMsg, LoginOutput};
+use components::error_modal::ErrorModalMsg;
+use crate::components::{error_modal::ErrorModal, login::{LoginForm, LoginMsg, LoginOutput}};
 use app::gtk4::glib::Propagation;
 use client::client_run;
 use components::file_workspace::{FileWorkspace, FileWorkspaceMsg, FileWorkspaceOutputMessage};
@@ -36,7 +37,9 @@ pub struct AppModel {
     command_sender: Option<Sender<String>>,
     username: String,
     current_file:String,
-    subscribed_files: HashMap<String, bool>
+    subscribed_files: HashMap<String, bool>,
+    error_modal: Controller<ErrorModal>,
+
 }
 
 #[derive(Debug)]
@@ -57,6 +60,8 @@ pub enum AppMsg {
     ManageResponse(String),
     ManageSubscribeResponse(String),
     ManageUnsubscribeResponse(String),
+    Error(String),
+
 }
 
 #[relm4::component(pub)]
@@ -135,6 +140,11 @@ impl SimpleComponent for AppModel {
             &css_provider,
             gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
+        let error_modal = ErrorModal::builder()
+            .transient_for(&root)
+            .launch(())
+            .detach();
+
 
         let header_model = NavbarModel::builder().launch(()).forward(
             sender.input_sender(),
@@ -173,7 +183,9 @@ impl SimpleComponent for AppModel {
             command_sender: None,
             username: "".to_string(),
             current_file: "".to_string(),
-            subscribed_files: HashMap::new()
+            subscribed_files: HashMap::new(),
+            error_modal
+
         };
 
         let sender_clone = sender.clone();
@@ -207,6 +219,10 @@ impl SimpleComponent for AppModel {
                         .send(NavbarMsg::SetConnectionStatus(true))
                         .unwrap();
                 }
+            }
+            AppMsg::Error(error_message) => {
+                // Mostrar el modal de error
+                self.error_modal.emit(ErrorModalMsg::Show(error_message));
             }
             AppMsg::PrepareAndExecuteCommand(command, username) => {
                 self.command = command;
