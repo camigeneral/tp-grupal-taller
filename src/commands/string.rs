@@ -1,12 +1,10 @@
 use super::redis;
 use super::redis_response::RedisResponse;
 use crate::client_info;
-use crate::commands::set::handle_scard;
 #[allow(unused_imports)]
 use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use client_info::ClientType;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 pub fn handle_get(
