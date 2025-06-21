@@ -47,6 +47,7 @@ pub fn handle_subscribe(
                 command: "sadd".to_string(),
                 key: Some(doc.clone()),
                 arguments: vec![ValueType::String(client_addr.clone())],
+                unparsed_command: "".to_string(),
             };
 
             let _ = handle_sadd(&request, shared_sets);
@@ -99,6 +100,7 @@ pub fn handle_unsubscribe(
             command: "srem".to_string(),
             key: Some(doc.clone()),
             arguments: vec![ValueType::String(client_addr.clone())],
+            unparsed_command: "".to_string(),
         };
 
         let _ = handle_srem(&request, shared_sets);
