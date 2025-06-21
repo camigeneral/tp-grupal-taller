@@ -107,6 +107,27 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    {
+        let node_streams_clone = Arc::clone(&node_streams);
+        let main_address_clone = main_address.clone();
+        thread::spawn(move || loop {
+            {
+                let streams = node_streams_clone.lock().unwrap();
+                if let Some(mut stream) = streams.get(&main_address_clone) {
+                    let command_parts = vec!["SET", "doc1", "hola"];
+                    let resp_command = format_resp_command(&command_parts);
+                    if let Err(e) = stream.write_all(resp_command.as_bytes()) {
+                        eprintln!("Error al enviar comando SET doc1 hola: {}", e);
+                    } else {
+                        println!("Comando automático enviado: SET doc1 hola");
+                    }
+                }
+            }
+            thread::sleep(Duration::from_secs(60));
+        });
+    }
+
+
     loop {}
 }
 
