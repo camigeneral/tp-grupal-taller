@@ -140,9 +140,7 @@ impl SimpleComponent for AppModel {
             sender.input_sender(),
             |output| match output {
                 NavbarOutput::ToggleConnectionRequested => AppMsg::Connect,
-                NavbarOutput::CreateFileRequested(file_id, content) => {
-                    AppMsg::CreateFile(file_id, content)
-                }
+                NavbarOutput::CreateFileRequested(file_id, content) => AppMsg::CreateFile(file_id, content),
             },
         );
 
@@ -277,15 +275,10 @@ impl SimpleComponent for AppModel {
                 self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(self.current_file.clone(), crate::components::types::FileType::Text));
             }
 
-            AppMsg::CreateFile(_file_id, _content) => {
-                /* println!("Se ejecuto el siguiente comando: {:#?}", self.command);
-                if let Some(channel_sender) = &self.command_sender {
-                    if let Err(e) = channel_sender.send(ClientCommand::CreateFile{ file_id, content }) {
-                        println!("Error enviando comando: {}", e);
-                    } else {
-                        self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
-                    }
-                } */
+            AppMsg::CreateFile(file_id, content) => {
+                self.command = format!("SET {} \"{}\"", file_id, content);
+                sender.input(AppMsg::ExecuteCommand);
+                self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
             }
 
             AppMsg::SubscribeFile(file) => {

@@ -1,8 +1,6 @@
 extern crate gtk4;
-extern crate rand;
 extern crate relm4;
 use self::gtk4::prelude::{ButtonExt, PopoverExt, WidgetExt, OrientableExt, BoxExt, EditableExt};
-use self::rand::Rng;
 use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
 
 /// Modelo que representa la barra de navegación (navbar). Gestiona el estado de la conexión y
@@ -147,9 +145,11 @@ impl SimpleComponent for NavbarModel {
                 if let Some(popover) = &self.new_file_popover {
                     popover.popdown();
                 }
-                println!("Crear hoja de texto");
-                let file_id =
-                    "text".to_string() + &rand::thread_rng().gen_range(1..1000000).to_string();
+                if self.file_name.trim().is_empty() {
+                    println!("El nombre del archivo es obligatorio.");
+                    return;
+                }
+                let file_id = format!("{}.txt", self.file_name.trim());
                 sender
                     .output(NavbarOutput::CreateFileRequested(
                         file_id,
@@ -162,7 +162,17 @@ impl SimpleComponent for NavbarModel {
                 if let Some(popover) = &self.new_file_popover {
                     popover.popdown();
                 }
-                println!("Crear hoja de cálculo");
+                if self.file_name.trim().is_empty() {
+                    println!("El nombre del archivo es obligatorio.");
+                    return;
+                }
+                let file_id = format!("{}.xlsx", self.file_name.trim());
+                sender
+                    .output(NavbarOutput::CreateFileRequested(
+                        file_id,
+                        "".to_string(),
+                    ))
+                    .unwrap();
             }
             NavbarMsg::SetLoggedInUser(username) => {
                 self.username = username;

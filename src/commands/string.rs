@@ -84,8 +84,11 @@ pub fn handle_set(
 
     {
         let mut docs_lock = docs.lock().unwrap();
-        // docs_lock.insert(doc_name.clone(), vec![content.clone()]);
-        docs_lock.insert(doc_name.clone(), Documento::Texto(vec![content.clone()]));
+        if content.trim().is_empty() {
+            docs_lock.insert(doc_name.clone(), Documento::Texto(vec![]));
+        } else {
+            docs_lock.insert(doc_name.clone(), Documento::Texto(vec![content.clone()]));
+        }
     }
 
     {

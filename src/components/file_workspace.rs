@@ -158,14 +158,12 @@ impl SimpleComponent for FileWorkspace {
                     .output(FileWorkspaceOutputMessage::SubscribeFile(file.clone()))
                     .unwrap();
 
-                // Determina el tipo de archivo según el sufijo
                 let file_type = if file.ends_with(".xlsx") {
                     FileType::Sheet
                 } else {
                     FileType::Text
                 };
 
-                // Envía el mensaje para abrir el editor
                 sender.input(FileWorkspaceMsg::OpenFile(file, file_type));
             }
 
@@ -209,8 +207,23 @@ impl SimpleComponent for FileWorkspace {
 
                 let current_file = self.current_file.clone();
 
+                let new_files = get_files_list(&"docs.txt".to_string());
+                let mut files_map: HashMap<(String, FileType), Documento> = HashMap::new();
+                for (nombre, file_type, contenido, _qty) in &new_files {
+                    let doc = if *file_type == FileType::Text {
+                        Documento::Texto(
+                            if contenido.is_empty() { vec![] } else { contenido.lines().map(|s| s.to_string()).collect() }
+                        )
+                    } else {
+                        Documento::Calculo(
+                            if contenido.is_empty() { vec![] } else { contenido.lines().map(|l| l.split(',').map(|c| c.to_string()).collect()).collect() }
+                        )
+                    };
+                    files_map.insert((nombre.clone(), file_type.clone()), doc);
+                }
+                self.files = files_map;
+
                 glib::timeout_add_local(Duration::from_millis(100), move || {
-                    let new_files = get_files_list(&"docs.txt".to_string());
                     file_list_sender
                         .send(FileFilterAction::UpdateFiles(new_files.clone()))
                         .unwrap();
@@ -243,7 +256,6 @@ fn get_files_list(
     file_path: &String,
 ) -> Vec<(std::string::String, FileType, std::string::String, i32)> {
     let docs = get_file_content_workspace(file_path).unwrap_or_else(|_| HashMap::new());
-    // Convierte el HashMap a la lista que espera FileListView
     let files_list: Vec<(String, FileType, String, i32)> = docs
         .into_iter()
         .map(|(nombre, doc)| {
