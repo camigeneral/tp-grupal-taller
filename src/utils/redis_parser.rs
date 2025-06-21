@@ -56,7 +56,7 @@ pub struct CommandRequest {
 /// - Null: "$-1\r\n"
 /// - Error: "-ERR ...\r\n"
 /// - Array: arreglo de respuestas (no completamente soportado)
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[allow(dead_code)]
 pub enum CommandResponse {
     Ok,
