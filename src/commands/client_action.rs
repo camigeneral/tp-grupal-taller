@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-pub fn handle_welcome(request: &CommandRequest, _active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>, shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>) -> RedisResponse {
+pub fn handle_welcome(request: &CommandRequest, _active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>, shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>) -> RedisResponse {
     let client_addr_str = redis::extract_string_arguments(&request.arguments);
 
     let doc = match &request.key {
@@ -27,6 +27,7 @@ pub fn handle_welcome(request: &CommandRequest, _active_clients: Arc<Mutex<HashM
         command: "scard".to_string(),
         key: Some(doc.clone()),
         arguments: vec![],
+        unparsed_command: format!("scard {}", doc.clone())
     };
 
     let response = handle_scard(&request, shared_sets);
@@ -43,7 +44,7 @@ pub fn handle_welcome(request: &CommandRequest, _active_clients: Arc<Mutex<HashM
 
 
 pub fn set_content_file( request: &CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> RedisResponse {
+    _docs: &Arc<Mutex<HashMap<String, Vec<String>>>>) -> RedisResponse {
     // valor, posición. lset(posicion, valor)
     //Written CommandResponse valor|posicion
     let doc = match &request.key {
@@ -63,7 +64,7 @@ pub fn set_content_file( request: &CommandRequest,
 
 
 pub fn delete_content_file( request: &CommandRequest,
-    docs: Arc<Mutex<HashMap<String, Vec<String>>>>) -> RedisResponse {
+    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
         None => {
