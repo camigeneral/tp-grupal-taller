@@ -15,10 +15,10 @@ use self::relm4::{
 use super::file_editor::FileEditorModel;
 use super::list_files::FileListView;
 use crate::components::file_editor::FileEditorOutputMessage;
+use crate::documento::Documento;
 use components::file_editor::FileEditorMessage;
 use components::list_files::FileFilterAction;
 use components::types::FileType;
-use crate::documento::Documento;
 
 #[derive(Debug)]
 /// Estructura principal que gestiona el espacio de trabajo de archivos, que incluye una lista de archivos
@@ -33,7 +33,7 @@ pub struct FileWorkspace {
     /// Nombre del archivo actual.
     current_file: String,
 
-    files: HashMap<(String, FileType), Documento>
+    files: HashMap<(String, FileType), Documento>,
 }
 
 /// Enum que define los diferentes mensajes que puede recibir el componente `FileWorkspace`.
@@ -174,7 +174,11 @@ impl SimpleComponent for FileWorkspace {
                     let (content, qty) = match doc {
                         Documento::Texto(lineas) => (lineas.join("\n"), lineas.len() as i32),
                         Documento::Calculo(filas) => (
-                            filas.iter().map(|fila| fila.join(",")).collect::<Vec<_>>().join("\n"),
+                            filas
+                                .iter()
+                                .map(|fila| fila.join(","))
+                                .collect::<Vec<_>>()
+                                .join("\n"),
                             filas.len() as i32,
                         ),
                     };
@@ -191,7 +195,9 @@ impl SimpleComponent for FileWorkspace {
             }
             FileWorkspaceMsg::CloseEditor => {
                 sender
-                    .output(FileWorkspaceOutputMessage::UnsubscribeFile(self.current_file.clone()))
+                    .output(FileWorkspaceOutputMessage::UnsubscribeFile(
+                        self.current_file.clone(),
+                    ))
                     .unwrap();
 
                 self.file_editor_ctrl
@@ -211,13 +217,20 @@ impl SimpleComponent for FileWorkspace {
                 let mut files_map: HashMap<(String, FileType), Documento> = HashMap::new();
                 for (nombre, file_type, contenido, _qty) in &new_files {
                     let doc = if *file_type == FileType::Text {
-                        Documento::Texto(
-                            if contenido.is_empty() { vec![] } else { contenido.lines().map(|s| s.to_string()).collect() }
-                        )
+                        Documento::Texto(if contenido.is_empty() {
+                            vec![]
+                        } else {
+                            contenido.lines().map(|s| s.to_string()).collect()
+                        })
                     } else {
-                        Documento::Calculo(
-                            if contenido.is_empty() { vec![] } else { contenido.lines().map(|l| l.split(',').map(|c| c.to_string()).collect()).collect() }
-                        )
+                        Documento::Calculo(if contenido.is_empty() {
+                            vec![]
+                        } else {
+                            contenido
+                                .lines()
+                                .map(|l| l.split(',').map(|c| c.to_string()).collect())
+                                .collect()
+                        })
                     };
                     files_map.insert((nombre.clone(), file_type.clone()), doc);
                 }
@@ -251,25 +264,26 @@ impl SimpleComponent for FileWorkspace {
     }
 }
 
-
 fn get_files_list(
     file_path: &String,
 ) -> Vec<(std::string::String, FileType, std::string::String, i32)> {
     let docs = get_file_content_workspace(file_path).unwrap_or_else(|_| HashMap::new());
     let files_list: Vec<(String, FileType, String, i32)> = docs
         .into_iter()
-        .map(|(nombre, doc)| {
-            match doc {
-                Documento::Texto(lineas) => {
-                    let contenido = lineas.join("\n");
-                    let qty = lineas.len() as i32;
-                    (nombre, FileType::Text, contenido, qty)
-                }
-                Documento::Calculo(filas) => {
-                    let contenido = filas.iter().map(|fila| fila.join(",")).collect::<Vec<_>>().join("\n");
-                    let qty = filas.len() as i32;
-                    (nombre, FileType::Sheet, contenido, qty)
-                }
+        .map(|(nombre, doc)| match doc {
+            Documento::Texto(lineas) => {
+                let contenido = lineas.join("\n");
+                let qty = lineas.len() as i32;
+                (nombre, FileType::Text, contenido, qty)
+            }
+            Documento::Calculo(filas) => {
+                let contenido = filas
+                    .iter()
+                    .map(|fila| fila.join(","))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                let qty = filas.len() as i32;
+                (nombre, FileType::Sheet, contenido, qty)
             }
         })
         .collect();

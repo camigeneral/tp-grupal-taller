@@ -1,6 +1,6 @@
 extern crate gtk4;
 extern crate relm4;
-use self::gtk4::prelude::{ButtonExt, PopoverExt, WidgetExt, OrientableExt, BoxExt, EditableExt};
+use self::gtk4::prelude::{BoxExt, ButtonExt, EditableExt, OrientableExt, PopoverExt, WidgetExt};
 use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
 
 /// Modelo que representa la barra de navegación (navbar). Gestiona el estado de la conexión y
@@ -151,13 +151,10 @@ impl SimpleComponent for NavbarModel {
                 }
                 let file_id = format!("{}.txt", self.file_name.trim());
                 sender
-                    .output(NavbarOutput::CreateFileRequested(
-                        file_id,
-                        "".to_string(),
-                    ))
+                    .output(NavbarOutput::CreateFileRequested(file_id, "".to_string()))
                     .unwrap();
             }
-            NavbarMsg::SetFileName(file_name) => { self.file_name = file_name }
+            NavbarMsg::SetFileName(file_name) => self.file_name = file_name,
             NavbarMsg::CreateSpreadsheetDocument => {
                 if let Some(popover) = &self.new_file_popover {
                     popover.popdown();
@@ -168,10 +165,7 @@ impl SimpleComponent for NavbarModel {
                 }
                 let file_id = format!("{}.xlsx", self.file_name.trim());
                 sender
-                    .output(NavbarOutput::CreateFileRequested(
-                        file_id,
-                        "".to_string(),
-                    ))
+                    .output(NavbarOutput::CreateFileRequested(file_id, "".to_string()))
                     .unwrap();
             }
             NavbarMsg::SetLoggedInUser(username) => {

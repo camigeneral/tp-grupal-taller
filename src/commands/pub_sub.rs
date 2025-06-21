@@ -78,7 +78,7 @@ pub fn handle_unsubscribe(
     request: &CommandRequest,
     document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
     client_addr: String,
-    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>
+    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k,

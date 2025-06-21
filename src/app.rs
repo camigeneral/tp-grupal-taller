@@ -9,7 +9,7 @@ use app::gtk4::glib::Propagation;
 use client::client_run;
 use components::file_workspace::{FileWorkspace, FileWorkspaceMsg, FileWorkspaceOutputMessage};
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
-use std::{collections::HashMap};
+use std::collections::HashMap;
 use std::thread;
 
 use std::sync::mpsc::{channel, Sender};
@@ -35,8 +35,8 @@ pub struct AppModel {
     command: String,
     command_sender: Option<Sender<String>>,
     username: String,
-    current_file:String,
-    subscribed_files: HashMap<String, bool>
+    current_file: String,
+    subscribed_files: HashMap<String, bool>,
 }
 
 #[derive(Debug)]
@@ -52,7 +52,7 @@ pub enum AppMsg {
     RefreshData,
     CreateFile(String, String),
     SubscribeFile(String),
-    UnsubscribeFile(String), 
+    UnsubscribeFile(String),
     PrepareAndExecuteCommand(String, String),
     ManageResponse(String),
     ManageSubscribeResponse(String),
@@ -140,7 +140,9 @@ impl SimpleComponent for AppModel {
             sender.input_sender(),
             |output| match output {
                 NavbarOutput::ToggleConnectionRequested => AppMsg::Connect,
-                NavbarOutput::CreateFileRequested(file_id, content) => AppMsg::CreateFile(file_id, content),
+                NavbarOutput::CreateFileRequested(file_id, content) => {
+                    AppMsg::CreateFile(file_id, content)
+                }
             },
         );
 
@@ -152,15 +154,15 @@ impl SimpleComponent for AppModel {
             },
         );
 
-        let login_form_model = LoginForm::builder().launch(()).forward(
-            sender.input_sender(),
-            |output| match output {
-                LoginOutput::LoginRequested(username, password) => {
-                    let command = format!("AUTH {} {}", username, password);                    
-                    AppMsg::PrepareAndExecuteCommand(command, username)
-                },
-            },
-        );
+        let login_form_model =
+            LoginForm::builder()
+                .launch(())
+                .forward(sender.input_sender(), |output| match output {
+                    LoginOutput::LoginRequested(username, password) => {
+                        let command = format!("AUTH {} {}", username, password);
+                        AppMsg::PrepareAndExecuteCommand(command, username)
+                    }
+                });
 
         let mut model = AppModel {
             header_cont: header_model,
@@ -171,7 +173,7 @@ impl SimpleComponent for AppModel {
             command_sender: None,
             username: "".to_string(),
             current_file: "".to_string(),
-            subscribed_files: HashMap::new()
+            subscribed_files: HashMap::new(),
         };
 
         let sender_clone = sender.clone();
@@ -231,7 +233,7 @@ impl SimpleComponent for AppModel {
                 self.is_logged_in = true;
             }
             AppMsg::LoginFailure(error) => {
-                self.login_form_cont.emit(LoginMsg::SetErrorForm(error));                
+                self.login_form_cont.emit(LoginMsg::SetErrorForm(error));
             }
             AppMsg::Logout => {
                 self.header_cont
@@ -249,7 +251,7 @@ impl SimpleComponent for AppModel {
             AppMsg::CommandChanged(command) => {
                 self.command = command;
                 println!("comando {}", self.command);
-            },
+            }
 
             AppMsg::ManageResponse(resp) => {
                 if resp != "OK" {
@@ -258,10 +260,9 @@ impl SimpleComponent for AppModel {
                 }
                 if self.command.contains("AUTH") {
                     sender.input(AppMsg::LoginSuccess(self.username.clone()));
-                }        
-            },
+                }
+            }
             AppMsg::ManageSubscribeResponse(qty_subs) => {
-            
                 let qty_subs_int = match qty_subs.parse::<i32>() {
                     Ok(n) => n,
                     Err(_e) => -1,
@@ -271,9 +272,13 @@ impl SimpleComponent for AppModel {
                     println!("Error");
                 }
 
-                self.subscribed_files.insert(self.current_file.clone(), true);
+                self.subscribed_files
+                    .insert(self.current_file.clone(), true);
                 println!("Archivos suscriptos : {:#?}", self.subscribed_files);
-                self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(self.current_file.clone(), crate::components::types::FileType::Text));
+                self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(
+                    self.current_file.clone(),
+                    crate::components::types::FileType::Text,
+                ));
             }
 
             AppMsg::CreateFile(file_id, content) => {
@@ -283,12 +288,11 @@ impl SimpleComponent for AppModel {
             }
 
             AppMsg::SubscribeFile(file) => {
-                self.current_file = file;                          
+                self.current_file = file;
 
-                self.command = format!("subscribe {}", self.current_file);                
-                
-                sender.input(AppMsg::ExecuteCommand);                
-            
+                self.command = format!("subscribe {}", self.current_file);
+
+                sender.input(AppMsg::ExecuteCommand);
             }
 
             AppMsg::UnsubscribeFile(file) => {

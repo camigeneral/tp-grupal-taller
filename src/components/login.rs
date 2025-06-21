@@ -24,7 +24,7 @@ pub enum LoginMsg {
 /// Resultado del login.
 #[derive(Debug)]
 pub enum LoginOutput {
-    LoginRequested(String, String)
+    LoginRequested(String, String),
 }
 
 #[relm4::component(pub)]
@@ -108,12 +108,13 @@ impl SimpleComponent for LoginForm {
             }
             LoginMsg::Submit => {
                 sender
-                            .output(LoginOutput::LoginRequested(self.username.clone(), self.password.clone()))
-                            .unwrap();
-            },
-            LoginMsg::SetErrorForm(error) => {
-                self.error_message = error
+                    .output(LoginOutput::LoginRequested(
+                        self.username.clone(),
+                        self.password.clone(),
+                    ))
+                    .unwrap();
             }
+            LoginMsg::SetErrorForm(error) => self.error_message = error,
         }
     }
 }

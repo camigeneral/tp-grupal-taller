@@ -1,8 +1,8 @@
 use super::redis_response::RedisResponse;
+use crate::documento::Documento;
 use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use crate::documento::Documento;
 
 /// Maneja el comando LINSERT que inserta un elemento antes o después de un elemento pivote en una lista
 ///
@@ -63,7 +63,10 @@ pub fn handle_linsert(
     let entry_doc = docs_lock.entry(doc.clone()).or_default();
 
     // if let Some(index) = entry_doc.iter().position(|x| x == &pivot_str) {
-    if let Some(index) = entry_doc.as_texto().and_then(|v| v.iter().position(|x| x == &pivot_str)) {
+    if let Some(index) = entry_doc
+        .as_texto()
+        .and_then(|v| v.iter().position(|x| x == &pivot_str))
+    {
         match flag_str.as_str() {
             "before" => entry_doc.insert(index, element_str.clone()),
             "after" => {
@@ -178,7 +181,6 @@ pub fn handle_lset(
     if let Some(val) = list.get_mut(index_usize) {
         *val = element_str.clone();
     }
-    
 
     let message = format!("Updated index {} with '{}'", index_i32, element_str);
     RedisResponse::new(

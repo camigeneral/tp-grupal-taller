@@ -33,7 +33,7 @@ pub struct SpreadsheetModel {
 pub enum SpreadsheetMsg {
     CellChanged(usize, usize, String),
     RecalculateAll,
-    UpdateSheet(String, Vec<Vec<String>>)
+    UpdateSheet(String, Vec<Vec<String>>),
 }
 
 #[derive(Debug)]
@@ -291,7 +291,11 @@ impl SimpleComponent for SpreadsheetModel {
                 // Actualiza las celdas con los datos recibidos
                 for i in 0..10 {
                     for j in 0..10 {
-                        let value = filas.get(i).and_then(|row| row.get(j)).cloned().unwrap_or_default();
+                        let value = filas
+                            .get(i)
+                            .and_then(|row| row.get(j))
+                            .cloned()
+                            .unwrap_or_default();
                         self.cells[i][j] = Cell::new();
                         self.update_cell(i, j, value);
                     }
