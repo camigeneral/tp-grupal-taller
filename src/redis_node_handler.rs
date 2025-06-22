@@ -1,7 +1,7 @@
 use crate::documento::Documento;
 use commands::redis;
+use encryption::{decrypt_xor, encrypt_xor, ENCRYPTION_KEY};
 use local_node::{LocalNode, NodeRole, NodeState};
-use encryption::{encrypt_xor, decrypt_xor, ENCRYPTION_KEY};
 use peer_node;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -117,8 +117,8 @@ pub fn start_node_connection(
                         locked_local_node.hash_range.1
                     );
 
-                        let encrypted_message = encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
-                        cloned_stream.write_all(&encrypted_message)?;
+                    let encrypted_message = encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
+                    cloned_stream.write_all(&encrypted_message)?;
 
                     lock_peer_nodes.insert(
                         peer_addr,
@@ -284,8 +284,10 @@ fn handle_node(
                                 } else {
                                     // estoy hablando con mi master
                                     local_node_locked.master_node = Some(*parsed_port);
-                                    let message = format!("sync_request {}\n", local_node_locked.port);
-                                    let encrypted_message = encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
+                                    let message =
+                                        format!("sync_request {}\n", local_node_locked.port);
+                                    let encrypted_message =
+                                        encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
                                     stream_to_respond.write_all(&encrypted_message)?;
                                 }
                             } else {
@@ -331,7 +333,8 @@ fn handle_node(
                                     local_node_locked.master_node = Some(*parsed_port);
                                     let message =
                                         format!("sync_request {}\n", local_node_locked.port);
-                                    let encrypted_message = encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
+                                    let encrypted_message =
+                                        encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
                                     peer_node_to_update.stream.write_all(&encrypted_message)?;
                                 }
                             } else {
@@ -400,7 +403,6 @@ fn handle_node(
                 let message = "pong\n";
                 let encrypted = encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
                 stream.write_all(&encrypted)?;
-
             }
             "confirm_master_down" => {
                 match confirm_master_state(local_node, &nodes) {
@@ -423,7 +425,8 @@ fn handle_node(
                                     match peer.stream.try_clone() {
                                         Ok(mut peer_stream) => {
                                             let message = "initialize_replica_promotion\n";
-                                            let encrypted_message = encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
+                                            let encrypted_message =
+                                                encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
                                             let _ = peer_stream.write_all(&encrypted_message);
                                         }
                                         Err(_) => {
@@ -467,7 +470,6 @@ fn handle_node(
     Ok(())
 }
 
-
 /// Lee un archivo de configuracion y genera una lista de los puertos a los que un nodo se debe conectar
 ///
 /// # Errores
@@ -489,7 +491,6 @@ fn read_node_ports<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<usize>> {
 
     Ok(ports)
 }
-
 
 pub fn broadcast_to_replicas(
     local_node: &Arc<Mutex<LocalNode>>,
@@ -513,17 +514,14 @@ pub fn broadcast_to_replicas(
             let end_message = "end_replica_command\n";
             let encrypted_end_message = encrypt_xor(end_message.as_bytes(), ENCRYPTION_KEY);
 
-            
             stream.write_all(&encrypted_start_message)?;
             stream.write_all(&encrypted_message)?;
             stream.write_all(&encrypted_end_message)?;
-            
         }
     }
 
     Ok(())
 }
-
 
 fn handle_replica_sync(
     replica_port: &String,
@@ -562,14 +560,14 @@ fn handle_replica_sync(
     Ok(())
 }
 
-
 fn serialize_vec_hashmap(
     map: &HashMap<String, Documento>,
     mut stream: TcpStream,
 ) -> std::io::Result<()> {
     for (key, doc) in map {
         let line = match doc {
-            Documento::Texto(vec) => { //ARREGLAR
+            Documento::Texto(vec) => {
+                //ARREGLAR
                 let joined = vec.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(",");
 
                 format!("serialize_vec {}:{}\n", key, joined)
@@ -586,7 +584,6 @@ fn serialize_vec_hashmap(
     Ok(())
 }
 
-
 fn serialize_hashset_hashmap(
     map: &HashMap<String, HashSet<String>>,
     mut stream: TcpStream,
@@ -602,7 +599,6 @@ fn serialize_hashset_hashmap(
     stream.write_all(&encrypted_message)?;
     Ok(())
 }
-
 
 fn deserialize_hashset_hashmap(
     lines: &Vec<String>,
@@ -623,10 +619,9 @@ fn deserialize_hashset_hashmap(
     }
 }
 
-
 fn deserialize_vec_hashmap(
     lines: &Vec<String>,
-    shared_documents: &Arc<Mutex<HashMap<String,Documento>>>,
+    shared_documents: &Arc<Mutex<HashMap<String, Documento>>>,
 ) {
     {
         let mut locked_documents = shared_documents.lock().unwrap();
@@ -637,12 +632,13 @@ fn deserialize_vec_hashmap(
                     .split(',')
                     .map(|s| s.trim().to_string())
                     .collect();
-                locked_documents.insert(key.to_string(), crate::documento::Documento::Texto(values)); //ARREGLAR
+                locked_documents
+                    .insert(key.to_string(), crate::documento::Documento::Texto(values));
+                //ARREGLAR
             }
         }
     }
 }
-
 
 fn ping_to_master(
     local_node: Arc<Mutex<LocalNode>>,
@@ -721,7 +717,6 @@ fn ping_to_master(
     }
 }
 
-
 fn request_master_state_confirmation(
     local_node: &Arc<Mutex<LocalNode>>,
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
@@ -788,7 +783,6 @@ fn request_master_state_confirmation(
     }
 }
 
-
 fn confirm_master_state(
     local_node: &Arc<Mutex<LocalNode>>,
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
@@ -819,7 +813,6 @@ fn confirm_master_state(
     Ok(master_state)
 }
 
-
 fn initialize_replica_promotion(
     local_node: &Arc<Mutex<LocalNode>>,
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
@@ -849,7 +842,8 @@ fn initialize_replica_promotion(
         let encrypted_node_message = encrypt_xor(node_info_message.as_bytes(), ENCRYPTION_KEY);
 
         let inactive_node_message = format!("inactive_node {}\n", inactive_port);
-        let encrypted_inactive_message = encrypt_xor(inactive_node_message.as_bytes(), ENCRYPTION_KEY);
+        let encrypted_inactive_message =
+            encrypt_xor(inactive_node_message.as_bytes(), ENCRYPTION_KEY);
 
         println!("3");
         for (_, peer) in locked_peer_nodes.iter() {

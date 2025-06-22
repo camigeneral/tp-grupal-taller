@@ -1,6 +1,14 @@
 pub const ENCRYPTION_KEY: &[u8] = b"clavesupersecreta";
 
-
+/// Encripta un mensaje utilizando XOR con una clave dada,
+/// evitando los caracteres `\n` y `0xFF`.
+///
+/// # Argumentos
+/// * `input` - Mensaje en bytes a encriptar.
+/// * `key` - Clave en bytes.
+///
+/// # Retorna
+/// El mensaje encriptado con un `\n` al final.
 pub fn encrypt_xor(input: &[u8], key: &[u8]) -> Vec<u8> {
     let mut encrypted = Vec::new();
 
@@ -23,7 +31,14 @@ pub fn encrypt_xor(input: &[u8], key: &[u8]) -> Vec<u8> {
     encrypted
 }
 
-
+/// Desencripta un mensaje previamente encriptado con `encrypt_xor`.
+///
+/// # Argumentos
+/// * `encrypted` - Mensaje encriptado en bytes.
+/// * `key` - La misma clave que se usó para encriptar.
+///
+/// # Retorna
+/// Un `Vec<u8>` con el mensaje desencriptado.
 pub fn decrypt_xor(encrypted: &[u8], key: &[u8]) -> Vec<u8> {
     let mut result = Vec::new();
     let mut i = 0;
@@ -54,7 +69,6 @@ pub fn decrypt_xor(encrypted: &[u8], key: &[u8]) -> Vec<u8> {
 
     result
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -98,4 +112,3 @@ mod tests {
         assert_eq!(original.as_bytes(), &decrypted[..]);
     }
 }
-

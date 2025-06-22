@@ -4,10 +4,13 @@ use self::gtk4::{
     prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, WidgetExt},
     CssProvider,
 };
-use components::error_modal::ErrorModalMsg;
-use crate::components::{error_modal::ErrorModal, login::{LoginForm, LoginMsg, LoginOutput}};
+use crate::components::{
+    error_modal::ErrorModal,
+    login::{LoginForm, LoginMsg, LoginOutput},
+};
 use app::gtk4::glib::Propagation;
 use client::client_run;
+use components::error_modal::ErrorModalMsg;
 use components::file_workspace::{FileWorkspace, FileWorkspaceMsg, FileWorkspaceOutputMessage};
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
 use std::collections::HashMap;
@@ -36,10 +39,9 @@ pub struct AppModel {
     command: String,
     command_sender: Option<Sender<String>>,
     username: String,
-    current_file:String,
+    current_file: String,
     subscribed_files: HashMap<String, bool>,
     error_modal: Controller<ErrorModal>,
-
 }
 
 #[derive(Debug)]
@@ -61,7 +63,6 @@ pub enum AppMsg {
     ManageSubscribeResponse(String),
     ManageUnsubscribeResponse(String),
     Error(String),
-
 }
 
 #[relm4::component(pub)]
@@ -145,7 +146,6 @@ impl SimpleComponent for AppModel {
             .launch(())
             .detach();
 
-
         let header_model = NavbarModel::builder().launch(()).forward(
             sender.input_sender(),
             |output| match output {
@@ -184,8 +184,7 @@ impl SimpleComponent for AppModel {
             username: "".to_string(),
             current_file: "".to_string(),
             subscribed_files: HashMap::new(),
-            error_modal
-
+            error_modal,
         };
 
         let sender_clone = sender.clone();

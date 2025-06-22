@@ -9,7 +9,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::{channel, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use utils::redis_parser::{format_resp_publish, format_resp_command};
+use utils::redis_parser::{format_resp_command, format_resp_publish};
 
 pub fn client_run(
     port: u16,
@@ -65,7 +65,7 @@ pub fn client_run(
 
     for command in rx {
         let trimmed_command = command.to_string().trim().to_lowercase();
-        if trimmed_command == "close"  {
+        if trimmed_command == "close" {
             println!("Desconectando del servidor");
             let parts: Vec<&str> = trimmed_command.split_whitespace().collect();
             let resp_command = format_resp_publish(parts[0], parts[1]);
@@ -75,16 +75,15 @@ pub fn client_run(
             socket.write_all(resp_command.as_bytes())?;
             break;
         } else {
-
-            
             println!("Enviando: {:?}", command);
 
             let parts: Vec<&str> = command.split_whitespace().collect();
-            let resp_command = if parts[0] == "AUTH" || parts[0] == "subscribe"  || parts[0] == "unsubscribe" {
-                                    format_resp_command(&parts)
-                                }else{
-                                    format_resp_publish(parts[1], &command)
-                                };
+            let resp_command =
+                if parts[0] == "AUTH" || parts[0] == "subscribe" || parts[0] == "unsubscribe" {
+                    format_resp_command(&parts)
+                } else {
+                    format_resp_publish(parts[1], &command)
+                };
 
             {
                 let mut last_command = last_command_sent.lock().unwrap();
@@ -133,9 +132,11 @@ fn listen_to_redis_response(
                     "Error desconocido".to_string()
                 };
                 if let Some(sender) = &ui_sender {
-                    let _ = sender.send(AppMsg::Error(format!("Hubo un problema: {}", error_message)));
+                    let _ = sender.send(AppMsg::Error(format!(
+                        "Hubo un problema: {}",
+                        error_message
+                    )));
                 }
-                
             }
             "ASK" => {
                 if response.len() < 3 {

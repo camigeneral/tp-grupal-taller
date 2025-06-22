@@ -25,7 +25,7 @@ pub mod hashing;
 
 /// Módulo de encriptación de mensajes.
 ///
-/// Implementa funciones para encriptar y desencriptar mensajes usando XOR 
+/// Implementa funciones para encriptar y desencriptar mensajes usando XOR
 /// con una clave arbitraria.
 pub mod encryption;
 

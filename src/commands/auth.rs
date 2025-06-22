@@ -94,8 +94,6 @@ fn valid_credentials(username: String, password: String) -> bool {
 
     match user_password {
         Some(hashed_pass) => *hashed_pass == hashed_password,
-        _ => {
-            false
-        }
+        _ => false,
     }
 }
