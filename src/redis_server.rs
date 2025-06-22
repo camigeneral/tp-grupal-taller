@@ -18,6 +18,7 @@ use crate::utils::redis_parser::CommandResponse;
 mod client_info;
 mod commands;
 mod documento;
+mod encryption;
 mod hashing;
 mod local_node;
 mod peer_node;
