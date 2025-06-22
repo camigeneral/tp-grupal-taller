@@ -103,7 +103,7 @@ pub fn handle_set(
 
         let subscribers = document_subscribers_lock
             .entry(doc_name.clone())
-            .or_insert_with(Vec::new);
+            .or_default();
 
         for (addr, client) in active_clients_lock.iter() {
             if client.client_type == ClientType::Microservicio && !subscribers.contains(addr) {

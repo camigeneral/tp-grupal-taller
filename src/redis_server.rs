@@ -89,7 +89,7 @@ fn start_server(
             .create(true)
             .append(true)
             .open(&log_path)
-            .and_then(|mut file| writeln!(file, ""));
+            .and_then(|mut file| writeln!(file));
     }
 
     let local_node = redis_node_handler::create_local_node(port)?;
@@ -133,7 +133,7 @@ fn start_server(
     let active_clients = Arc::new(Mutex::new(HashMap::new()));
     let logged_clients: Arc<Mutex<HashMap<String, bool>>> = Arc::new(Mutex::new(HashMap::new()));
 
-    let _ = redis_node_handler::start_node_connection(
+    redis_node_handler::start_node_connection(
         port,
         node_address,
         &local_node,

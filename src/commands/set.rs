@@ -107,64 +107,6 @@ pub fn handle_smembers(
     }
 }
 
-/// Maneja el comando SSCAN que busca suscriptores en un set que coincidan con un patrón
-///
-/// # Argumentos
-/// * `request` - La solicitud de comando que contiene el set a consultar y opcionalmente un patrón de búsqueda
-/// * `shared_sets` - Un mapa compartido y protegido que asocia set con listas de clientes suscritos
-///
-/// # Retorno
-/// * `RedisResponse` - La respuesta al comando con los suscriptores que coinciden con el patrón
-// pub fn handle_sscan(
-//     request: &CommandRequest,
-//     shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
-// ) -> RedisResponse {
-//     let key = match &request.key {
-//         Some(k) => k,
-//         None => {
-//             return RedisResponse::new(
-//                 CommandResponse::Error("Uso: SSCAN <key> <cursor> [count N]".to_string()),
-//                 false,
-//                 "".to_string(),
-//                 "".to_string(),
-//             );
-//         }
-//     };
-
-//     let cursor: usize = request.arguments.get(0).and_then(|c| c.parse().ok()).unwrap_or(0);
-//     let count: usize = match request.arguments.iter().position(|s| s == "count") {
-//         Some(i) => request.arguments.get(i + 1).and_then(|n| n.parse().ok()).unwrap_or(10),
-//         None => 10,
-//     };
-
-//     let sets = shared_sets.lock().unwrap();
-//     match sets.get(key) {
-//         Some(set) => {
-//             let mut members: Vec<String> = set.iter().cloned().collect();
-//             members.sort(); // para que el orden sea predecible
-
-//             let end = usize::min(cursor + count, members.len());
-//             let next_cursor = if end >= members.len() { 0 } else { end };
-
-//             let slice = &members[cursor..end];
-//             let response = format!("Cursor: {}\nMiembros: {}", next_cursor, slice.join(", "));
-
-//             RedisResponse::new(
-//                 CommandResponse::String(response),
-//                 false,
-//                 "".to_string(),
-//                 "".to_string(),
-//             )
-//         }
-//         None => RedisResponse::new(
-//             CommandResponse::Error("Set no encontrado".to_string()),
-//             false,
-//             "".to_string(),
-//             "".to_string(),
-//         ),
-//     }
-// }
-
 /// Maneja el comando SREM que elimina uno o más elementos de un conjunto.
 ///
 /// # Argumentos
@@ -242,7 +184,7 @@ pub fn handle_sadd(
     };
 
     let mut sets = shared_sets.lock().unwrap();
-    let set = sets.entry(key.clone()).or_insert_with(HashSet::new);
+    let set = sets.entry(key.clone()).or_default();
 
     let mut added = 0;
     for arg in &request.arguments {

@@ -68,7 +68,7 @@ pub fn client_run(
         if trimmed_command == "close"  {
             println!("Desconectando del servidor");
             let parts: Vec<&str> = trimmed_command.split_whitespace().collect();
-            let resp_command = format_resp_publish(&parts[0], &parts[1]);
+            let resp_command = format_resp_publish(parts[0], parts[1]);
 
             println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
 
@@ -80,14 +80,11 @@ pub fn client_run(
             println!("Enviando: {:?}", command);
 
             let parts: Vec<&str> = command.split_whitespace().collect();
-            let resp_command;
-            if parts[0] == "AUTH" {
-                resp_command = format_resp_command(&parts);
-            } else if parts[0] == "subscribe"  || parts[0] == "unsubscribe"  {
-                resp_command = format_resp_command(&parts);
-            }else{
-                resp_command = format_resp_publish(&parts[1], &command);
-            }
+            let resp_command = if parts[0] == "AUTH" || parts[0] == "subscribe"  || parts[0] == "unsubscribe" {
+                                    format_resp_command(&parts)
+                                }else{
+                                    format_resp_publish(parts[1], &command)
+                                };
 
             {
                 let mut last_command = last_command_sent.lock().unwrap();
