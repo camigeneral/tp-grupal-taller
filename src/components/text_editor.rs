@@ -3,12 +3,13 @@ extern crate relm4;
 use self::gtk4::prelude::{
     BoxExt, OrientableExt, TextBufferExt, TextBufferExtManual, TextViewExt, WidgetExt,
 };
-
+use std::rc::Rc;
+use std::cell::RefCell;
 use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
 
 /// Estructura que representa el modelo del editor de archivos. Contiene información sobre el archivo
 /// que se está editando, el contenido del archivo y el estado de cambios manuales en el contenido.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TextEditorModel {
     /// Nombre del archivo que se está editando.
     file_name: String,
@@ -20,6 +21,7 @@ pub struct TextEditorModel {
     buffer: gtk::TextBuffer,
     /// Indica si el contenido del archivo ha sido modificado manualmente en el editor.
     content_changed_manually: bool,
+    programmatic_update: Rc<RefCell<bool>>, // Shared reference
 }
 
 /// Enum que define los posibles mensajes que el editor de archivos puede recibir.
@@ -74,12 +76,16 @@ impl SimpleComponent for TextEditorModel {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        println!("{:#?}, {:#?}", file_name, content);
+
+        let programmatic_update = Rc::new(RefCell::new(false));
+
         let mut model = TextEditorModel {
             file_name,
             num_contributors,
             content,
-            content_changed_manually: false,
+            content_changed_manually: true,
+            programmatic_update: programmatic_update.clone(), 
+
             buffer: gtk::TextBuffer::new(None),
         };
 
@@ -88,9 +94,15 @@ impl SimpleComponent for TextEditorModel {
         let sender = sender.clone();
 
         let sender_insert = sender.clone();
+        let programmatic_update_insert = programmatic_update.clone();
+
         model
             .buffer
             .connect_insert_text(move |_buffer, iter, text| {
+                if *programmatic_update_insert.borrow() {
+                    return;
+                }
+
                 let offset = iter.offset();
                 
                 if text == "\n" {
@@ -106,9 +118,15 @@ impl SimpleComponent for TextEditorModel {
             });
 
         let sender_delete = sender.clone();
+        let programmatic_update_delete = programmatic_update.clone();
+
         model
             .buffer
             .connect_delete_range(move |_buffer, start, end| {
+                if *programmatic_update_delete.borrow() {
+                    return; 
+                }
+                
                 sender_delete.input(TextEditorMessage::ContentRemoved(
                     start.offset(),
                     end.offset(),
@@ -119,32 +137,57 @@ impl SimpleComponent for TextEditorModel {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: TextEditorMessage, _sender: ComponentSender<Self>) {
+    fn update(&mut self, message: TextEditorMessage, _sender: ComponentSender<Self>) {    
         match message {
-            TextEditorMessage::ContentAdded(new_text, offset) => {
-                println!("Texto añadido: '{}' en posición: {}", new_text, offset);
-            }
-            TextEditorMessage::ContentRemoved(start_offset, end_offset) => {
-                println!("Texto eliminado desde: {} hasta: {}", start_offset, end_offset);
-            }
             TextEditorMessage::EnterPressed(offset) => {
+                if !self.content_changed_manually {
+                    return;
+                }
+
                 println!("Enter presionado en posición: {}", offset);
             }
             TextEditorMessage::TabPressed(offset) => {
+                if !self.content_changed_manually {
+                    return;
+                }
+
                 println!("Tab presionado en posición: {}", offset);
             }
+            TextEditorMessage::ContentAdded(new_text, offset) => {
+                if !self.content_changed_manually  {
+                    return;
+                }
+                println!("Texto añadido: '{}' en posición: {}", new_text, offset);
+            }
+            TextEditorMessage::ContentRemoved(start_offset, end_offset) => {
+                println!("Estoy aca?");
+                if !self.content_changed_manually  {
+                    return;
+                }
+                println!("Texto eliminado desde: {} hasta: {}", start_offset, end_offset);
+            }
             TextEditorMessage::UpdateFile(file_name, contributors, content) => {
+                *self.programmatic_update.borrow_mut() = true;
+                self.content_changed_manually = false; 
+                
                 self.file_name = file_name;
                 self.num_contributors = contributors;
                 self.content = content;
                 self.buffer.set_text(&self.content);
-                self.content_changed_manually = true;
+                
+                self.content_changed_manually = true; 
+                *self.programmatic_update.borrow_mut() = false;
             }
             TextEditorMessage::ResetEditor => {
+                *self.programmatic_update.borrow_mut() = true;
+                self.content_changed_manually = false; 
+
                 self.buffer.set_text("");
                 self.content.clear();
                 self.file_name.clear();
                 self.num_contributors = 0;
+                
+                *self.programmatic_update.borrow_mut() = false;
             }
         }
     }
