@@ -46,15 +46,15 @@ pub fn handle_subscribe(
         };
         let _ = handle_sadd(&request, shared_sets);
 
-        let notification = format!("Client {} subscribed to {}", client_addr, doc);
+        let notification = format!("CLIENT {}|{}", client_addr, doc);
 
         // RETORNAR la respuesta de éxito aquí
-        return RedisResponse::new(
+        RedisResponse::new(
             CommandResponse::String(notification),
             false,
             "".to_string(),
             doc.to_string(),
-        );
+        )
     } else {
         RedisResponse::new(
             CommandResponse::Error("Document not found".to_string()),

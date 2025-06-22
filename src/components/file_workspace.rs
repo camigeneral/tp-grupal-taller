@@ -100,8 +100,16 @@ impl SimpleComponent for FileWorkspace {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
+        let redis_nodes_files: [&str; 3] = [
+            "redis_node_0_5460.rdb",
+            "redis_node_5460_10921.rdb",
+            "redis_node_10921_16383.rdb",
+        ];
+
+        let files_list = get_all_files_list(&redis_nodes_files);
+
         let list_files_cont: Controller<FileListView> = FileListView::builder()
-            .launch(get_files_list(&"docs.txt".to_string()))
+            .launch(files_list.clone())
             .forward(
                 sender.input_sender(),
                 |msg: crate::components::list_files::FileFilterAction| match msg {
@@ -125,15 +133,20 @@ impl SimpleComponent for FileWorkspace {
 
         let mut files_map: HashMap<(String, FileType), Documento> = HashMap::new();
 
-        if let Ok(docs) = get_file_content_workspace(&"docs.txt".to_string()) {
-            for (nombre, mensajes) in docs {
-                let file_type = if nombre.ends_with(".xlsx") {
-                    FileType::Sheet
-                } else {
-                    FileType::Text
-                };
-                files_map.insert((nombre, file_type), mensajes);
-            }
+        let redis_nodes_files: [&str; 3] = [
+            "redis_node_0_5460.rdb",
+            "redis_node_5460_10921.rdb",
+            "redis_node_10921_16383.rdb",
+        ];
+
+        let docs = get_all_files_content(&redis_nodes_files);
+        for (nombre, mensajes) in docs {
+            let file_type = if nombre.ends_with(".xlsx") {
+                FileType::Sheet
+            } else {
+                FileType::Text
+            };
+            files_map.insert((nombre, file_type), mensajes);
         }
         println!("files_map: {:#?}", files_map);
         let model = FileWorkspace {
@@ -205,7 +218,13 @@ impl SimpleComponent for FileWorkspace {
 
                 let current_file = self.current_file.clone();
 
-                let new_files = get_files_list(&"docs.txt".to_string());
+                let redis_nodes_files: [&str; 3] = [
+                    "redis_node_0_5460.rdb",
+                    "redis_node_5460_10921.rdb",
+                    "redis_node_10921_16383.rdb",
+                ];
+
+                let new_files = get_all_files_list(&redis_nodes_files);
                 let mut files_map: HashMap<(String, FileType), Documento> = HashMap::new();
                 for (nombre, file_type, contenido, _qty) in &new_files {
                     let doc = if *file_type == FileType::Text {
@@ -364,4 +383,29 @@ pub fn get_file_content_workspace(
     }
 
     Ok(docs)
+}
+
+fn get_all_files_list(
+    file_paths: &[&str],
+) -> Vec<(String, FileType, String, i32)> {
+    let mut files_list = Vec::new();
+    for path in file_paths {
+        let list = get_files_list(&path.to_string());
+        files_list.extend(list);
+    }
+    files_list
+}
+
+fn get_all_files_content(
+    file_paths: &[&str],
+) -> HashMap<String, Documento> {
+    let mut docs = HashMap::new();
+    for path in file_paths {
+        if let Ok(file_docs) = get_file_content_workspace(&path.to_string()) {
+            for (nombre, doc) in file_docs {
+                docs.insert(nombre, doc);
+            }
+        }
+    }
+    docs
 }

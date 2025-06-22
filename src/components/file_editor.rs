@@ -108,16 +108,12 @@ impl SimpleComponent for FileEditorModel {
     ) -> ComponentParts<Self> {
         let spreadsheet_cont = SpreadsheetModel::builder().launch(()).forward(
             sender.input_sender(),
-            |msg| match msg {
-                _ => FileEditorMessage::ResetEditor,
-            },
+            |_msg| FileEditorMessage::ResetEditor,
         );
 
         let text_editor_cont = TextEditorModel::builder()
             .launch((file_name.clone(), num_contributors, content.clone()))
-            .forward(sender.input_sender(), |msg| match msg {
-                _ => FileEditorMessage::ResetEditor,
-            });
+            .forward(sender.input_sender(), |_msg| FileEditorMessage::ResetEditor);
 
         let model = FileEditorModel {
             file_name,
@@ -143,7 +139,7 @@ impl SimpleComponent for FileEditorModel {
             }
             FileEditorMessage::ContentRemoved(_start_offset, _end_offset) => {}
             FileEditorMessage::UpdateFile(file_name, contributors, content, file_type) => {
-                let _ = self.text_editor_ctrl.emit(TextEditorMessage::UpdateFile(
+                self.text_editor_ctrl.emit(TextEditorMessage::UpdateFile(
                     file_name.clone(),
                     contributors,
                     content.clone(),
@@ -189,7 +185,7 @@ impl SimpleComponent for FileEditorModel {
                 }
             }
             FileEditorMessage::ResetEditor => {
-                let _ = self.text_editor_ctrl.emit(TextEditorMessage::ResetEditor);
+                self.text_editor_ctrl.emit(TextEditorMessage::ResetEditor);
             }
         }
     }

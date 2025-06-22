@@ -15,6 +15,7 @@ use std::time::Duration;
 #[path = "utils/logger.rs"]
 mod logger;
 
+
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let redis_port = 4000;
     let main_address = format!("127.0.0.1:{}", redis_port);
@@ -36,7 +37,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             .create(true)
             .append(true)
             .open(&log_path)
-            .and_then(|mut file| writeln!(file, ""));
+            .and_then(|mut file| writeln!(file));
     }
 
     println!("Conectándome al server de redis en {:?}", main_address);
@@ -115,7 +116,37 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    loop {}
+    {
+        let node_streams_clone = Arc::clone(&node_streams);
+        let main_address_clone = main_address.clone();
+        let last_command_sent_clone = Arc::clone(&last_command_sent);
+
+        thread::spawn(move || loop {
+            {
+                let streams = node_streams_clone.lock().unwrap();
+                if let Some(mut stream) = streams.get(&main_address_clone) {
+                    let command_parts = vec!["SET", "docprueba.txt", "hola"];
+                    let resp_command = format_resp_command(&command_parts);
+
+                    // ACTUALIZAMOS el último comando enviado
+                    {
+                        let mut last_command = last_command_sent_clone.lock().unwrap();
+                        *last_command = resp_command.clone();
+                    }
+
+                    if let Err(e) = stream.write_all(resp_command.as_bytes()) {
+                        eprintln!("Error al enviar comando SET docprueba hola: {}", e);
+                    } else {
+                        println!("Comando automático enviado: SET docprueba hola");
+                    }
+                }
+            }
+            thread::sleep(Duration::from_secs(60));
+        });
+    }
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
 }
 
 fn connect_to_nodes(
@@ -156,10 +187,7 @@ fn listen_to_redis_response(
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(microservice_socket.try_clone()?);
     loop {
-        let _ = connect_node_sender.clone();
-        let _ = last_command_sent.clone();
-        let _ = node_streams.clone();
-
+        
         let mut line = String::new();
         let bytes_read = reader.read_line(&mut line)?;
         if bytes_read == 0 {
@@ -167,17 +195,52 @@ fn listen_to_redis_response(
         }
 
         println!("Respuesta de redis: {}", line);
-        logger::log_event(&log_path, &format!("Respuesta de redis: {}", line));
+        logger::log_event(log_path, &format!("Respuesta de redis: {}", line));
 
         // client-address qty_users
-        if line.starts_with("Client ") && line.contains(" subscribed to ") {
-            let parts: Vec<&str> = line.trim().split_whitespace().collect();
-            if parts.len() >= 5 {
-                let client_addr = parts[1];
+        // if line.starts_with("Client ") && line.contains(" subscribed to ") {
+        //     let parts: Vec<&str> = line.trim().split_whitespace().collect();
+        //     if parts.len() >= 5 {
+        //         let client_addr = parts[1];
 
-                let doc_name = parts[4];
+        //         let doc_name = parts[4];
 
-                let bienvenida = format!("Welcome {} {}", doc_name, client_addr);
+        //         let bienvenida = format!("Welcome {} {}", doc_name, client_addr);
+
+        //         let parts: Vec<&str> = bienvenida.split_whitespace().collect();
+
+        //         let mensaje_final = format_resp_command(&parts);
+
+        //         if let Err(e) = microservice_socket.write_all(mensaje_final.as_bytes()) {
+        //             eprintln!("Error al enviar mensaje de bienvenida: {}", e);
+        //             logger::log_event(&log_path, &format!("Error al enviar mensaje de bienvenida: {}", e));
+        //         }
+        //     }
+        // }
+
+        let response: Vec<&str> = line.split_whitespace().collect();
+
+
+        let first = response[0].to_uppercase();
+        let first_response = first.as_str();
+
+        match first_response {
+            s if s.starts_with("-ERR") => {
+
+                let _credenciales = &response[1]; 
+                let _invalidas = response[2].trim_end_matches(':');
+
+                // if let Some(sender) = &ui_sender {
+                //     let _ = sender.send(AppMsg::LoginFailure(format!("{} {}", credenciales, invalidas)));
+                // }
+            }
+            "CLIENT" => {
+                // se va a procesar lo que otro agrego 
+                let response_client: Vec<&str> = response[1].split('|').collect();
+                let client_address = response_client[0];
+                let doc_name = response_client[1];
+
+                let bienvenida = format!("Welcome {} {}", doc_name, client_address);
 
                 let parts: Vec<&str> = bienvenida.split_whitespace().collect();
 
@@ -186,12 +249,42 @@ fn listen_to_redis_response(
                 if let Err(e) = microservice_socket.write_all(mensaje_final.as_bytes()) {
                     eprintln!("Error al enviar mensaje de bienvenida: {}", e);
                     logger::log_event(
-                        &log_path,
+                        log_path,
                         &format!("Error al enviar mensaje de bienvenida: {}", e),
                     );
                 }
             }
+            "WRITTEN" => {
+                // se va a procesasr lo que otro agrego 
+                let response_written: Vec<&str> = response[1].split('|').collect();
+                let _doc = response_written[0];
+                let _line = response_written[1];
+                let _content = response_written[2];
+                
+                // if let Some(sender) = &ui_sender {
+                //     let _ = sender.send(AppMsg::ManageSubscribeResponse(response_written[1].to_string()));
+                // }
+            }
+            "ASK" => { 
+                if response.len() < 3 {
+                    println!("Nodo de redireccion no disponible");
+                } else {
+                    let _ = send_command_to_nodes(connect_node_sender.clone(),node_streams.clone() ,last_command_sent.clone(), response);
+                }
+            }
+            _ => { 
+                // if let Some(sender) = &ui_sender {
+                //     let _ = sender.send(AppMsg::ManageResponse(first));
+                // }
+            }
         }
+
+        let response: Vec<&str> = line.split_whitespace().collect();
+
+        let first = response[0].to_uppercase();
+        let _first_response = first.as_str();
+
+        
     }
     Ok(())
 }
@@ -205,4 +298,41 @@ pub fn format_resp_command(command_parts: &[&str]) -> String {
     }
 
     resp_message
+}
+
+fn send_command_to_nodes(
+    connect_node_sender: MpscSender<TcpStream>,
+    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+    last_command_sent: Arc<Mutex<String>>,
+    response: Vec<&str>
+) -> Result<(), Box<dyn std::error::Error>> {
+    let last_line_cloned = last_command_sent.lock().unwrap().clone();
+    let mut locked_node_streams = node_streams.lock().unwrap();
+    let new_node_address = response[2].to_string();
+    
+    println!("Ultimo comando ejecutado: {:#?}", last_line_cloned);
+    println!("Redirigiendo a nodo: {}", new_node_address);
+    
+    if let Some(stream) = locked_node_streams.get_mut(&new_node_address) {
+        println!("Usando conexión existente al nodo {}", new_node_address);
+        stream.write_all(last_line_cloned.as_bytes())?;
+    } else {
+        println!("Creando nueva conexión al nodo {}", new_node_address);
+        let parts: Vec<&str> = "connect".split_whitespace().collect();
+        let resp_command = format_resp_command(&parts);
+        let mut final_stream = TcpStream::connect(new_node_address.clone())?;
+        final_stream.write_all(resp_command.as_bytes())?;
+
+        let mut cloned_stream_to_connect = final_stream.try_clone()?;
+        locked_node_streams.insert(new_node_address, final_stream);
+        
+        let _ = connect_node_sender.send(cloned_stream_to_connect.try_clone()?);
+        std::thread::sleep(std::time::Duration::from_millis(2));
+
+        if let Err(e) = cloned_stream_to_connect.write_all(last_line_cloned.as_bytes()) {
+            eprintln!("Error al reenviar el último comando: {}", e);
+        }
+
+    }
+    Ok(())
 }

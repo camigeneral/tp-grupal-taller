@@ -29,6 +29,9 @@ impl Documento {
             Documento::Calculo(m) => m.len(),
         }
     }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
     pub fn join(&self, sep: &str) -> Option<String> {
         match self {
             Documento::Texto(v) => Some(v.join(sep)),

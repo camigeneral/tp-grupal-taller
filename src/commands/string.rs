@@ -101,7 +101,7 @@ pub fn handle_set(
 
         let subscribers = document_subscribers_lock
             .entry(doc_name.clone())
-            .or_insert_with(Vec::new);
+            .or_default();
 
         for (addr, client) in active_clients_lock.iter() {
             if client.client_type == ClientType::Microservicio && !subscribers.contains(addr) {
@@ -174,7 +174,7 @@ pub fn handle_append(
     }
 
     // let notification = format!("New content in {}: {} L{}", doc, content, line_number);
-    let notification = format!("L{}: {} ", line_number, content);
+    let notification = format!("WRITTEN {}|{}|{} ",doc, line_number, content);
     println!("Publishing to subscribers of {}: {}", doc, notification);
 
     RedisResponse::new(

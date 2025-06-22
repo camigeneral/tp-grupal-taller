@@ -94,7 +94,7 @@ impl SimpleComponent for FileListView {
                     set_margin_top: 10
                 },
                 #[watch]
-                set_visible: model.all_filles.len() != 0
+                set_visible: !model.all_filles.is_empty()
             },
 
             gtk::Box {
@@ -108,7 +108,7 @@ impl SimpleComponent for FileListView {
                 },
 
                 #[watch]
-                set_visible: model.all_filles.len() == 0
+                set_visible: model.all_filles.is_empty()
             }
         }
     }
