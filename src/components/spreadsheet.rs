@@ -58,9 +58,7 @@ impl SpreadsheetModel {
         }
 
         let col = (col_char.to_ascii_uppercase() as u8 - b'A') as usize;
-        let row = row_str.parse::<usize>().ok()?.saturating_sub(1);
-
-        // Verificar que esté dentro del rango 10x10
+        let row = row_str.parse::<usize>().ok()?.saturating_sub(1);        
         if row < 10 && col < 10 {
             Some((row, col))
         } else {
