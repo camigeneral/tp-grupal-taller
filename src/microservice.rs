@@ -110,12 +110,21 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let node_streams_clone = Arc::clone(&node_streams);
         let main_address_clone = main_address.clone();
+        let last_command_sent_clone = Arc::clone(&last_command_sent);
+
         thread::spawn(move || loop {
             {
                 let streams = node_streams_clone.lock().unwrap();
                 if let Some(mut stream) = streams.get(&main_address_clone) {
                     let command_parts = vec!["SET", "doc1", "hola"];
                     let resp_command = format_resp_command(&command_parts);
+
+                    // ACTUALIZAMOS el último comando enviado
+                    {
+                        let mut last_command = last_command_sent_clone.lock().unwrap();
+                        *last_command = resp_command.clone();
+                    }
+
                     if let Err(e) = stream.write_all(resp_command.as_bytes()) {
                         eprintln!("Error al enviar comando SET doc1 hola: {}", e);
                     } else {
@@ -169,10 +178,7 @@ fn listen_to_redis_response(
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(microservice_socket.try_clone()?);
     loop {
-        let _ = connect_node_sender.clone();
-        let _ = last_command_sent.clone();
-        let _ = node_streams.clone();
-
+        
         let mut line = String::new();
         let bytes_read = reader.read_line(&mut line)?;
         if bytes_read == 0 {
@@ -202,6 +208,24 @@ fn listen_to_redis_response(
                 }
             }
         }
+
+        let response: Vec<&str> = line.split_whitespace().collect();
+
+        let first = response[0].to_uppercase();
+        let first_response = first.as_str();
+
+        match first_response {
+            "ASK" => { 
+                if response.len() < 3 {
+                    println!("Nodo de redireccion no disponible");
+                } else {
+                    let _ = send_command_to_nodes(connect_node_sender.clone(),node_streams.clone() ,last_command_sent.clone(), response);
+                }
+            }
+            _ => { 
+
+            }
+        }
     }
     Ok(())
 }
@@ -215,4 +239,41 @@ pub fn format_resp_command(command_parts: &[&str]) -> String {
     }
 
     resp_message
+}
+
+fn send_command_to_nodes(
+    connect_node_sender: MpscSender<TcpStream>,
+    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+    last_command_sent: Arc<Mutex<String>>,
+    response: Vec<&str>
+) -> Result<(), Box<dyn std::error::Error>> {
+    let last_line_cloned = last_command_sent.lock().unwrap().clone();
+    let mut locked_node_streams = node_streams.lock().unwrap();
+    let new_node_address = response[2].to_string();
+    
+    println!("Ultimo comando ejecutado: {:#?}", last_line_cloned);
+    println!("Redirigiendo a nodo: {}", new_node_address);
+    
+    if let Some(stream) = locked_node_streams.get_mut(&new_node_address) {
+        println!("Usando conexión existente al nodo {}", new_node_address);
+        stream.write_all(last_line_cloned.as_bytes())?;
+    } else {
+        println!("Creando nueva conexión al nodo {}", new_node_address);
+        let parts: Vec<&str> = "connect".split_whitespace().collect();
+        let resp_command = format_resp_command(&parts);
+        let mut final_stream = TcpStream::connect(new_node_address.clone())?;
+        final_stream.write_all(resp_command.as_bytes())?;
+
+        let mut cloned_stream_to_connect = final_stream.try_clone()?;
+        locked_node_streams.insert(new_node_address, final_stream);
+        
+        let _ = connect_node_sender.send(cloned_stream_to_connect.try_clone()?);
+        std::thread::sleep(std::time::Duration::from_millis(2));
+
+        if let Err(e) = cloned_stream_to_connect.write_all(last_line_cloned.as_bytes()) {
+            eprintln!("Error al reenviar el último comando: {}", e);
+        }
+
+    }
+    Ok(())
 }

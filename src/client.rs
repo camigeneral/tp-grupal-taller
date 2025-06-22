@@ -134,7 +134,7 @@ fn listen_to_redis_response(
                 if response.len() < 3 {
                     println!("Nodo de redireccion no disponible");
                 } else {
-                    let _ = send_command_to_nodes(ui_sender.clone(), connect_node_sender.clone(),node_streams.clone() ,last_command_sent.clone(), response);
+                    let _ = send_command_to_nodes(connect_node_sender.clone(),node_streams.clone() ,last_command_sent.clone(), response);
                 }
             }
             "STATUS" => {
@@ -165,8 +165,7 @@ fn listen_to_redis_response(
 
 
 
-fn send_command_to_nodes(    
-    _ui_sender: Option<Sender<AppMsg>>,
+fn send_command_to_nodes(
     connect_node_sender: MpscSender<TcpStream>,
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     last_command_sent: Arc<Mutex<String>>,
