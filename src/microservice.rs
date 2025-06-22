@@ -17,9 +17,7 @@ use std::time::Duration;
 #[path = "utils/logger.rs"]
 mod logger;
 
-
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-
     let redis_port = 4000;
     let main_address = format!("127.0.0.1:{}", redis_port);
 
@@ -32,17 +30,26 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
 
     use std::fs;
-    if fs::metadata(&log_path).map(|m| m.len() > 0).unwrap_or(false) {
+    if fs::metadata(&log_path)
+        .map(|m| m.len() > 0)
+        .unwrap_or(false)
+    {
         let _ = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&log_path)
-                .and_then(|mut file| writeln!(file, ""));
+            .create(true)
+            .append(true)
+            .open(&log_path)
+            .and_then(|mut file| writeln!(file, ""));
     }
 
     println!("Conectándome al server de redis en {:?}", main_address);
     let mut socket: TcpStream = TcpStream::connect(&main_address)?;
-    logger::log_event(&log_path, &format!("Microservicio conectandose al server de redis en {:?}", main_address));
+    logger::log_event(
+        &log_path,
+        &format!(
+            "Microservicio conectandose al server de redis en {:?}",
+            main_address
+        ),
+    );
     let redis_socket = socket.try_clone()?;
     let redis_socket_clone_for_hashmap = socket.try_clone()?;
 
@@ -55,7 +62,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         let cloned_node_streams = Arc::clone(&node_streams);
         let cloned_last_command = Arc::clone(&last_command_sent);
         let connect_node_sender_cloned = connect_node_sender.clone();
-    
+
         thread::spawn(move || {
             if let Err(e) = connect_to_nodes(
                 connect_node_sender_cloned,
@@ -68,11 +75,13 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // logger::log_event(&log_path, &format!("Error en la conexión con el nodo: {}", cloned_last_command.lock().unwrap()));
             }
         });
-    }   
+    }
 
-    
     {
-        node_streams.lock().unwrap().insert(main_address.clone(), redis_socket_clone_for_hashmap);
+        node_streams
+            .lock()
+            .unwrap()
+            .insert(main_address.clone(), redis_socket_clone_for_hashmap);
     }
 
     let parts: Vec<&str> = command.split_whitespace().collect();
@@ -80,11 +89,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
     socket.write_all(resp_command.as_bytes())?;
 
-    
     connect_node_sender.send(redis_socket)?;
 
-    
-    let otros_puertos = vec![4001, 4002]; // <-- agregá más si hace falta
+    let otros_puertos = vec![4001, 4002];
     for port in otros_puertos {
         let addr = format!("127.0.0.1:{}", port);
         match TcpStream::connect(&addr) {
@@ -97,7 +104,10 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                 extra_socket.write_all(resp_command.as_bytes())?;
 
                 let clone_for_map = extra_socket.try_clone()?;
-                node_streams.lock().unwrap().insert(addr.clone(), clone_for_map);
+                node_streams
+                    .lock()
+                    .unwrap()
+                    .insert(addr.clone(), clone_for_map);
 
                 connect_node_sender.send(extra_socket)?;
             }
@@ -239,7 +249,10 @@ fn listen_to_redis_response(
 
                 if let Err(e) = microservice_socket.write_all(mensaje_final.as_bytes()) {
                     eprintln!("Error al enviar mensaje de bienvenida: {}", e);
-                    logger::log_event(&log_path, &format!("Error al enviar mensaje de bienvenida: {}", e));
+                    logger::log_event(
+                        &log_path,
+                        &format!("Error al enviar mensaje de bienvenida: {}", e),
+                    );
                 }
             }
             "WRITTEN" => {

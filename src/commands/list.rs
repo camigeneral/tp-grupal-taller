@@ -1,4 +1,5 @@
 use super::redis_response::RedisResponse;
+use crate::documento::Documento;
 use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -13,7 +14,7 @@ use std::sync::{Arc, Mutex};
 /// * `RedisResponse` - La respuesta al comando, que incluye la longitud actualizada de la lista
 pub fn handle_linsert(
     request: &CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
@@ -61,7 +62,11 @@ pub fn handle_linsert(
     let mut docs_lock = docs.lock().unwrap();
     let entry_doc = docs_lock.entry(doc.clone()).or_default();
 
-    if let Some(index) = entry_doc.iter().position(|x| x == &pivot_str) {
+    // if let Some(index) = entry_doc.iter().position(|x| x == &pivot_str) {
+    if let Some(index) = entry_doc
+        .as_texto()
+        .and_then(|v| v.iter().position(|x| x == &pivot_str))
+    {
         match flag_str.as_str() {
             "before" => entry_doc.insert(index, element_str.clone()),
             "after" => {
@@ -109,7 +114,7 @@ pub fn handle_linsert(
 /// * `RedisResponse` - La respuesta al comando confirmando la actualización o un error
 pub fn handle_lset(
     request: &CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
@@ -172,7 +177,10 @@ pub fn handle_lset(
         );
     }
 
-    list[index_usize] = element_str.clone();
+    // list[index_usize] = element_str.clone();
+    if let Some(val) = list.get_mut(index_usize) {
+        *val = element_str.clone();
+    }
 
     let message = format!("Updated index {} with '{}'", index_i32, element_str);
     RedisResponse::new(
@@ -193,7 +201,7 @@ pub fn handle_lset(
 /// * `RedisResponse` - La respuesta al comando con la longitud de la lista
 pub fn handle_llen(
     request: &CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
@@ -233,7 +241,7 @@ pub fn handle_llen(
 /// * `RedisResponse` - La respuesta al comando con la longitud actualizada de la lista
 pub fn handle_rpush(
     request: &CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),

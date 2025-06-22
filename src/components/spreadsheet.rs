@@ -33,6 +33,7 @@ pub struct SpreadsheetModel {
 pub enum SpreadsheetMsg {
     CellChanged(usize, usize, String),
     RecalculateAll,
+    UpdateSheet(String, Vec<Vec<String>>),
 }
 
 #[derive(Debug)]
@@ -272,13 +273,9 @@ impl SimpleComponent for SpreadsheetModel {
         match message {
             SpreadsheetMsg::CellChanged(row, col, content) => {
                 self.update_cell(row, col, content);
-
                 self.recalculate_all();
-
                 self.update_display();
-
                 let cell_name = format!("{}{}", (b'A' + col as u8) as char, row + 1);
-
                 sender
                     .output(SpreadsheetOutput::ContentChanged(
                         cell_name,
@@ -288,6 +285,21 @@ impl SimpleComponent for SpreadsheetModel {
             }
             SpreadsheetMsg::RecalculateAll => {
                 self.recalculate_all();
+                self.update_display();
+            }
+            SpreadsheetMsg::UpdateSheet(_file_name, filas) => {
+                // Actualiza las celdas con los datos recibidos
+                for i in 0..10 {
+                    for j in 0..10 {
+                        let value = filas
+                            .get(i)
+                            .and_then(|row| row.get(j))
+                            .cloned()
+                            .unwrap_or_default();
+                        self.cells[i][j] = Cell::new();
+                        self.update_cell(i, j, value);
+                    }
+                }
                 self.update_display();
             }
         }

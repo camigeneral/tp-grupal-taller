@@ -45,7 +45,7 @@ pub struct CommandRequest {
     pub command: String,
     pub key: Option<String>,
     pub arguments: Vec<ValueType>,
-    pub unparsed_command: String
+    pub unparsed_command: String,
 }
 
 /// Representa una respuesta que puede enviarse a un cliente en formato RESP.
@@ -135,6 +135,7 @@ pub fn write_response(stream: &TcpStream, response: &CommandResponse) -> std::io
 /// String formateada según el protocolo RESP
 #[allow(dead_code)]
 pub fn format_resp_command(command_parts: &[&str]) -> String {
+
     let mut resp_message = format!("*{}\r\n", command_parts.len());
 
     for part in command_parts {
@@ -144,13 +145,29 @@ pub fn format_resp_command(command_parts: &[&str]) -> String {
     resp_message
 }
 
+#[allow(dead_code)]
+pub fn format_resp_publish(channel: &str, message: &str) -> String {
+    let command_parts = ["PUBLISH", channel, message];
+    let mut resp_message = format!("*{}\r\n", command_parts.len());
+
+    for part in &command_parts {
+        resp_message.push_str(&format!("${}\r\n{}\r\n", part.len(), part));
+    }
+
+    resp_message
+}
+
+
+
 /// Parsea una línea en formato RESP que representa un array de cadenas (`Vec<String>`).
 ///
 /// Lee el número de elementos del array (`*<n>`), seguido por `n` cadenas tipo bulk (`$<len>\r\n<value>\r\n`).
 ///
 /// # Errores
 /// Retorna `std::io::Error` si el formato RESP no es válido o si ocurre un error de lectura.
-pub fn parse_resp_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<(Vec<String>, String)> {
+pub fn parse_resp_command(
+    reader: &mut BufReader<TcpStream>,
+) -> std::io::Result<(Vec<String>, String)> {
     let mut line = String::new();
     let mut unparsed_command = String::new();
 
@@ -203,9 +220,6 @@ pub fn parse_resp_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<
     Ok((result, unparsed_command))
 }
 
-
-
-
 /// Escribe una cadena como bulk string en formato RESP (`$<len>\r\n<value>\r\n`).
 ///
 /// # Errores
@@ -240,7 +254,9 @@ pub fn write_resp_error(mut stream: &TcpStream, msg: &str) -> std::io::Result<()
     stream.write_all(format!("-ERR {}\r\n", msg).as_bytes())
 }
 
-pub fn parse_replica_command(reader: &mut BufReader<std::io::Cursor<String>>) -> std::io::Result<CommandRequest> {
+pub fn parse_replica_command(
+    reader: &mut BufReader<std::io::Cursor<String>>,
+) -> std::io::Result<CommandRequest> {
     let (command_parts, unparsed_command) = parse_replica_resp(reader)?;
 
     if command_parts.is_empty() {
@@ -270,7 +286,9 @@ pub fn parse_replica_command(reader: &mut BufReader<std::io::Cursor<String>>) ->
     Ok(request)
 }
 
-pub fn parse_replica_resp(reader: &mut BufReader<std::io::Cursor<String>>) -> std::io::Result<(Vec<String>, String)> {
+pub fn parse_replica_resp(
+    reader: &mut BufReader<std::io::Cursor<String>>,
+) -> std::io::Result<(Vec<String>, String)> {
     let mut line = String::new();
     let mut unparsed_command = String::new();
 

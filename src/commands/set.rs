@@ -107,14 +107,14 @@ pub fn handle_smembers(
     }
 }
 
-// /// Maneja el comando SSCAN que busca suscriptores en un set que coincidan con un patrón
-// ///
-// /// # Argumentos
-// /// * `request` - La solicitud de comando que contiene el set a consultar y opcionalmente un patrón de búsqueda
-// /// * `shared_sets` - Un mapa compartido y protegido que asocia set con listas de clientes suscritos
-// ///
-// /// # Retorno
-// /// * `RedisResponse` - La respuesta al comando con los suscriptores que coinciden con el patrón
+/// Maneja el comando SSCAN que busca suscriptores en un set que coincidan con un patrón
+///
+/// # Argumentos
+/// * `request` - La solicitud de comando que contiene el set a consultar y opcionalmente un patrón de búsqueda
+/// * `shared_sets` - Un mapa compartido y protegido que asocia set con listas de clientes suscritos
+///
+/// # Retorno
+/// * `RedisResponse` - La respuesta al comando con los suscriptores que coinciden con el patrón
 // pub fn handle_sscan(
 //     request: &CommandRequest,
 //     shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
@@ -265,7 +265,7 @@ fn extract_string(value: &ValueType) -> Option<String> {
     match value {
         ValueType::String(s) => Some(s.clone()),
         ValueType::Integer(i) => Some(i.to_string()),
-        _ => None, // Podés ampliar los casos si necesitás
+        _ => None,
     }
 }
 

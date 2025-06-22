@@ -9,7 +9,7 @@ redis:
 	for i in $$(seq 1 $(nodes)); do \
 		PORT=$$((4000 + $$i - 1)); \
 		echo "Iniciando Redis Server $$i en puerto $$PORT"; \
-		gnome-terminal -- bash -c "cargo run --bin redis_server $$PORT; exec bash"; \
+		cargo run --bin redis_server $$PORT; \
 	done
 
 
