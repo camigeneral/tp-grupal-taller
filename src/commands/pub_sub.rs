@@ -48,7 +48,6 @@ pub fn handle_subscribe(
 
         let notification = format!("CLIENT {}|{}", client_addr, doc);
 
-        // RETORNAR la respuesta de éxito aquí
         RedisResponse::new(
             CommandResponse::String(notification),
             false,

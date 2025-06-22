@@ -16,6 +16,8 @@ use std::thread;
 use std::time::Duration;
 #[path = "utils/logger.rs"]
 mod logger;
+#[path = "utils/redis_parser.rs"]
+mod redis_parser;
 
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -273,6 +275,28 @@ fn listen_to_redis_response(
                 } else {
                     let _ = send_command_to_nodes(connect_node_sender.clone(),node_streams.clone() ,last_command_sent.clone(), response);
                 }
+            }
+            "NODEFILES" => {
+                let paths = std::fs::read_dir(".")
+                    .unwrap()
+                    .filter_map(|entry| {
+                        let entry = entry.ok()?;
+                        let path = entry.path();
+                        let fname = path.file_name()?.to_str()?.to_string();
+                        if fname.starts_with("redis_node_") && fname.ends_with(".rdb") {
+                            Some(fname)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                let response = paths.join(",");
+                redis_parser::write_response(
+                    &microservice_socket,
+                    &redis_parser::CommandResponse::String(response),
+                )?;
+                continue;
             }
             _ => { 
                 // if let Some(sender) = &ui_sender {

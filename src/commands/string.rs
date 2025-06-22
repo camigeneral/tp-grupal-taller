@@ -232,6 +232,19 @@ pub fn handle_welcome(
     )
 }
 
+pub fn handle_list_files(
+) -> RedisResponse {
+    
+    let notification = format!("NODEFILES");
+
+    RedisResponse::new(
+        CommandResponse::String(notification.clone()),
+        true,
+        notification,
+        "".to_string(),
+    )
+}
+
 // #[cfg(test)]
 // mod tests {
 //     use super::*;
