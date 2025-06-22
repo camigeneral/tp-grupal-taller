@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use crate::hashing::get_hash_slots;
+use crate::encryption::{xor, ENCRYPTION_KEY};
 use crate::local_node::NodeRole;
 use crate::local_node::NodeState;
 use crate::utils::redis_parser::CommandResponse;
@@ -19,6 +20,7 @@ mod client_info;
 mod commands;
 mod documento;
 mod hashing;
+mod encryption;
 mod local_node;
 mod peer_node;
 mod redis_node_handler;
