@@ -40,6 +40,8 @@ pub enum TextEditorMessage {
 pub enum TextEditorOutputMessage {
     /// Mensaje que indica que se debe volver a la vista anterior.
     GoBack,
+    ContentAdded(String, i32),
+    ContentRemoved(i32, i32),
 }
 
 #[relm4::component(pub)]
@@ -137,45 +139,65 @@ impl SimpleComponent for TextEditorModel {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: TextEditorMessage, _sender: ComponentSender<Self>) {    
+    fn update(&mut self, message: TextEditorMessage, sender: ComponentSender<Self>) {    
         match message {
             TextEditorMessage::EnterPressed(offset) => {
                 if !self.content_changed_manually {
                     return;
                 }
 
-                println!("Enter presionado en posición: {}", offset);
+                let _ = sender.output(TextEditorOutputMessage::ContentAdded(
+                    "<enter>".to_string(), offset));                
+
             }
             TextEditorMessage::TabPressed(offset) => {
                 if !self.content_changed_manually {
                     return;
                 }
 
-                println!("Tab presionado en posición: {}", offset);
+                let _ = sender.output(TextEditorOutputMessage::ContentAdded(
+                    "<tab>".to_string(), offset));  
             }
-            TextEditorMessage::ContentAdded(new_text, offset) => {
+            TextEditorMessage::ContentAdded(mut new_text, offset) => {
                 if !self.content_changed_manually  {
                     return;
+                }                
+                if new_text == " " {
+                    new_text = "<space>".to_string();
                 }
-                println!("Texto añadido: '{}' en posición: {}", new_text, offset);
+                let _ = sender.output(TextEditorOutputMessage::ContentAdded(new_text, offset));                
             }
             TextEditorMessage::ContentRemoved(start_offset, end_offset) => {
-                println!("Estoy aca?");
                 if !self.content_changed_manually  {
                     return;
                 }
-                println!("Texto eliminado desde: {} hasta: {}", start_offset, end_offset);
             }
             TextEditorMessage::UpdateFile(file_name, contributors, content) => {
                 *self.programmatic_update.borrow_mut() = true;
-                self.content_changed_manually = false; 
-                
+                self.content_changed_manually = false;
+            
                 self.file_name = file_name;
                 self.num_contributors = contributors;
                 self.content = content;
+            
+                let insert_mark = self.buffer.get_insert();
+                let iter = self.buffer.iter_at_mark(&insert_mark);
+                let cursor_offset = iter.offset();
+                  
                 self.buffer.set_text(&self.content);
+            
+                let new_content_length = self.buffer.char_count();
                 
-                self.content_changed_manually = true; 
+                if new_content_length > 0 {
+                    let safe_offset = cursor_offset.min(new_content_length - 1);
+                    let new_iter = self.buffer.iter_at_offset(safe_offset);
+                    self.buffer.place_cursor(&new_iter);
+                } else {
+                    let start_iter = self.buffer.start_iter();
+                    self.buffer.place_cursor(&start_iter);
+                }
+            
+                self.content_changed_manually = true;
                 *self.programmatic_update.borrow_mut() = false;
             }
             TextEditorMessage::ResetEditor => {

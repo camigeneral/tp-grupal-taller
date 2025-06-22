@@ -39,7 +39,6 @@ pub struct AppModel {
     current_file:String,
     subscribed_files: HashMap<String, bool>,
     error_modal: Controller<ErrorModal>,
-
 }
 
 #[derive(Debug)]
@@ -60,7 +59,9 @@ pub enum AppMsg {
     ManageResponse(String),
     ManageSubscribeResponse(String),
     ManageUnsubscribeResponse(String),
+    SetContentFileCommand(String),
     Error(String),
+    AddContent(String, String, i32)
 
 }
 
@@ -161,6 +162,8 @@ impl SimpleComponent for AppModel {
             |command: FileWorkspaceOutputMessage| match command {
                 FileWorkspaceOutputMessage::SubscribeFile(file) => AppMsg::SubscribeFile(file),
                 FileWorkspaceOutputMessage::UnsubscribeFile(file) => AppMsg::UnsubscribeFile(file),
+                FileWorkspaceOutputMessage::ContentAdded(file, text , offset) => AppMsg::AddContent(file, text, offset),
+                FileWorkspaceOutputMessage::ContentRemoved(file, start_offset , stop_offset) => AppMsg::RefreshData,
             },
         );
 
@@ -235,11 +238,6 @@ impl SimpleComponent for AppModel {
                     .send(NavbarMsg::SetLoggedInUser(username))
                     .unwrap();
 
-                let files_manager_cont_sender = self.files_manager_cont.sender().clone();
-
-                files_manager_cont_sender
-                    .send(FileWorkspaceMsg::ReloadFiles)
-                    .unwrap();
                 self.header_cont
                     .sender()
                     .send(NavbarMsg::SetConnectionStatus(true))
@@ -269,13 +267,14 @@ impl SimpleComponent for AppModel {
             }
 
             AppMsg::ManageResponse(resp) => {
-                if resp != "OK" {
-                    self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
+                if resp != "OK" {                
                     return;
                 }
                 if self.command.contains("AUTH") {
                     sender.input(AppMsg::LoginSuccess(self.username.clone()));
                 }
+                self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
+                self.command.clear();
             }
             AppMsg::ManageSubscribeResponse(qty_subs) => {
                 let qty_subs_int = match qty_subs.parse::<i32>() {
@@ -301,6 +300,15 @@ impl SimpleComponent for AppModel {
                 sender.input(AppMsg::ExecuteCommand);
                 // self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
             }
+            AppMsg::AddContent(file_id, text, offset) => {
+                self.command = format!("WRITE|{}|{}|{} {}", offset, text, file_id, file_id);
+                sender.input(AppMsg::ExecuteCommand);
+            }
+
+            AppMsg::SetContentFileCommand(command) => {
+                self.command = command;
+                sender.input(AppMsg::ExecuteCommand);
+            }
 
             AppMsg::SubscribeFile(file) => {
                 self.current_file = file;
@@ -318,7 +326,6 @@ impl SimpleComponent for AppModel {
 
             AppMsg::ManageUnsubscribeResponse(response) => {
                 if response == "OK" {
-                    // Remover el archivo de los suscritos
                     self.subscribed_files.remove(&self.current_file);
                     println!("Desuscrito del archivo: {}", self.current_file);
                 } else {

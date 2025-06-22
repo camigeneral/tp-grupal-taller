@@ -1,5 +1,7 @@
 extern crate gtk4;
 extern crate relm4;
+use crate::components::text_editor::TextEditorOutputMessage;
+
 use self::gtk4::prelude::{BoxExt, ButtonExt, OrientableExt, WidgetExt};
 use self::relm4::{
     gtk, Component, ComponentController, ComponentParts, ComponentSender, Controller,
@@ -48,6 +50,9 @@ pub enum FileEditorMessage {
 /// Enum que define los posibles mensajes de salida del editor de archivos.
 #[derive(Debug)]
 pub enum FileEditorOutputMessage {
+    ContentAdded(String, i32),
+    ContentRemoved(i32, i32),
+
     /// Mensaje que indica que se debe volver a la vista anterior.
     GoBack,
 }
@@ -112,7 +117,11 @@ impl SimpleComponent for FileEditorModel {
 
         let text_editor_cont = TextEditorModel::builder()
             .launch((file_name.clone(), num_contributors, content.clone()))
-            .forward(sender.input_sender(), |_msg| FileEditorMessage::ResetEditor);
+            .forward(sender.input_sender(),|msg| match msg {
+                TextEditorOutputMessage::GoBack => FileEditorMessage::ResetEditor,
+                TextEditorOutputMessage::ContentAdded(text, offset) => FileEditorMessage::ContentAdded(text, offset),
+                TextEditorOutputMessage::ContentRemoved(start_offset, stop_offset ) => FileEditorMessage::ResetEditor,
+            }, );
 
         let model = FileEditorModel {
             file_name,
@@ -130,10 +139,10 @@ impl SimpleComponent for FileEditorModel {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: FileEditorMessage, _sender: ComponentSender<Self>) {
+    fn update(&mut self, message: FileEditorMessage, sender: ComponentSender<Self>) {
         match message {
-            FileEditorMessage::ContentAdded(_new_text, _offset) => {
-                //Llamado a la api para insertar caracter
+            FileEditorMessage::ContentAdded(new_text, offset) => {
+                let _ = sender.output(FileEditorOutputMessage::ContentAdded(new_text, offset));
             }
             FileEditorMessage::ContentRemoved(_start_offset, _end_offset) => {}
             FileEditorMessage::UpdateFile(file_name, contributors, content, file_type) => {
