@@ -65,7 +65,7 @@ pub fn client_run(
 
     for command in rx {
         let trimmed_command = command.to_string().trim().to_lowercase();
-        if trimmed_command == "close" {
+        if trimmed_command == "close"  {
             println!("Desconectando del servidor");
             let parts: Vec<&str> = trimmed_command.split_whitespace().collect();
             let resp_command = format_resp_publish(&parts[0], &parts[1]);
@@ -83,10 +83,11 @@ pub fn client_run(
             let resp_command;
             if parts[0] == "AUTH" {
                 resp_command = format_resp_command(&parts);
-            } else {
+            } else if parts[0] == "subscribe"  || parts[0] == "unsubscribe"  {
+                resp_command = format_resp_command(&parts);
+            }else{
                 resp_command = format_resp_publish(&parts[1], &command);
             }
-            
 
             {
                 let mut last_command = last_command_sent.lock().unwrap();
