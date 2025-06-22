@@ -37,23 +37,22 @@ pub fn handle_welcome(request: &CommandRequest, _active_clients: &Arc<Mutex<Hash
 
     if let CommandResponse::String(ref s) = response.response {
         if let Some(qty_subs) = s.split_whitespace().last() {
-            notification = format!("STATUS {}|{:?}", client_addr_str, qty_subs);
+            notification = format!("status {}|{:?}", client_addr_str, qty_subs);
         };
     }
     RedisResponse::new(CommandResponse::String(notification.clone()), true, notification, doc)
 }
 
 
-pub fn set_content_file( request: &CommandRequest,
-     _docs: &Arc<Mutex<HashMap<String, Documento>>>,
+pub fn set_content_file(
+    request: &CommandRequest,
+    docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
-    // valor, posición. lset(posicion, valor)
-    //Written CommandResponse valor|posicion
     let doc = match &request.key {
         Some(k) => k.clone(),
         None => {
             return RedisResponse::new(
-                CommandResponse::Error("Usage: LTRIM <key> <start> <stop>".to_string()),
+                CommandResponse::Error("Falta el nombre del documento".to_string()),
                 false,
                 "".to_string(),
                 "".to_string(),
@@ -61,7 +60,80 @@ pub fn set_content_file( request: &CommandRequest,
         }
     };
 
-    RedisResponse::new(CommandResponse::Ok, true, "Ok".to_string(), doc)
+    if request.arguments.len() < 2 {
+        return RedisResponse::new(
+            CommandResponse::Error("Faltan argumentos: índice y carácter".to_string()),
+            false,
+            "".to_string(),
+            doc,
+        );
+    }
+    println!("Arguments: {:#?}",request.arguments);
+    let index = match &request.arguments[0] {
+        ValueType::Integer(i) => *i as usize,
+        ValueType::String(s) => match s.parse::<usize>() {
+            Ok(i) => i,
+            _ => {
+                return RedisResponse::new(
+                    CommandResponse::Error("El índice debe ser un entero".to_string()),
+                    false,
+                    "".to_string(),
+                    doc,
+                )
+            }
+        },
+        _ => {
+            return RedisResponse::new(
+                CommandResponse::Error("El índice debe ser un entero".to_string()),
+                false,
+                "".to_string(),
+                doc,
+            )
+        }
+    };
+
+    let caracter = match &request.arguments[1] {
+        ValueType::String(s) => {
+            match s.as_str() {
+                "<space>" =>  " ".to_string(),
+                "<enter>" =>  "\n".to_string(),
+                "<tab>" =>  "\t".to_string(),
+                _ =>  s.clone()
+            }
+        },
+        _ => {
+            return RedisResponse::new(
+                CommandResponse::Error("El carácter debe ser un string".to_string()),
+                false,
+                "".to_string(),
+                doc,
+            )
+        }
+    };
+
+    let mut docs_lock = docs.lock().unwrap();
+    let documento = docs_lock.entry(doc.clone()).or_default();
+
+    match documento {
+        Documento::Texto(ref mut vec) => {
+            println!("vec: {:#?}", vec);
+            if index > vec.len() {
+                vec.push(caracter);
+            } else {
+
+                
+                vec.insert(index, caracter);
+            }
+            
+            RedisResponse::new(CommandResponse::String(format!("update-files {}", doc)), true, "Carácter insertado".to_string(), doc)
+        }
+        _ => RedisResponse::new(
+            CommandResponse::Error("El documento no es de texto".to_string()),
+            false,
+            "".to_string(),
+            doc,
+        ),
+    }
 }
 
 
