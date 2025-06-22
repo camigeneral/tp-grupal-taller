@@ -146,15 +146,10 @@ pub fn format_resp_command(command_parts: &[&str]) -> String {
 }
 
 #[allow(dead_code)]
-pub fn format_resp_publish(channel: &str, message: &str) -> String {
-    let command_parts = ["PUBLISH", channel, message];
-    let mut resp_message = format!("*{}\r\n", command_parts.len());
+pub fn format_resp_publish(channel: &str, message: &str) -> String {    
+    let command_parts = ["publish", channel, message];
 
-    for part in &command_parts {
-        resp_message.push_str(&format!("${}\r\n{}\r\n", part.len(), part));
-    }
-
-    resp_message
+    format_resp_command(&command_parts)
 }
 
 
