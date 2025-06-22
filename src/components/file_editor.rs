@@ -162,7 +162,7 @@ impl SimpleComponent for FileEditorModel {
                         self.text_editor_visible = false;
                         self.spreadsheet_visible = true;
                         let filas: Vec<Vec<String>> = if content.trim().is_empty() {
-                            vec![vec![String::new(); 10]; 10] // Matriz vacía 10x10
+                            vec![vec![String::new(); 10]; 10] 
                         } else {
                             content
                                 .lines()

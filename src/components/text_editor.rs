@@ -29,8 +29,8 @@ pub enum TextEditorMessage {
     ContentRemoved(i32, i32),
     UpdateFile(String, i32, String),
     ResetEditor,
-    EnterPressed(i32),  // Nuevo mensaje para Enter
-    TabPressed(i32),    // Nuevo mensaje para Tab
+    EnterPressed(i32),  
+    TabPressed(i32),    
 }
 
 /// Enum que define los posibles mensajes de salida del editor de archivos.
@@ -128,12 +128,10 @@ impl SimpleComponent for TextEditorModel {
                 println!("Texto eliminado desde: {} hasta: {}", start_offset, end_offset);
             }
             TextEditorMessage::EnterPressed(offset) => {
-                println!("¡Enter presionado! en posición: {}", offset);
-                // Aquí puedes agregar tu lógica específica para Enter
+                println!("Enter presionado en posición: {}", offset);
             }
             TextEditorMessage::TabPressed(offset) => {
-                println!("¡Tab presionado! en posición: {}", offset);
-                // Aquí puedes agregar tu lógica específica para Tab
+                println!("Tab presionado en posición: {}", offset);
             }
             TextEditorMessage::UpdateFile(file_name, contributors, content) => {
                 self.file_name = file_name;
