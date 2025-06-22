@@ -169,17 +169,11 @@ impl SimpleComponent for FileWorkspace {
 
             FileWorkspaceMsg::OpenFile(file, file_type) => {
                 self.current_file = file.clone();
-
                 if let Some(doc) = self.files.get(&(file.clone(), file_type.clone())) {
                     let (content, qty) = match doc {
                         Documento::Texto(lineas) => (lineas.join("\n"), lineas.len() as i32),
                         Documento::Calculo(filas) => (
-                            filas
-                                .iter()
-                                .map(|fila| fila.join(","))
-                                .collect::<Vec<_>>()
-                                .join("\n"),
-                            filas.len() as i32,
+                            filas.join("\n"), filas.len() as i32
                         ),
                     };
 
@@ -189,8 +183,6 @@ impl SimpleComponent for FileWorkspace {
                         .unwrap();
 
                     self.editor_visible = true;
-                } else {
-                    println!("Archivo no encontrado: {} ({:?})", file, file_type.clone());
                 }
             }
             FileWorkspaceMsg::CloseEditor => {
@@ -264,6 +256,45 @@ impl SimpleComponent for FileWorkspace {
     }
 }
 
+fn parse_cell_reference(cell_ref: &str) -> Option<(usize, usize)> {
+    if cell_ref.len() < 2 {
+        return None;
+    }
+
+    let mut chars = cell_ref.chars();
+    let col_char = chars.next()?;
+    let row_str: String = chars.collect();
+
+    if !col_char.is_ascii_alphabetic() {
+        return None;
+    }
+
+    let col = (col_char.to_ascii_uppercase() as u8 - b'A') as usize;
+    let row = row_str.parse::<usize>().ok()?.saturating_sub(1);
+
+    if row < 10 && col < 10 {
+        Some((row, col))
+    } else {
+        None
+    }
+}
+
+fn convert_calc_data_to_matrix(calc_entries: &[String]) -> Vec<Vec<String>> {
+    let mut matrix: Vec<Vec<String>> = vec![vec![String::new(); 10]; 10];
+    
+    for entry in calc_entries {
+        if let Some(colon_pos) = entry.find(':') {
+            let cell_ref = &entry[..colon_pos];
+            let value = &entry[colon_pos + 1..];
+            if let Some((row, col)) = parse_cell_reference(cell_ref) {
+                matrix[row][col] = value.to_string();
+            }
+        }
+    }
+    
+    matrix
+}
+
 fn get_files_list(
     file_path: &String,
 ) -> Vec<(std::string::String, FileType, std::string::String, i32)> {
@@ -277,11 +308,7 @@ fn get_files_list(
                 (nombre, FileType::Text, contenido, qty)
             }
             Documento::Calculo(filas) => {
-                let contenido = filas
-                    .iter()
-                    .map(|fila| fila.join(","))
-                    .collect::<Vec<_>>()
-                    .join("\n");
+                let contenido = filas.join("\n");
                 let qty = filas.len() as i32;
                 (nombre, FileType::Sheet, contenido, qty)
             }
@@ -317,11 +344,18 @@ pub fn get_file_content_workspace(
                         .collect();
                     docs.insert(doc_name, Documento::Texto(messages));
                 } else if doc_name.ends_with(".xlsx") {
-                    let filas: Vec<Vec<String>> = data
+                    let calc_entries: Vec<String> = data
                         .split("/--/")
                         .filter(|s| !s.is_empty())
-                        .map(|fila| fila.split(',').map(|c| c.to_string()).collect())
+                        .map(|s| s.to_string())
                         .collect();
+                    
+                    let matrix = convert_calc_data_to_matrix(&calc_entries);
+                    let filas: Vec<String> = matrix
+                        .into_iter()
+                        .map(|row| row.join(","))
+                        .collect();
+                    
                     docs.insert(doc_name, Documento::Calculo(filas));
                 }
             }

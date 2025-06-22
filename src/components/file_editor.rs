@@ -162,16 +162,24 @@ impl SimpleComponent for FileEditorModel {
                         self.text_editor_visible = false;
                         self.spreadsheet_visible = true;
                         let filas: Vec<Vec<String>> = if content.trim().is_empty() {
-                            vec![]
+                            vec![vec![String::new(); 10]; 10] // Matriz vacía 10x10
                         } else {
                             content
                                 .lines()
-                                .map(|line| line.split(',').map(|c| c.to_string()).collect())
+                                .map(|line| {
+                                    let mut row: Vec<String> = line.split(',').map(|c| c.to_string()).collect();
+                                    row.resize(10, String::new());
+                                    row
+                                })
                                 .collect()
                         };
+                        
+                        let mut final_filas = filas;
+                        final_filas.resize_with(10, || vec![String::new(); 10]);
+                        
                         self.spreadsheet_ctrl
                             .sender()
-                            .send(SpreadsheetMsg::UpdateSheet(file_name.clone(), filas))
+                            .send(SpreadsheetMsg::UpdateSheet(file_name.clone(), final_filas))
                             .unwrap();
                     }
                     _ => {
