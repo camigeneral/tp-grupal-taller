@@ -315,7 +315,6 @@ fn handle_node(
                     }
                     // si lo conozco, actualizo todo menos el stream
                     else {
-                        println!("Recibido: {:?}", input);
                         let peer_node_to_update = lock_nodes.get_mut(&node_address).unwrap();
                         peer_node_to_update.role = node_role;
                         peer_node_to_update.hash_range = (*hash_range_start, *hash_range_end);
