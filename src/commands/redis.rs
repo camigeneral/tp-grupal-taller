@@ -73,6 +73,7 @@ pub fn execute_replica_command(
         "srem" => set::handle_srem(&request, shared_sets),
         "rpush" => list::handle_rpush(&request, docs),
         "lset" => list::handle_lset(&request, docs),
+        "add_content" => client_action::set_content_file(&request, &docs),
         "linsert" => list::handle_linsert(&request, docs),
         _ => RedisResponse::new(
             CommandResponse::Error("Unknown".to_string()),
