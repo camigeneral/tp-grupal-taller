@@ -1,11 +1,5 @@
-pub const ENCRYPTION_KEY: &[u8] = b"clavesecreta";
+pub const ENCRYPTION_KEY: &[u8] = b"clavesupersecreta";
 
-// pub fn xor(message: &[u8], key: &[u8]) -> Vec<u8> {
-//     message.iter()
-//         .enumerate()
-//         .map(|(i, byte)| byte ^ key[i % key.len()])
-//         .collect()
-// }
 
 pub fn encrypt_xor(input: &[u8], key: &[u8]) -> Vec<u8> {
     let mut encrypted = Vec::new();
@@ -24,10 +18,10 @@ pub fn encrypt_xor(input: &[u8], key: &[u8]) -> Vec<u8> {
             encrypted.push(xor_byte);
         }
     }
+    encrypted.push(b'\n');
 
     encrypted
 }
-
 
 
 pub fn decrypt_xor(encrypted: &[u8], key: &[u8]) -> Vec<u8> {
@@ -60,8 +54,6 @@ pub fn decrypt_xor(encrypted: &[u8], key: &[u8]) -> Vec<u8> {
 
     result
 }
-
-
 
 
 #[cfg(test)]
