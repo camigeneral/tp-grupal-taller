@@ -330,7 +330,7 @@ pub fn handle_rpush(
     };
 
     let mut docs_lock = docs.lock().unwrap();
-    let list: &mut Vec<String> = docs_lock.entry(doc.clone()).or_default();
+    let list: &mut Documento = docs_lock.entry(doc.clone()).or_default();
         let list_len = list.len() as isize;
 
     let mut start = if start_offset < 0 {
