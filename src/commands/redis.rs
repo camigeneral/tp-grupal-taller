@@ -55,11 +55,11 @@ pub fn execute_command(
     }
 }
 
-#[allow(unused_variables)]
+
 pub fn execute_replica_command(
     request: CommandRequest,
     docs: &Arc<Mutex<HashMap<String, Documento>>>,
-    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    _document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
     shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> RedisResponse {
     match request.command.as_str() {
