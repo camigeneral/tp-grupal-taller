@@ -129,7 +129,6 @@ fn start_server(
     let shared_documents: Arc<Mutex<HashMap<String, Documento>>> =
         Arc::new(Mutex::new(stored_documents));
     let (document_subscribers, shared_sets) = initialize_datasets(&shared_documents);
-
     let active_clients = Arc::new(Mutex::new(HashMap::new()));
     let logged_clients: Arc<Mutex<HashMap<String, bool>>> = Arc::new(Mutex::new(HashMap::new()));
 
@@ -398,6 +397,7 @@ fn handle_client(
         let response = match resolve_key_location(key, &local_node, &peer_nodes) {
             Ok(()) => {
                 let unparsed_command = command_request.unparsed_command.clone();
+
                 let redis_response = redis::execute_command(
                     command_request,
                     &shared_documents,
@@ -614,8 +614,11 @@ pub fn persist_documents(
                 Documento::Texto(lineas) => {
                     let mut document_data = format!("{}/++/", document_id);
                     for linea in lineas {
-                        document_data.push_str(linea);
-                        document_data.push_str("/--/");
+                        if linea == "\n" {
+                            document_data.push_str("/--/");
+                        } else {
+                            document_data.push_str(linea);
+                        }
                     }
                     writeln!(persistence_file, "{}", document_data)?;
                 }
@@ -642,7 +645,7 @@ pub fn persist_documents(
 /// HashMap con los documentos y sus mensajes, o un error si hay problemas
 /// al leer el archivo
 pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Documento>, String> {
-    let mut documents = HashMap::new();
+    let mut documents: HashMap<String, Documento> = HashMap::new();
     let file = File::open(file_path).map_err(|_| "archivo-no-encontrado".to_string())?;
     let reader = BufReader::new(file);
     let lines = reader.lines();
@@ -658,12 +661,12 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Documen
 
         if document_id.ends_with(".txt") {
             let joined: String = messages_data
-            .split("/--/")
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join("");
+                .split("/--/")
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join("");
             let chars: Vec<String> = joined.chars().map(|c| c.to_string()).collect();
-            documents.insert(document_id, Documento::Texto(chars));    
+            documents.insert(document_id, Documento::Texto(chars.clone()));    
         } else {
             let filas: Vec<String> = messages_data
                 .split("/--/")
