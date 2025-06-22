@@ -92,34 +92,34 @@ impl SpreadsheetModel {
                 }
             }
         }
-        self.simple_calculator(&processed_expr)
+        Self::simple_calculator(&processed_expr)
     }
     // Evaluación recursiva con procedencia de operadores
-    fn simple_calculator(&self, expr: &str) -> Result<f64, String> {
+    fn simple_calculator(expr: &str) -> Result<f64, String> {
         let expr = expr.replace(" ", "");
         if let Some(pos) = expr.rfind('+') {
-            let left = self.simple_calculator(&expr[..pos])?;
-            let right = self.simple_calculator(&expr[pos + 1..])?;
+            let left = Self::simple_calculator(&expr[..pos])?;
+            let right = Self::simple_calculator(&expr[pos + 1..])?;
             return Ok(left + right);
         }
 
         if let Some(pos) = expr.rfind('-') {
             //TODO: arreglar manejo de negativos
             if pos > 0 {
-                let left = self.simple_calculator(&expr[..pos])?;
-                let right = self.simple_calculator(&expr[pos + 1..])?;
+                let left = Self::simple_calculator(&expr[..pos])?;
+                let right = Self::simple_calculator(&expr[pos + 1..])?;
                 return Ok(left - right);
             }
         }
         if let Some(pos) = expr.rfind('*') {
-            let left = self.simple_calculator(&expr[..pos])?;
-            let right = self.simple_calculator(&expr[pos + 1..])?;
+            let left = Self::simple_calculator(&expr[..pos])?;
+            let right = Self::simple_calculator(&expr[pos + 1..])?;
             return Ok(left * right);
         }
 
         if let Some(pos) = expr.rfind('/') {
-            let left = self.simple_calculator(&expr[..pos])?;
-            let right = self.simple_calculator(&expr[pos + 1..])?;
+            let left = Self::simple_calculator(&expr[..pos])?;
+            let right = Self::simple_calculator(&expr[pos + 1..])?;
             if right == 0.0 {
                 return Err("División por cero".to_string());
             }

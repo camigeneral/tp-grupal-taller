@@ -23,7 +23,7 @@ pub fn handle_auth(
         }
     };
 
-    if request.arguments.len() >= 2 || request.arguments.len() < 1 {
+    if request.arguments.len() >= 2 || request.arguments.is_empty() {
         println!("Cantidad de credenciales_: {:#?}", request.arguments.len());
         return RedisResponse::new(
             CommandResponse::Error(
@@ -93,9 +93,9 @@ fn valid_credentials(username: String, password: String) -> bool {
     }
 
     match user_password {
-        Some(hashed_pass) => return *hashed_pass == hashed_password,
+        Some(hashed_pass) => *hashed_pass == hashed_password,
         _ => {
-            return false;
+            false
         }
     }
 }

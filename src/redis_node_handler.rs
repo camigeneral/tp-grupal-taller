@@ -65,9 +65,9 @@ pub fn start_node_connection(
     let cloned_nodes = Arc::clone(peer_nodes);
     let config_path = get_config_path(port)?;
     let cloned_local_node = Arc::clone(local_node);
-    let cloned_document_subscribers = Arc::clone(&document_subscribers);
-    let cloned_shared_documents = Arc::clone(&shared_documents);
-    let cloned_shared_sets = Arc::clone(&shared_sets);
+    let cloned_document_subscribers = Arc::clone(document_subscribers);
+    let cloned_shared_documents = Arc::clone(shared_documents);
+    let cloned_shared_sets = Arc::clone(shared_sets);
     let node_ports = read_node_ports(config_path)?;
 
     thread::spawn(move || {
@@ -84,7 +84,7 @@ pub fn start_node_connection(
         }
     });
 
-    let cloned_local_node_for_ping_pong = Arc::clone(&local_node);
+    let cloned_local_node_for_ping_pong = Arc::clone(local_node);
     let cloned_peer_nodes = Arc::clone(peer_nodes);
 
     thread::spawn(move || {
@@ -103,38 +103,33 @@ pub fn start_node_connection(
             if connection_port != locked_local_node.port {
                 let node_address_to_connect = format!("127.0.0.1:{}", connection_port);
                 let peer_addr = format!("127.0.0.1:{}", connection_port);
-                match TcpStream::connect(node_address_to_connect) {
-                    Ok(stream) => {
-                        let mut cloned_stream = stream.try_clone()?;
+                if let Ok(stream) = TcpStream::connect(node_address_to_connect) {
+                    let mut cloned_stream = stream.try_clone()?;
 
-                        // mando node
-                        println!("mando node desde start_node_connection\n");
-                        let message = format!(
-                            "{:?} {} {:?} {} {}\n",
-                            RedisMessage::Node,
-                            locked_local_node.port,
-                            locked_local_node.role,
-                            locked_local_node.hash_range.0,
-                            locked_local_node.hash_range.1
-                        );
+                    // mando node
+                    println!("mando node desde start_node_connection\n");
+                    let message = format!(
+                        "{:?} {} {:?} {} {}\n",
+                        RedisMessage::Node,
+                        locked_local_node.port,
+                        locked_local_node.role,
+                        locked_local_node.hash_range.0,
+                        locked_local_node.hash_range.1
+                    );
 
                         let encrypted_message = xor(message.as_bytes(), ENCRYPTION_KEY);
                         cloned_stream.write_all(&encrypted_message)?;
 
-                        lock_peer_nodes.insert(
-                            peer_addr,
-                            peer_node::PeerNode::new(
-                                stream,
-                                connection_port,
-                                NodeRole::Unknown,
-                                (0, 16383),
-                                NodeState::Active,
-                            ),
-                        );
-
-                        ()
-                    }
-                    Err(_) => {}
+                    lock_peer_nodes.insert(
+                        peer_addr,
+                        peer_node::PeerNode::new(
+                            stream,
+                            connection_port,
+                            NodeRole::Unknown,
+                            (0, 16383),
+                            NodeState::Active,
+                        ),
+                    );
                 };
             }
         }
@@ -802,7 +797,7 @@ fn initialize_replica_promotion(
         println!("1");
         let locked_peer_nodes = peer_nodes.lock().unwrap();
         println!("2");
-        let inactive_port = locked_local_node.master_node.unwrap().clone();
+        let inactive_port = locked_local_node.master_node.unwrap();
         println!("inactive port: {}", inactive_port);
         locked_local_node.role = NodeRole::Master;
         locked_local_node.master_node = None;

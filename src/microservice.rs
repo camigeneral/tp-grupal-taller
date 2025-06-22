@@ -17,6 +17,7 @@ use std::time::Duration;
 #[path = "utils/logger.rs"]
 mod logger;
 
+
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let redis_port = 4000;
     let main_address = format!("127.0.0.1:{}", redis_port);
@@ -38,7 +39,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             .create(true)
             .append(true)
             .open(&log_path)
-            .and_then(|mut file| writeln!(file, ""));
+            .and_then(|mut file| writeln!(file));
     }
 
     println!("Conectándome al server de redis en {:?}", main_address);
@@ -145,9 +146,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             thread::sleep(Duration::from_secs(60));
         });
     }
-
-
-    loop {}
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
 }
 
 fn connect_to_nodes(
@@ -196,7 +197,7 @@ fn listen_to_redis_response(
         }
 
         println!("Respuesta de redis: {}", line);
-        logger::log_event(&log_path, &format!("Respuesta de redis: {}", line));
+        logger::log_event(log_path, &format!("Respuesta de redis: {}", line));
 
         // client-address qty_users
         // if line.starts_with("Client ") && line.contains(" subscribed to ") {
@@ -250,7 +251,7 @@ fn listen_to_redis_response(
                 if let Err(e) = microservice_socket.write_all(mensaje_final.as_bytes()) {
                     eprintln!("Error al enviar mensaje de bienvenida: {}", e);
                     logger::log_event(
-                        &log_path,
+                        log_path,
                         &format!("Error al enviar mensaje de bienvenida: {}", e),
                     );
                 }
@@ -265,7 +266,14 @@ fn listen_to_redis_response(
                 // if let Some(sender) = &ui_sender {
                 //     let _ = sender.send(AppMsg::ManageSubscribeResponse(response_written[1].to_string()));
                 // }
-            } 
+            }
+            "ASK" => { 
+                if response.len() < 3 {
+                    println!("Nodo de redireccion no disponible");
+                } else {
+                    let _ = send_command_to_nodes(connect_node_sender.clone(),node_streams.clone() ,last_command_sent.clone(), response);
+                }
+            }
             _ => { 
                 // if let Some(sender) = &ui_sender {
                 //     let _ = sender.send(AppMsg::ManageResponse(first));
@@ -276,20 +284,9 @@ fn listen_to_redis_response(
         let response: Vec<&str> = line.split_whitespace().collect();
 
         let first = response[0].to_uppercase();
-        let first_response = first.as_str();
+        let _first_response = first.as_str();
 
-        match first_response {
-            "ASK" => { 
-                if response.len() < 3 {
-                    println!("Nodo de redireccion no disponible");
-                } else {
-                    let _ = send_command_to_nodes(connect_node_sender.clone(),node_streams.clone() ,last_command_sent.clone(), response);
-                }
-            }
-            _ => { 
-
-            }
-        }
+        
     }
     Ok(())
 }
