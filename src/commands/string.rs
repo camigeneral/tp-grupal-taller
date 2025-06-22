@@ -1,7 +1,6 @@
 use super::redis;
 use super::redis_response::RedisResponse;
 use crate::client_info;
-use crate::commands::set::handle_scard;
 use crate::documento::Documento;
 #[allow(unused_imports)]
 use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
