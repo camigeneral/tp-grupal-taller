@@ -657,13 +657,14 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Documen
         let messages_data = parts[1];
 
         if document_id.ends_with(".txt") {
-            let messages: Vec<String> = messages_data
-                .split("/--/")
-                .filter(|s| !s.is_empty())
-                .map(|s| s.to_string())
-                .collect();
-            documents.insert(document_id, Documento::Texto(messages));
-        } else if document_id.ends_with(".xlsx") {
+            let joined: String = messages_data
+            .split("/--/")
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("");
+            let chars: Vec<String> = joined.chars().map(|c| c.to_string()).collect();
+            documents.insert(document_id, Documento::Texto(chars));    
+        } else {
             let filas: Vec<String> = messages_data
                 .split("/--/")
                 .filter(|s| !s.is_empty())
