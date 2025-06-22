@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use crate::hashing::get_hash_slots;
-use crate::encryption::{xor, ENCRYPTION_KEY};
+use crate::encryption::{encrypt_xor, decrypt_xor, ENCRYPTION_KEY};
 use crate::local_node::NodeRole;
 use crate::local_node::NodeState;
 use crate::utils::redis_parser::CommandResponse;
