@@ -488,12 +488,12 @@ pub fn handle_ltrim(
 }
 
 
-/* 
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn setup() -> Arc<Mutex<HashMap<String, Vec<String>>>> {
+    fn setup() -> Arc<Mutex<HashMap<String, Documento>>> {
         Arc::new(Mutex::new(HashMap::new()))
     }
 
@@ -510,15 +510,16 @@ mod tests {
                 ValueType::String("pivot".to_string()),
                 ValueType::String("new".to_string()),
             ],
+            unparsed_command: String::new(),
         };
 
-        let response = handle_linsert(&request, Arc::clone(&docs));
+        let response = handle_linsert(&request, &docs);
         assert!(matches!(response.response, CommandResponse::Error(_)));
 
         // Test inserting after existing element
         {
             let mut docs_lock = docs.lock().unwrap();
-            docs_lock.insert("test".to_string(), vec!["pivot".to_string()]);
+            docs_lock.insert("test".to_string(), Documento::Texto(vec!["pivot".to_string()]));
         }
 
         let request = CommandRequest {
@@ -529,9 +530,10 @@ mod tests {
                 ValueType::String("pivot".to_string()),
                 ValueType::String("new".to_string()),
             ],
+            unparsed_command: String::new(),
         };
 
-        let response = handle_linsert(&request, Arc::clone(&docs));
+        let response = handle_linsert(&request, &docs);
         assert!(matches!(response.response, CommandResponse::Integer(2)));
     }
 
@@ -547,18 +549,19 @@ mod tests {
                 ValueType::Integer(0),
                 ValueType::String("value".to_string()),
             ],
+            unparsed_command: String::new(),
         };
 
-        let response = handle_lset(&request, Arc::clone(&docs));
+        let response = handle_lset(&request, &docs);
         assert!(matches!(response.response, CommandResponse::Error(_)));
 
         // Test valid set
         {
             let mut docs_lock = docs.lock().unwrap();
-            docs_lock.insert("test".to_string(), vec!["old".to_string()]);
+            docs_lock.insert("test".to_string(), Documento::Texto(vec!["old".to_string()]));
         }
 
-        let response = handle_lset(&request, Arc::clone(&docs));
+        let response = handle_lset(&request, &docs);
         assert!(matches!(response.response, CommandResponse::String(_)));
     }
 
@@ -571,40 +574,39 @@ mod tests {
             command: "LLEN".to_string(),
             key: Some("test".to_string()),
             arguments: vec![],
+            unparsed_command: String::new(),
         };
 
-        let response = handle_llen(&request, Arc::clone(&docs));
+        let response = handle_llen(&request, &docs);
         assert!(matches!(response.response, CommandResponse::Integer(0)));
 
         // Test non-empty list
         {
             let mut docs_lock = docs.lock().unwrap();
-            docs_lock.insert("test".to_string(), vec!["value".to_string()]);
+            docs_lock.insert("test".to_string(), Documento::Texto(vec!["value".to_string()]));
         }
 
-        let response = handle_llen(&request, Arc::clone(&docs));
+        let response = handle_llen(&request, &docs);
         assert!(matches!(response.response, CommandResponse::Integer(1)));
     }
 
     #[test]
-    fn test_handle_lrange() {
+    fn test_lrange_indices_positivos() {
         let docs = setup();
         {
             let mut docs_lock = docs.lock().unwrap();
             docs_lock.insert(
                 "test".to_string(),
-                vec!["pivot".to_string(), "new".to_string(), "before".to_string()],
+                Documento::Texto(vec!["pivot".to_string(), "new".to_string(), "before".to_string()]),
             );
         }
-
-        // Caso 1: índices positivos [0..1]
         let request = CommandRequest {
             command: "LRANGE".to_string(),
             key: Some("test".to_string()),
             arguments: vec![ValueType::Integer(0), ValueType::Integer(1)],
+            unparsed_command: String::new(),
         };
-
-        let response = handle_lrange(&request, docs.clone());
+        let response = handle_lrange(&request, &docs);
         let expected = vec![
             CommandResponse::String("pivot".to_string()),
             CommandResponse::String("new".to_string()),
@@ -614,15 +616,25 @@ mod tests {
         } else {
             panic!("Expected CommandResponse::Array");
         }
+    }
 
-        // Caso 2: mezcla positivos y negativos [1..-1]
+    #[test]
+    fn test_lrange_mezcla_positivos_negativos() {
+        let docs = setup();
+        {
+            let mut docs_lock = docs.lock().unwrap();
+            docs_lock.insert(
+                "test".to_string(),
+                Documento::Texto(vec!["pivot".to_string(), "new".to_string(), "before".to_string()]),
+            );
+        }
         let request = CommandRequest {
             command: "LRANGE".to_string(),
             key: Some("test".to_string()),
             arguments: vec![ValueType::Integer(1), ValueType::Integer(-1)],
+            unparsed_command: String::new(),
         };
-
-        let response = handle_lrange(&request, docs.clone());
+        let response = handle_lrange(&request, &docs);
         let expected = vec![
             CommandResponse::String("new".to_string()),
             CommandResponse::String("before".to_string()),
@@ -632,43 +644,73 @@ mod tests {
         } else {
             panic!("Expected CommandResponse::Array");
         }
+    }
 
-        // Caso 3: start > stop → []
+    #[test]
+    fn test_lrange_start_mayor_que_stop() {
+        let docs = setup();
+        {
+            let mut docs_lock = docs.lock().unwrap();
+            docs_lock.insert(
+                "test".to_string(),
+                Documento::Texto(vec!["pivot".to_string(), "new".to_string(), "before".to_string()]),
+            );
+        }
         let request = CommandRequest {
             command: "LRANGE".to_string(),
             key: Some("test".to_string()),
             arguments: vec![ValueType::Integer(2), ValueType::Integer(1)],
+            unparsed_command: String::new(),
         };
-
-        let response = handle_lrange(&request, docs.clone());
+        let response = handle_lrange(&request, &docs);
         if let CommandResponse::Array(ref items) = response.response {
             assert!(items.is_empty());
         } else {
             panic!("Expected CommandResponse::Array");
         }
+    }
 
-        // Caso 4: índices fuera de rango
+    #[test]
+    fn test_lrange_indices_fuera_de_rango() {
+        let docs = setup();
+        {
+            let mut docs_lock = docs.lock().unwrap();
+            docs_lock.insert(
+                "test".to_string(),
+                Documento::Texto(vec!["pivot".to_string(), "new".to_string(), "before".to_string()]),
+            );
+        }
         let request = CommandRequest {
             command: "LRANGE".to_string(),
             key: Some("test".to_string()),
             arguments: vec![ValueType::Integer(10), ValueType::Integer(20)],
+            unparsed_command: String::new(),
         };
-
-        let response = handle_lrange(&request, docs.clone());
+        let response = handle_lrange(&request, &docs);
         if let CommandResponse::Array(ref items) = response.response {
             assert!(items.is_empty());
         } else {
             panic!("Expected CommandResponse::Array");
         }
+    }
 
-        // Caso 5: negativos extremos [-3..-1] → lista completa
+    #[test]
+    fn test_lrange_negativos_extremos() {
+        let docs = setup();
+        {
+            let mut docs_lock = docs.lock().unwrap();
+            docs_lock.insert(
+                "test".to_string(),
+                Documento::Texto(vec!["pivot".to_string(), "new".to_string(), "before".to_string()]),
+            );
+        }
         let request = CommandRequest {
             command: "LRANGE".to_string(),
             key: Some("test".to_string()),
             arguments: vec![ValueType::Integer(-3), ValueType::Integer(-1)],
+            unparsed_command: String::new(),
         };
-
-        let response = handle_lrange(&request, docs.clone());
+        let response = handle_lrange(&request, &docs);
         let expected = vec![
             CommandResponse::String("pivot".to_string()),
             CommandResponse::String("new".to_string()),
@@ -679,29 +721,42 @@ mod tests {
         } else {
             panic!("Expected CommandResponse::Array");
         }
+    }
 
-        // Caso 6: lista inexistente → []
+    #[test]
+    fn test_lrange_lista_inexistente() {
+        let docs = setup();
         let request = CommandRequest {
             command: "LRANGE".to_string(),
             key: Some("nonexistent".to_string()),
             arguments: vec![ValueType::Integer(0), ValueType::Integer(1)],
+            unparsed_command: String::new(),
         };
-
-        let response = handle_lrange(&request, docs.clone());
+        let response = handle_lrange(&request, &docs);
         if let CommandResponse::Array(ref items) = response.response {
             assert!(items.is_empty());
         } else {
             panic!("Expected CommandResponse::Array");
         }
+    }
 
-        // Caso 7: sin argumentos → error
+    #[test]
+    fn test_lrange_sin_argumentos() {
+        let docs = setup();
+        {
+            let mut docs_lock = docs.lock().unwrap();
+            docs_lock.insert(
+                "test".to_string(),
+                Documento::Texto(vec!["pivot".to_string(), "new".to_string(), "before".to_string()]),
+            );
+        }
         let request = CommandRequest {
             command: "LRANGE".to_string(),
             key: Some("test".to_string()),
             arguments: vec![],
+            unparsed_command: String::new(),
         };
-
-        let response = handle_lrange(&request, docs.clone());
+        let response = handle_lrange(&request, &docs);
         if let CommandResponse::Error(msg) = response.response {
             assert!(msg.contains("Wrong number of arguments"));
         } else {
@@ -710,103 +765,138 @@ mod tests {
     }
 
     #[test]
-fn test_handle_ltrim() {
-    let docs = setup();
-
-    {
-        let mut docs_lock = docs.lock().unwrap();
-        docs_lock.insert(
-            "test".to_string(),
-            vec!["a".to_string(), "b".to_string(), "c".to_string(), "d".to_string()],
-        );
+    fn test_ltrim_conserva_b_hasta_d() {
+        let docs = setup();
+        {
+            let mut docs_lock = docs.lock().unwrap();
+            docs_lock.insert(
+                "test".to_string(),
+                Documento::Texto(vec!["a".to_string(), "b".to_string(), "c".to_string(), "d".to_string()]),
+            );
+        }
+        let request = CommandRequest {
+            command: "LTRIM".to_string(),
+            key: Some("test".to_string()),
+            arguments: vec![ValueType::Integer(1), ValueType::Integer(-1)],
+            unparsed_command: String::new(),
+        };
+        let response = handle_ltrim(&request, &docs);
+        assert!(matches!(response.response, CommandResponse::Ok));
+        let docs_lock = docs.lock().unwrap();
+        let result = docs_lock.get("test").unwrap();
+        assert_eq!(result, &Documento::Texto(vec!["b".to_string(), "c".to_string(), "d".to_string()]));
     }
 
-    // Caso 1: LTRIM 1 -1 => conserva desde "b" hasta "d"
-    let request = CommandRequest {
-        command: "LTRIM".to_string(),
-        key: Some("test".to_string()),
-        arguments: vec![ValueType::Integer(1), ValueType::Integer(-1)],
-    };
+    #[test]
+    fn test_ltrim_conserva_c_y_d() {
+        let docs = setup();
+        {
+            let mut docs_lock = docs.lock().unwrap();
+            docs_lock.insert(
+                "test".to_string(),
+                Documento::Texto(vec!["a".to_string(), "b".to_string(), "c".to_string(), "d".to_string()]),
+            );
+        }
+        let request = CommandRequest {
+            command: "LTRIM".to_string(),
+            key: Some("test".to_string()),
+            arguments: vec![ValueType::Integer(-2), ValueType::Integer(-1)],
+            unparsed_command: String::new(),
+        };
+        let response = handle_ltrim(&request, &docs);
+        assert!(matches!(response.response, CommandResponse::Ok));
+        let docs_lock = docs.lock().unwrap();
+        let result = docs_lock.get("test").unwrap();
+        assert_eq!(result, &Documento::Texto(vec!["c".to_string(), "d".to_string()]));
+    }
 
-    let response = handle_ltrim(&request, docs.clone());
-    assert!(matches!(response.response, CommandResponse::Ok));
+    #[test]
+    fn test_ltrim_conserva_c() {
+        let docs = setup();
+        {
+            let mut docs_lock = docs.lock().unwrap();
+            docs_lock.insert(
+                "test".to_string(),
+                Documento::Texto(vec!["a".to_string(), "b".to_string(), "c".to_string(), "d".to_string()]),
+            );
+        }
+        let request = CommandRequest {
+            command: "LTRIM".to_string(),
+            key: Some("test".to_string()),
+            arguments: vec![ValueType::Integer(0), ValueType::Integer(0)],
+            unparsed_command: String::new(),
+        };
+        let response = handle_ltrim(&request, &docs);
+        assert!(matches!(response.response, CommandResponse::Ok));
+        let docs_lock = docs.lock().unwrap();
+        let result = docs_lock.get("test").unwrap();
+        assert_eq!(result, &Documento::Texto(vec!["a".to_string()]));
+    }
 
-    let docs_lock = docs.lock().unwrap();
-    let result = docs_lock.get("test").unwrap();
-    assert_eq!(result, &vec!["b".to_string(), "c".to_string(), "d".to_string()]);
+    #[test]
+    fn test_ltrim_lista_vacia_elimina_clave() {
+        let docs = setup();
+        {
+            let mut docs_lock = docs.lock().unwrap();
+            docs_lock.insert(
+                "test".to_string(),
+                Documento::Texto(vec!["a".to_string(), "b".to_string(), "c".to_string(), "d".to_string()]),
+            );
+        }
+        let request = CommandRequest {
+            command: "LTRIM".to_string(),
+            key: Some("test".to_string()),
+            arguments: vec![ValueType::Integer(5), ValueType::Integer(10)],
+            unparsed_command: String::new(),
+        };
+        let response = handle_ltrim(&request, &docs);
+        assert!(matches!(response.response, CommandResponse::Ok));
+        let docs_lock = docs.lock().unwrap();
+        assert!(!docs_lock.contains_key("test"));
+    }
 
-    // Caso 2: LTRIM -2 -1 => ["c", "d"]
-    let request = CommandRequest {
-        command: "LTRIM".to_string(),
-        key: Some("test".to_string()),
-        arguments: vec![ValueType::Integer(-2), ValueType::Integer(-1)],
-    };
+    #[test]
+    fn test_ltrim_lista_inexistente() {
+        let docs = setup();
+        let request = CommandRequest {
+            command: "LTRIM".to_string(),
+            key: Some("nonexistent".to_string()),
+            arguments: vec![ValueType::Integer(0), ValueType::Integer(1)],
+            unparsed_command: String::new(),
+        };
+        let response = handle_ltrim(&request, &docs);
+        assert!(matches!(response.response, CommandResponse::Ok));
+        let docs_lock = docs.lock().unwrap();
+        assert!(!docs_lock.contains_key("nonexistent"));
+    }
 
-    let response = handle_ltrim(&request, docs.clone());
-    assert!(matches!(response.response, CommandResponse::Ok));
-    let docs_lock = docs.lock().unwrap();
-    let result = docs_lock.get("test").unwrap();
-    assert_eq!(result, &vec!["c".to_string(), "d".to_string()]);
+    #[test]
+    fn test_ltrim_argumentos_invalidos() {
+        let docs = setup();
+        let request = CommandRequest {
+            command: "LTRIM".to_string(),
+            key: Some("test2".to_string()),
+            arguments: vec![ValueType::String("abc".to_string()), ValueType::Integer(2)],
+            unparsed_command: String::new(),
+        };
+        let response = handle_ltrim(&request, &docs);
+        assert!(matches!(response.response, CommandResponse::Error(_)));
+    }
 
-    // Caso 3: LTRIM 0 0 => ["c"]
-    let request = CommandRequest {
-        command: "LTRIM".to_string(),
-        key: Some("test".to_string()),
-        arguments: vec![ValueType::Integer(0), ValueType::Integer(0)],
-    };
+    #[test]
+    fn test_ltrim_sin_argumentos() {
+        let docs = setup();
+        let request = CommandRequest {
+            command: "LTRIM".to_string(),
+            key: Some("test2".to_string()),
+            arguments: vec![],
+            unparsed_command: String::new(),
+        };
+        let response = handle_ltrim(&request, &docs);
+        assert!(matches!(response.response, CommandResponse::Error(_)));
+    }
 
-    let response = handle_ltrim(&request, docs.clone());
-    assert!(matches!(response.response, CommandResponse::Ok));
-    let docs_lock = docs.lock().unwrap();
-    let result = docs_lock.get("test").unwrap();
-    assert_eq!(result, &vec!["a".to_string()]);
-
-    // Caso 4: LTRIM 5 10 => lista vacía → clave eliminada
-    let request = CommandRequest {
-        command: "LTRIM".to_string(),
-        key: Some("test".to_string()),
-        arguments: vec![ValueType::Integer(5), ValueType::Integer(10)],
-    };
-
-    let response = handle_ltrim(&request, docs.clone());
-    assert!(matches!(response.response, CommandResponse::Ok));
-    let docs_lock = docs.lock().unwrap();
-    assert!(!docs_lock.contains_key("test"));
-
-    // Caso 5: lista inexistente → se crea vacía, luego LTRIM hace remove (por estar vacía)
-    let request = CommandRequest {
-        command: "LTRIM".to_string(),
-        key: Some("nonexistent".to_string()),
-        arguments: vec![ValueType::Integer(0), ValueType::Integer(1)],
-    };
-
-    let response = handle_ltrim(&request, docs.clone());
-    assert!(matches!(response.response, CommandResponse::Ok));
-    let docs_lock = docs.lock().unwrap();
-    assert!(!docs_lock.contains_key("nonexistent"));
-
-
-    // Caso 6: argumentos inválidos → error
-    let request = CommandRequest {
-        command: "LTRIM".to_string(),
-        key: Some("test2".to_string()),
-        arguments: vec![ValueType::String("abc".to_string()), ValueType::Integer(2)],
-    };
-
-    let response = handle_ltrim(&request, docs.clone());
-    assert!(matches!(response.response, CommandResponse::Error(_)));
-
-    // Caso 7: sin argumentos → error
-    let request = CommandRequest {
-        command: "LTRIM".to_string(),
-        key: Some("test2".to_string()),
-        arguments: vec![],
-    };
-
-    let response = handle_ltrim(&request, docs.clone());
-    assert!(matches!(response.response, CommandResponse::Error(_)));
-}
-
+    #[test]
     fn test_handle_rpush() {
         let docs = setup();
 
@@ -815,9 +905,10 @@ fn test_handle_ltrim() {
              command: "RPUSH".to_string(),
              key: Some("test".to_string()),
              arguments: vec![ValueType::String("value".to_string())],
+             unparsed_command: String::new(),
          };
 
-         let response = handle_rpush(&request, Arc::clone(&docs));
+         let response = handle_rpush(&request, &docs);
          assert!(matches!(response.response, CommandResponse::Integer(1)));
 
           //Test pushing multiple values
@@ -828,10 +919,10 @@ fn test_handle_ltrim() {
                  ValueType::String("value1".to_string()),
                  ValueType::String("value2".to_string()),
              ],
+             unparsed_command: String::new(),
          };
 
-         let response = handle_rpush(&request, Arc::clone(&docs));
+         let response = handle_rpush(&request, &docs);
          assert!(matches!(response.response, CommandResponse::Integer(3)));
      }
  }
- */
