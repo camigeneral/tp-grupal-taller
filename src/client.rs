@@ -65,7 +65,7 @@ pub fn client_run(
 
     for command in rx {
         let trimmed_command = command.to_string().trim().to_lowercase();
-        if trimmed_command == "close" {
+        if trimmed_command == "close"  {
             println!("Desconectando del servidor");
             let parts: Vec<&str> = trimmed_command.split_whitespace().collect();
             let resp_command = format_resp_publish(&parts[0], &parts[1]);
@@ -83,10 +83,11 @@ pub fn client_run(
             let resp_command;
             if parts[0] == "AUTH" {
                 resp_command = format_resp_command(&parts);
-            } else {
+            } else if parts[0] == "subscribe"  || parts[0] == "unsubscribe"  {
+                resp_command = format_resp_command(&parts);
+            }else{
                 resp_command = format_resp_publish(&parts[1], &command);
             }
-            
 
             {
                 let mut last_command = last_command_sent.lock().unwrap();
@@ -143,7 +144,13 @@ fn listen_to_redis_response(
                 if response.len() < 3 {
                     println!("Nodo de redireccion no disponible");
                 } else {
-                    let _ = send_command_to_nodes(connect_node_sender.clone(),node_streams.clone() ,last_command_sent.clone(), response);
+                    let _ = send_command_to_nodes(
+                        ui_sender.clone(),
+                        connect_node_sender.clone(),
+                        node_streams.clone(),
+                        last_command_sent.clone(),
+                        response,
+                    );
                 }
             }
             "STATUS" => {
@@ -162,17 +169,9 @@ fn listen_to_redis_response(
             }
 
             "WRITTEN" => {
-                // se va a procesasr lo que otro agrego 
-                let response_written: Vec<&str> = response[1].split('|').collect();
-                let doc = response_written[0];
-                let line = response_written[1];
-                let content = response_written[2];
-                
-                if let Some(sender) = &ui_sender {
-                    let _ = sender.send(AppMsg::ManageSubscribeResponse(response_written[1].to_string()));
-                }
-            } 
-            _ => { 
+                // se va a procesasr lo que otro agrego
+            }
+            _ => {
                 if let Some(sender) = &ui_sender {
                     let _ = sender.send(AppMsg::ManageResponse(first));
                 }
@@ -182,9 +181,8 @@ fn listen_to_redis_response(
     Ok(())
 }
 
-
-
 fn send_command_to_nodes(
+    _ui_sender: Option<Sender<AppMsg>>,
     connect_node_sender: MpscSender<TcpStream>,
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     last_command_sent: Arc<Mutex<String>>,

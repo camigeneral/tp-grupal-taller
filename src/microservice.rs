@@ -126,7 +126,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             {
                 let streams = node_streams_clone.lock().unwrap();
                 if let Some(mut stream) = streams.get(&main_address_clone) {
-                    let command_parts = vec!["SET", "doc1", "hola"];
+                    let command_parts = vec!["SET", "docprueba.txt", "hola"];
                     let resp_command = format_resp_command(&command_parts);
 
                     // ACTUALIZAMOS el último comando enviado
@@ -136,9 +136,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                     if let Err(e) = stream.write_all(resp_command.as_bytes()) {
-                        eprintln!("Error al enviar comando SET doc1 hola: {}", e);
+                        eprintln!("Error al enviar comando SET docprueba hola: {}", e);
                     } else {
-                        println!("Comando automático enviado: SET doc1 hola");
+                        println!("Comando automático enviado: SET docprueba hola");
                     }
                 }
             }
@@ -228,12 +228,12 @@ fn listen_to_redis_response(
         match first_response {
             s if s.starts_with("-ERR") => {
 
-                let credenciales = &response[1]; 
-                let invalidas = response[2].trim_end_matches(':');
+                let _credenciales = &response[1]; 
+                let _invalidas = response[2].trim_end_matches(':');
 
-                if let Some(sender) = &ui_sender {
-                    let _ = sender.send(AppMsg::LoginFailure(format!("{} {}", credenciales, invalidas)));
-                }
+                // if let Some(sender) = &ui_sender {
+                //     let _ = sender.send(AppMsg::LoginFailure(format!("{} {}", credenciales, invalidas)));
+                // }
             }
             "CLIENT" => {
                 // se va a procesar lo que otro agrego 
@@ -258,18 +258,18 @@ fn listen_to_redis_response(
             "WRITTEN" => {
                 // se va a procesasr lo que otro agrego 
                 let response_written: Vec<&str> = response[1].split('|').collect();
-                let doc = response_written[0];
-                let line = response_written[1];
-                let content = response_written[2];
+                let _doc = response_written[0];
+                let _line = response_written[1];
+                let _content = response_written[2];
                 
-                if let Some(sender) = &ui_sender {
-                    let _ = sender.send(AppMsg::ManageSubscribeResponse(response_written[1].to_string()));
-                }
+                // if let Some(sender) = &ui_sender {
+                //     let _ = sender.send(AppMsg::ManageSubscribeResponse(response_written[1].to_string()));
+                // }
             } 
             _ => { 
-                if let Some(sender) = &ui_sender {
-                    let _ = sender.send(AppMsg::ManageResponse(first));
-                }
+                // if let Some(sender) = &ui_sender {
+                //     let _ = sender.send(AppMsg::ManageResponse(first));
+                // }
             }
         }
 
