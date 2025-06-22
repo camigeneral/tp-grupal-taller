@@ -290,7 +290,7 @@ pub fn handle_rpush(
     )
 }
 
-/* pub fn handle_lrange(
+pub fn handle_lrange(
     request: &CommandRequest,
     docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
@@ -330,8 +330,21 @@ pub fn handle_rpush(
     };
 
     let mut docs_lock = docs.lock().unwrap();
-    let list: &mut Documento = docs_lock.entry(doc.clone()).or_default();
-        let list_len = list.len() as isize;
+    let documento = docs_lock.entry(doc.clone()).or_default();
+
+    let vec = match documento {
+        Documento::Texto(ref mut vec) => vec,
+        _ => {
+            return RedisResponse::new(
+                CommandResponse::Error("El documento no permite el comando LRANGE".to_string()),
+                false,
+                "".to_string(),
+                doc,
+            )
+        }
+    };
+
+    let list_len = vec.len() as isize;
 
     let mut start = if start_offset < 0 {
         list_len + start_offset
@@ -365,7 +378,7 @@ pub fn handle_rpush(
         stop = list_len - 1;
     }
 
-    let slice = &list[start as usize..=stop as usize];
+    let slice = &vec[start as usize..=stop as usize];
 
     let mut message = String::new();
     let mut vec_response = vec![];
@@ -383,6 +396,7 @@ pub fn handle_rpush(
         doc,
     )
 }
+
 
 pub fn handle_ltrim(
     request: &CommandRequest,
@@ -424,9 +438,21 @@ pub fn handle_ltrim(
     };
 
     let mut docs_lock = docs.lock().unwrap();
-    let list = docs_lock.entry(doc.clone()).or_default();
+    let documento = docs_lock.entry(doc.clone()).or_default();
 
-    let list_len = list.len() as isize;
+    let vec = match documento {
+        Documento::Texto(ref mut vec) => vec,
+        _ => {
+            return RedisResponse::new(
+                CommandResponse::Error("El documento no permite el comando LTRIM".to_string()),
+                false,
+                "".to_string(),
+                doc,
+            )
+        }
+    };
+
+    let list_len = vec.len() as isize;
 
     let mut start = if start_idx < 0 {
         list_len + start_idx
@@ -445,24 +471,22 @@ pub fn handle_ltrim(
     if stop < 0 {
         stop = 0;
     }
-    if start > stop || start >= list_len {
-        // Vaciar la lista
-        list.clear();
-        docs_lock.remove(&doc); // Comportamiento Redis: se elimina la key si queda vacía
-        return RedisResponse::new(CommandResponse::Ok, true, "Ok".to_string(), doc);
+    if start > stop || start >= list_len {        
+        vec.clear();
+        docs_lock.remove(&doc); 
+        return RedisResponse::new(CommandResponse::Ok, true, "OK".to_string(), doc);
     }
 
     if stop >= list_len {
         stop = list_len - 1;
     }
 
-    let slice = list[start as usize..=stop as usize].to_vec();
-    *list = slice;
+    let slice = vec[start as usize..=stop as usize].to_vec();
+    *vec = slice;
 
-    RedisResponse::new(CommandResponse::Ok, true, "Ok".to_string(), doc)
+    RedisResponse::new(CommandResponse::Ok, true, "OK".to_string(), doc)
 }
 
- */
 
 /* 
 #[cfg(test)]
