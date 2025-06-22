@@ -168,7 +168,7 @@ pub fn handle_publish<T: Write>(
     if let Some(subscribers) = subscribers_guard.get(doc) {
         for subscriber_id in subscribers {
             if let Some(client) = clients_guard.get_mut(subscriber_id) {
-                let _ = writeln!(client, "{}", message); 
+                let _ = writeln!(client, "{}", message);
                 sent_count += 1;
             }
         }
