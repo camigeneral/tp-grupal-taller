@@ -53,7 +53,7 @@ pub fn handle_subscribe(
 
             let _ = handle_sadd(&request, shared_sets);
 
-        let notification = format!("Client {} subscribed to {}", client_addr, doc);
+        let notification = format!("CLIENT {}|{}", client_addr, doc);
 
         RedisResponse::new(CommandResponse::Null, true, notification, doc.to_string())
     } else {

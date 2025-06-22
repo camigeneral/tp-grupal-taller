@@ -152,6 +152,14 @@ fn listen_to_redis_response(
 
             "WRITTEN" => {
                 // se va a procesasr lo que otro agrego 
+                let response_written: Vec<&str> = response[1].split('|').collect();
+                let doc = response_written[0];
+                let line = response_written[1];
+                let content = response_written[2];
+                
+                if let Some(sender) = &ui_sender {
+                    let _ = sender.send(AppMsg::ManageSubscribeResponse(response_written[1].to_string()));
+                }
             } 
             _ => { 
                 if let Some(sender) = &ui_sender {
