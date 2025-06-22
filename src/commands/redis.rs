@@ -30,6 +30,9 @@ pub fn execute_command(
         "unsubscribe" => {
             pub_sub::handle_unsubscribe(&request, document_subscribers, client_addr, shared_sets)
         }
+        "publish" => {
+            pub_sub::handle_publish(&request, document_subscribers, active_clients)
+        }
         "append" => string::handle_append(&request, docs),
         "scard" => set::handle_scard(&request, shared_sets),
         "smembers" => set::handle_smembers(&request, shared_sets),
