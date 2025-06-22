@@ -22,7 +22,7 @@ pub fn client_run(
     let address = format!("127.0.0.1:{}", port);
     let cloned_address = address.clone();
 
-    println!("Conectándome al server de redis en {:?}", address);
+    //println!("Conectándome al server de redis en {:?}", address);
     let mut socket: TcpStream = TcpStream::connect(address.clone())?;
 
     let command = "Cliente\r\n".to_string();
@@ -60,8 +60,9 @@ pub fn client_run(
             eprintln!("Error en la conexión con el nodo: {}", e);
         }
     });
-
+    let local_addr = redis_socket.try_clone()?.local_addr()?;
     let _ = connect_node_sender.send(redis_socket);
+    
 
     for command in rx {
         let trimmed_command = command.to_string().trim().to_lowercase();
@@ -80,11 +81,17 @@ pub fn client_run(
             println!("Enviando: {:?}", command);
 
             let parts: Vec<&str> = command.split_whitespace().collect();
-            let resp_command = if parts[0] == "AUTH" || parts[0] == "subscribe"  || parts[0] == "unsubscribe" {
-                                    format_resp_command(&parts)
-                                }else{
-                                    format_resp_publish(parts[1], &command)
-                                };
+            let resp_command =
+             if parts[0] == "AUTH" || parts[0] == "subscribe"  || parts[0] == "unsubscribe" {
+                    format_resp_command(&parts)
+                }else{
+                    if parts[0].starts_with("WRITE|") {
+                        let message = format!("{}|{}", parts[0], local_addr.to_string());                        
+                        format_resp_publish(parts[1], &message)
+                    } else {
+                        format_resp_publish(parts[1], &command)
+                    }
+                };
 
             {
                 let mut last_command = last_command_sent.lock().unwrap();
@@ -124,6 +131,7 @@ fn listen_to_redis_response(
 
         let first = response[0].to_uppercase();
         let first_response = first.as_str();
+        let local_addr: std::net::SocketAddr = client_socket_cloned.local_addr()?;
 
         match first_response {
             s if s.starts_with("-ERR") => {
@@ -153,7 +161,7 @@ fn listen_to_redis_response(
             "STATUS" => {
                 let response_status: Vec<&str> = response[1].split('|').collect();
                 let socket = response_status[0];
-                let local_addr = client_socket_cloned.local_addr()?;
+                
                 if socket != local_addr.to_string() {
                     continue;
                 }
@@ -165,8 +173,11 @@ fn listen_to_redis_response(
                 }
             }
 
-            "WRITTEN" => {
-                // se va a procesasr lo que otro agrego
+            s if s.starts_with("UPDATE-FILES-CLIENT") => {
+                if let Some(sender) = &ui_sender {
+                    println!("Recargar");
+                    let _ = sender.send(AppMsg::RefreshData);
+                }
             }
             _ => {
                 if let Some(sender) = &ui_sender {
