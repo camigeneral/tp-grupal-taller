@@ -34,7 +34,6 @@ pub struct FileEditorModel {
     num_contributors: i32,
     /// Contenido del archivo.
     content: String,
-    content_changed_manually: bool,
 }
 
 /// Enum que define los posibles mensajes que el editor de archivos puede recibir.
@@ -119,7 +118,6 @@ impl SimpleComponent for FileEditorModel {
             file_name,
             num_contributors,
             content,
-            content_changed_manually: false,
             spreadsheet_ctrl: spreadsheet_cont,
             text_editor_ctrl: text_editor_cont,
             spreadsheet_visible: false,
@@ -139,20 +137,20 @@ impl SimpleComponent for FileEditorModel {
             }
             FileEditorMessage::ContentRemoved(_start_offset, _end_offset) => {}
             FileEditorMessage::UpdateFile(file_name, contributors, content, file_type) => {
-                self.text_editor_ctrl.emit(TextEditorMessage::UpdateFile(
-                    file_name.clone(),
-                    contributors,
-                    content.clone(),
-                ));
+                
                 self.file_name = file_name.clone();
                 self.num_contributors = contributors;
                 self.content = content.clone();
-                self.content_changed_manually = true;
 
                 match file_type {
                     FileType::Text => {
                         self.text_editor_visible = true;
                         self.spreadsheet_visible = false;
+                        self.text_editor_ctrl.emit(TextEditorMessage::UpdateFile(
+                            file_name.clone(),
+                            contributors,
+                            content.clone(),
+                        ));
                     }
                     FileType::Sheet => {
                         self.text_editor_visible = false;
