@@ -115,7 +115,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-
     {
         let node_streams_clone = Arc::clone(&node_streams);
         let main_address_clone = main_address.clone();
@@ -125,10 +124,8 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             {
                 let streams = node_streams_clone.lock().unwrap();
                 if let Some(mut stream) = streams.get(&main_address_clone) {
-                    let command_parts = vec!["SET", "docprueba.txt", "hola"];
+                    let command_parts = vec!["SET", "docprueba.txt", ""];
                     let resp_command = format_resp_command(&command_parts);
-
-                    // ACTUALIZAMOS el último comando enviado
                     {
                         let mut last_command = last_command_sent_clone.lock().unwrap();
                         *last_command = resp_command.clone();
@@ -141,7 +138,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
-            thread::sleep(Duration::from_secs(60));
+            thread::sleep(Duration::from_secs(18000));
         });
     }
     loop {
@@ -194,29 +191,7 @@ fn listen_to_redis_response(
             break;
         }
 
-        println!("Respuesta de redis: {}", line);
         logger::log_event(log_path, &format!("Respuesta de redis: {}", line));
-
-        // client-address qty_users
-        // if line.starts_with("Client ") && line.contains(" subscribed to ") {
-        //     let parts: Vec<&str> = line.trim().split_whitespace().collect();
-        //     if parts.len() >= 5 {
-        //         let client_addr = parts[1];
-
-        //         let doc_name = parts[4];
-
-        //         let bienvenida = format!("Welcome {} {}", doc_name, client_addr);
-
-        //         let parts: Vec<&str> = bienvenida.split_whitespace().collect();
-
-        //         let mensaje_final = format_resp_command(&parts);
-
-        //         if let Err(e) = microservice_socket.write_all(mensaje_final.as_bytes()) {
-        //             eprintln!("Error al enviar mensaje de bienvenida: {}", e);
-        //             logger::log_event(&log_path, &format!("Error al enviar mensaje de bienvenida: {}", e));
-        //         }
-        //     }
-        // }
 
         let response: Vec<&str> = line.split_whitespace().collect();
 
@@ -226,13 +201,7 @@ fn listen_to_redis_response(
 
         match first_response {
             s if s.starts_with("-ERR") => {
-
-                let _credenciales = &response[1]; 
-                let _invalidas = response[2].trim_end_matches(':');
-
-                // if let Some(sender) = &ui_sender {
-                //     let _ = sender.send(AppMsg::LoginFailure(format!("{} {}", credenciales, invalidas)));
-                // }
+                
             }
             "CLIENT" => {
                 // se va a procesar lo que otro agrego 
@@ -254,16 +223,39 @@ fn listen_to_redis_response(
                     );
                 }
             }
-            "WRITTEN" => {
-                // se va a procesasr lo que otro agrego 
-                let response_written: Vec<&str> = response[1].split('|').collect();
-                let _doc = response_written[0];
-                let _line = response_written[1];
-                let _content = response_written[2];
-                
-                // if let Some(sender) = &ui_sender {
-                //     let _ = sender.send(AppMsg::ManageSubscribeResponse(response_written[1].to_string()));
-                // }
+            s if s.starts_with("UPDATE-FILES") => {
+                if response.len() >= 2 {
+                    let doc_name = response[1];
+                    let command_parts = vec!["PUBLISH", doc_name, "UPDATE-FILES-CLIENT"];
+                    let resp_command = format_resp_command(&command_parts);
+                    if let Err(e) = microservice_socket.write_all(resp_command.as_bytes()) {
+                        eprintln!("Error al enviar mensaje de actualizacion de archivo: {}", e);
+                        logger::log_event(
+                            log_path,
+                            &format!("Error al enviar mensaje de actualizacion de archivo: {}", e),
+                        );
+                    }
+                }
+            }
+
+            s if s.starts_with("WRITE|") => {
+                let partes: Vec<&str> = response[0].split('|').collect();
+                if partes.len() == 5 {
+                    let index = partes[1];
+                    let caracter = partes[2];
+                    let file_name = partes[3]; 
+                    let addr = partes[4];
+
+                    let command_parts = ["add_content", file_name, index, caracter, addr];
+
+                    let resp_command = format_resp_command(&command_parts);
+                    {
+                        let mut last_command = last_command_sent.lock().unwrap();
+                        *last_command = resp_command.clone();
+                    }
+                    println!("RESP enviado: {}", resp_command);
+                    microservice_socket.write_all(resp_command.as_bytes())?; 
+                }
             }
             "ASK" => { 
                 if response.len() < 3 {
