@@ -4,18 +4,12 @@ use crate::app::AppMsg;
 use std::collections::HashMap;
 use std::io::Write;
 use std::io::{BufRead, BufReader};
-#[allow(unused_imports)]
-use std::net::TcpListener;
 use std::net::TcpStream;
-#[allow(unused_imports)]
-use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::{channel, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
-#[allow(unused_imports)]
-use std::time::Duration;
-use utils::redis_parser::format_resp_command;
+use utils::redis_parser::{format_resp_publish, format_resp_command};
 
 pub fn client_run(
     port: u16,
@@ -29,7 +23,7 @@ pub fn client_run(
     let cloned_address = address.clone();
 
     println!("Conectándome al server de redis en {:?}", address);
-    let mut socket: TcpStream = TcpStream::connect(address)?;
+    let mut socket: TcpStream = TcpStream::connect(address.clone())?;
 
     let command = "Cliente\r\n".to_string();
 
@@ -71,20 +65,29 @@ pub fn client_run(
 
     for command in rx {
         let trimmed_command = command.to_string().trim().to_lowercase();
-        if trimmed_command == "close" {
+        if trimmed_command == "close"  {
             println!("Desconectando del servidor");
             let parts: Vec<&str> = trimmed_command.split_whitespace().collect();
-            let resp_command = format_resp_command(&parts);
+            let resp_command = format_resp_publish(&parts[0], &parts[1]);
 
             println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
 
             socket.write_all(resp_command.as_bytes())?;
             break;
         } else {
+
+            
             println!("Enviando: {:?}", command);
 
             let parts: Vec<&str> = command.split_whitespace().collect();
-            let resp_command = format_resp_command(&parts);
+            let resp_command;
+            if parts[0] == "AUTH" {
+                resp_command = format_resp_command(&parts);
+            } else if parts[0] == "subscribe"  || parts[0] == "unsubscribe"  {
+                resp_command = format_resp_command(&parts);
+            }else{
+                resp_command = format_resp_publish(&parts[1], &command);
+            }
 
             {
                 let mut last_command = last_command_sent.lock().unwrap();
@@ -101,13 +104,15 @@ pub fn client_run(
 }
 
 fn listen_to_redis_response(
-    microservice_socket: TcpStream,
+    client_socket: TcpStream,
     ui_sender: Option<Sender<AppMsg>>,
     connect_node_sender: MpscSender<TcpStream>,
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     last_command_sent: Arc<Mutex<String>>,
 ) -> std::io::Result<()> {
-    let mut reader = BufReader::new(microservice_socket);
+    let client_socket_cloned = client_socket.try_clone()?;
+    let mut reader = BufReader::new(client_socket);
+
     loop {
         let mut line = String::new();
         let bytes_read = reader.read_line(&mut line)?;
@@ -120,28 +125,53 @@ fn listen_to_redis_response(
 
         let response: Vec<&str> = line.split_whitespace().collect();
 
-
         let first = response[0].to_uppercase();
         let first_response = first.as_str();
 
         match first_response {
             s if s.starts_with("-ERR") => {
-
-                let credenciales = &response[1]; 
-                let invalidas = response[2].trim_end_matches(':');
-
+                let error_message = if response.len() > 1 {
+                    response[1..].join(" ")
+                } else {
+                    "Error desconocido".to_string()
+                };
                 if let Some(sender) = &ui_sender {
-                    let _ = sender.send(AppMsg::LoginFailure(format!("{} {}", credenciales, invalidas)));
+                    let _ = sender.send(AppMsg::Error(format!("Hubo un problema: {}", error_message)));
                 }
+                
             }
-            "ASK" => { 
+            "ASK" => {
                 if response.len() < 3 {
                     println!("Nodo de redireccion no disponible");
                 } else {
-                    let _ = send_command_to_nodes(ui_sender.clone(), connect_node_sender.clone(),node_streams.clone() ,last_command_sent.clone(), response);
+                    let _ = send_command_to_nodes(
+                        ui_sender.clone(),
+                        connect_node_sender.clone(),
+                        node_streams.clone(),
+                        last_command_sent.clone(),
+                        response,
+                    );
                 }
             }
-            _ => { 
+            "STATUS" => {
+                let response_status: Vec<&str> = response[1].split('|').collect();
+                let socket = response_status[0];
+                let local_addr = client_socket_cloned.local_addr()?;
+                if socket != local_addr.to_string() {
+                    continue;
+                }
+
+                if let Some(sender) = &ui_sender {
+                    let _ = sender.send(AppMsg::ManageSubscribeResponse(
+                        response_status[1].to_string(),
+                    ));
+                }
+            }
+
+            "WRITTEN" => {
+                // se va a procesasr lo que otro agrego
+            }
+            _ => {
                 if let Some(sender) = &ui_sender {
                     let _ = sender.send(AppMsg::ManageResponse(first));
                 }
@@ -151,22 +181,20 @@ fn listen_to_redis_response(
     Ok(())
 }
 
-
-
-fn send_command_to_nodes(    
+fn send_command_to_nodes(
     _ui_sender: Option<Sender<AppMsg>>,
     connect_node_sender: MpscSender<TcpStream>,
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     last_command_sent: Arc<Mutex<String>>,
-    response: Vec<&str>
+    response: Vec<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let last_line_cloned = last_command_sent.lock().unwrap().clone();
     let mut locked_node_streams = node_streams.lock().unwrap();
     let new_node_address = response[2].to_string();
-    
+
     println!("Ultimo comando ejecutado: {:#?}", last_line_cloned);
     println!("Redirigiendo a nodo: {}", new_node_address);
-    
+
     if let Some(stream) = locked_node_streams.get_mut(&new_node_address) {
         println!("Usando conexión existente al nodo {}", new_node_address);
         stream.write_all(last_line_cloned.as_bytes())?;
@@ -179,14 +207,13 @@ fn send_command_to_nodes(
 
         let mut cloned_stream_to_connect = final_stream.try_clone()?;
         locked_node_streams.insert(new_node_address, final_stream);
-        
+
         let _ = connect_node_sender.send(cloned_stream_to_connect.try_clone()?);
         std::thread::sleep(std::time::Duration::from_millis(2));
 
         if let Err(e) = cloned_stream_to_connect.write_all(last_line_cloned.as_bytes()) {
             eprintln!("Error al reenviar el último comando: {}", e);
         }
-
     }
     Ok(())
 }

@@ -4,7 +4,8 @@ use self::gtk4::{
     prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, WidgetExt},
     CssProvider,
 };
-use crate::components::login::{LoginForm, LoginMsg, LoginOutput};
+use components::error_modal::ErrorModalMsg;
+use crate::components::{error_modal::ErrorModal, login::{LoginForm, LoginMsg, LoginOutput}};
 use app::gtk4::glib::Propagation;
 use client::client_run;
 use components::file_workspace::{FileWorkspace, FileWorkspaceMsg, FileWorkspaceOutputMessage};
@@ -34,7 +35,11 @@ pub struct AppModel {
     is_logged_in: bool,
     command: String,
     command_sender: Option<Sender<String>>,
-    username: String
+    username: String,
+    current_file:String,
+    subscribed_files: HashMap<String, bool>,
+    error_modal: Controller<ErrorModal>,
+
 }
 
 #[derive(Debug)]
@@ -50,8 +55,13 @@ pub enum AppMsg {
     RefreshData,
     CreateFile(String, String),
     SubscribeFile(String),
+    UnsubscribeFile(String),
     PrepareAndExecuteCommand(String, String),
     ManageResponse(String),
+    ManageSubscribeResponse(String),
+    ManageUnsubscribeResponse(String),
+    Error(String),
+
 }
 
 #[relm4::component(pub)]
@@ -130,6 +140,11 @@ impl SimpleComponent for AppModel {
             &css_provider,
             gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
+        let error_modal = ErrorModal::builder()
+            .transient_for(&root)
+            .launch(())
+            .detach();
+
 
         let header_model = NavbarModel::builder().launch(()).forward(
             sender.input_sender(),
@@ -145,18 +160,19 @@ impl SimpleComponent for AppModel {
             sender.input_sender(),
             |command: FileWorkspaceOutputMessage| match command {
                 FileWorkspaceOutputMessage::SubscribeFile(file) => AppMsg::SubscribeFile(file),
+                FileWorkspaceOutputMessage::UnsubscribeFile(file) => AppMsg::UnsubscribeFile(file),
             },
         );
 
-        let login_form_model = LoginForm::builder().launch(()).forward(
-            sender.input_sender(),
-            |output| match output {
-                LoginOutput::LoginRequested(username, password) => {
-                    let command = format!("AUTH {} {}", username, password);                    
-                    AppMsg::PrepareAndExecuteCommand(command, username)
-                },
-            },
-        );
+        let login_form_model =
+            LoginForm::builder()
+                .launch(())
+                .forward(sender.input_sender(), |output| match output {
+                    LoginOutput::LoginRequested(username, password) => {
+                        let command = format!("AUTH {} {}", username, password);
+                        AppMsg::PrepareAndExecuteCommand(command, username)
+                    }
+                });
 
         let mut model = AppModel {
             header_cont: header_model,
@@ -165,13 +181,17 @@ impl SimpleComponent for AppModel {
             is_logged_in: false,
             command: "".to_string(),
             command_sender: None,
-            username: "".to_string()
+            username: "".to_string(),
+            current_file: "".to_string(),
+            subscribed_files: HashMap::new(),
+            error_modal
+
         };
 
         let sender_clone = sender.clone();
 
         root.connect_close_request(move |_| {
-            sender_clone.input(AppMsg::CommandChanged("CLOSE".to_string()));
+            sender_clone.input(AppMsg::CommandChanged("close".to_string()));
             sender_clone.input(AppMsg::ExecuteCommand);
             Propagation::Proceed
         });
@@ -200,6 +220,9 @@ impl SimpleComponent for AppModel {
                         .unwrap();
                 }
             }
+            AppMsg::Error(error_message) => {
+                self.error_modal.emit(ErrorModalMsg::Show(error_message));
+            }
             AppMsg::PrepareAndExecuteCommand(command, username) => {
                 self.command = command;
                 self.username = username;
@@ -225,7 +248,7 @@ impl SimpleComponent for AppModel {
                 self.is_logged_in = true;
             }
             AppMsg::LoginFailure(error) => {
-                self.login_form_cont.emit(LoginMsg::SetErrorForm(error));                
+                self.login_form_cont.emit(LoginMsg::SetErrorForm(error));
             }
             AppMsg::Logout => {
                 self.header_cont
@@ -243,36 +266,67 @@ impl SimpleComponent for AppModel {
             AppMsg::CommandChanged(command) => {
                 self.command = command;
                 println!("comando {}", self.command);
-            },
+            }
 
             AppMsg::ManageResponse(resp) => {
                 if resp != "OK" {
+                    self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
                     return;
                 }
                 if self.command.contains("AUTH") {
                     sender.input(AppMsg::LoginSuccess(self.username.clone()));
                 }
             }
+            AppMsg::ManageSubscribeResponse(qty_subs) => {
+                let qty_subs_int = match qty_subs.parse::<i32>() {
+                    Ok(n) => n,
+                    Err(_e) => -1,
+                };
 
-            AppMsg::CreateFile(_file_id, _content) => {
-                /* println!("Se ejecuto el siguiente comando: {:#?}", self.command);
-                if let Some(channel_sender) = &self.command_sender {
-                    if let Err(e) = channel_sender.send(ClientCommand::CreateFile{ file_id, content }) {
-                        println!("Error enviando comando: {}", e);
-                    } else {
-                        self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
-                    }
-                } */
+                if qty_subs_int == -1 {
+                    println!("Error");
+                }
+
+                self.subscribed_files
+                    .insert(self.current_file.clone(), true);
+                println!("Archivos suscriptos : {:#?}", self.subscribed_files);
+                self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(
+                    self.current_file.clone(),
+                    crate::components::types::FileType::Text,
+                ));
             }
 
-            AppMsg::SubscribeFile(_file) => {
-                /* if let Some(channel_sender) = &self.command_sender {
-                    if let Err(e) = channel_sender.send("SUBSCRIBE ".to_string() + &file) {
-                        println!("Error enviando comando: {}", e);
-                    } else {
-                    }
-                } */
-                /* self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(file.clone(), "".to_string(), 1)); */
+            AppMsg::CreateFile(file_id, content) => {
+                self.command = format!("SET {} \"{}\"", file_id, content);
+                sender.input(AppMsg::ExecuteCommand);
+                // self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
+            }
+
+            AppMsg::SubscribeFile(file) => {
+                self.current_file = file;
+
+                self.command = format!("subscribe {}", self.current_file);
+
+                sender.input(AppMsg::ExecuteCommand);
+            }
+
+            AppMsg::UnsubscribeFile(file) => {
+                self.current_file = file;
+                self.command = format!("unsubscribe {}", self.current_file);
+                sender.input(AppMsg::ExecuteCommand);
+            }
+
+            AppMsg::ManageUnsubscribeResponse(response) => {
+                if response == "OK" {
+                    // Remover el archivo de los suscritos
+                    self.subscribed_files.remove(&self.current_file);
+                    println!("Desuscrito del archivo: {}", self.current_file);
+                } else {
+                    println!("Error al desuscribirse: {}", response);
+                }
+
+                self.command = "".to_string();
+                self.current_file = "".to_string();
             }
 
             AppMsg::ExecuteCommand => {
@@ -292,7 +346,7 @@ impl SimpleComponent for AppModel {
             AppMsg::CloseApplication => {
                 if let Some(channel_sender) = &self.command_sender {
                     println!("Enviando comando de cierre al servidor");
-                    if let Err(e) = channel_sender.send("CLOSE".to_string()) {
+                    if let Err(e) = channel_sender.send("close".to_string()) {
                         eprintln!("Error al enviar comando de cierre: {:?}", e);
                     }
                 }

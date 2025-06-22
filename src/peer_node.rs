@@ -1,4 +1,5 @@
 use local_node::NodeRole;
+use local_node::NodeState;
 use std::net::TcpStream;
 
 /// Estructura que representa un nodo que se conecto al la instancia del nodo levantado en consola. Contiene el TCP stream para comunicarse, el puerto en el que
@@ -9,15 +10,23 @@ pub struct PeerNode {
     pub port: usize,
     pub role: NodeRole,
     pub hash_range: (usize, usize),
+    pub state: NodeState,
 }
 
 impl PeerNode {
-    pub fn new(stream: TcpStream, port: usize, role: NodeRole, hash_range: (usize, usize)) -> Self {
+    pub fn new(
+        stream: TcpStream,
+        port: usize,
+        role: NodeRole,
+        hash_range: (usize, usize),
+        state: NodeState,
+    ) -> Self {
         PeerNode {
             stream,
             port,
             role,
             hash_range,
+            state,
         }
     }
 }

@@ -45,6 +45,7 @@ pub struct CommandRequest {
     pub command: String,
     pub key: Option<String>,
     pub arguments: Vec<ValueType>,
+    pub unparsed_command: String,
 }
 
 /// Representa una respuesta que puede enviarse a un cliente en formato RESP.
@@ -75,7 +76,7 @@ pub enum CommandResponse {
 /// # Errores
 /// Retorna `std::io::Error` si el formato RESP es inválido o si el comando está vacío
 pub fn parse_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<CommandRequest> {
-    let command_parts = parse_resp_command(reader)?;
+    let (command_parts, unparsed_command) = parse_resp_command(reader)?;
 
     if command_parts.is_empty() {
         return Err(std::io::Error::new(
@@ -90,6 +91,7 @@ pub fn parse_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<Comma
         command,
         key: None,
         arguments: Vec::new(),
+        unparsed_command,
     };
 
     if command_parts.len() > 1 {
@@ -133,6 +135,7 @@ pub fn write_response(stream: &TcpStream, response: &CommandResponse) -> std::io
 /// String formateada según el protocolo RESP
 #[allow(dead_code)]
 pub fn format_resp_command(command_parts: &[&str]) -> String {
+
     let mut resp_message = format!("*{}\r\n", command_parts.len());
 
     for part in command_parts {
@@ -142,15 +145,34 @@ pub fn format_resp_command(command_parts: &[&str]) -> String {
     resp_message
 }
 
+#[allow(dead_code)]
+pub fn format_resp_publish(channel: &str, message: &str) -> String {
+    let command_parts = ["PUBLISH", channel, message];
+    let mut resp_message = format!("*{}\r\n", command_parts.len());
+
+    for part in &command_parts {
+        resp_message.push_str(&format!("${}\r\n{}\r\n", part.len(), part));
+    }
+
+    resp_message
+}
+
+
+
 /// Parsea una línea en formato RESP que representa un array de cadenas (`Vec<String>`).
 ///
 /// Lee el número de elementos del array (`*<n>`), seguido por `n` cadenas tipo bulk (`$<len>\r\n<value>\r\n`).
 ///
 /// # Errores
 /// Retorna `std::io::Error` si el formato RESP no es válido o si ocurre un error de lectura.
-pub fn parse_resp_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<Vec<String>> {
+pub fn parse_resp_command(
+    reader: &mut BufReader<TcpStream>,
+) -> std::io::Result<(Vec<String>, String)> {
     let mut line = String::new();
+    let mut unparsed_command = String::new();
+
     reader.read_line(&mut line)?;
+    unparsed_command.push_str(&line);
 
     if !line.starts_with('*') {
         return Err(std::io::Error::new(
@@ -165,6 +187,7 @@ pub fn parse_resp_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<
     for _ in 0..num_elements {
         line.clear();
         reader.read_line(&mut line)?;
+        unparsed_command.push_str(&line);
 
         if !line.starts_with('$') {
             return Err(std::io::Error::new(
@@ -185,14 +208,16 @@ pub fn parse_resp_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<
 
         let mut buffer = vec![0u8; length];
         reader.read_exact(&mut buffer)?;
+        unparsed_command.push_str(&String::from_utf8_lossy(&buffer));
 
         let mut crlf = [0u8; 2];
         reader.read_exact(&mut crlf)?;
+        unparsed_command.push_str("\r\n");
 
         result.push(String::from_utf8_lossy(&buffer).to_string());
     }
 
-    Ok(result)
+    Ok((result, unparsed_command))
 }
 
 /// Escribe una cadena como bulk string en formato RESP (`$<len>\r\n<value>\r\n`).
@@ -227,6 +252,93 @@ pub fn write_resp_null(mut stream: &TcpStream) -> std::io::Result<()> {
 /// Retorna `std::io::Error` si no puede escribir en el stream.
 pub fn write_resp_error(mut stream: &TcpStream, msg: &str) -> std::io::Result<()> {
     stream.write_all(format!("-ERR {}\r\n", msg).as_bytes())
+}
+
+pub fn parse_replica_command(
+    reader: &mut BufReader<std::io::Cursor<String>>,
+) -> std::io::Result<CommandRequest> {
+    let (command_parts, unparsed_command) = parse_replica_resp(reader)?;
+
+    if command_parts.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Empty command",
+        ));
+    }
+
+    let command = command_parts[0].to_lowercase();
+
+    let mut request = CommandRequest {
+        command,
+        key: None,
+        arguments: Vec::new(),
+        unparsed_command,
+    };
+
+    if command_parts.len() > 1 {
+        request.key = Some(command_parts[1].clone());
+    }
+
+    for arg in command_parts.iter().skip(2) {
+        request.arguments.push(ValueType::String(arg.clone()));
+    }
+
+    Ok(request)
+}
+
+pub fn parse_replica_resp(
+    reader: &mut BufReader<std::io::Cursor<String>>,
+) -> std::io::Result<(Vec<String>, String)> {
+    let mut line = String::new();
+    let mut unparsed_command = String::new();
+
+    reader.read_line(&mut line)?;
+    unparsed_command.push_str(&line);
+
+    if !line.starts_with('*') {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Not a RESP array",
+        ));
+    }
+
+    let num_elements: usize = line[1..].trim().parse().unwrap_or(0);
+    let mut result = Vec::with_capacity(num_elements);
+
+    for _ in 0..num_elements {
+        line.clear();
+        reader.read_line(&mut line)?;
+        unparsed_command.push_str(&line);
+
+        if !line.starts_with('$') {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Expected bulk string",
+            ));
+        }
+
+        let length: usize = match line[1..].trim().parse() {
+            Ok(len) => len,
+            Err(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Invalid length",
+                ))
+            }
+        };
+
+        let mut buffer = vec![0u8; length];
+        reader.read_exact(&mut buffer)?;
+        unparsed_command.push_str(&String::from_utf8_lossy(&buffer));
+
+        let mut crlf = [0u8; 2];
+        reader.read_exact(&mut crlf)?;
+        unparsed_command.push_str("\r\n");
+
+        result.push(String::from_utf8_lossy(&buffer).to_string());
+    }
+
+    Ok((result, unparsed_command))
 }
 
 #[cfg(test)]

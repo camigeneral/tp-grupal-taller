@@ -1,8 +1,6 @@
 extern crate gtk4;
-extern crate rand;
 extern crate relm4;
-use self::gtk4::prelude::{ButtonExt, PopoverExt, WidgetExt};
-use self::rand::Rng;
+use self::gtk4::prelude::{BoxExt, ButtonExt, EditableExt, OrientableExt, PopoverExt, WidgetExt};
 use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
 
 /// Modelo que representa la barra de navegación (navbar). Gestiona el estado de la conexión y
@@ -13,6 +11,9 @@ pub struct NavbarModel {
     is_connected: bool,
     /// Indica si el usuario esta
     username: String,
+
+    file_name: String,
+
     /// Popover que contiene las opciones para crear nuevos documentos.
     new_file_popover: Option<gtk::Popover>,
 }
@@ -31,6 +32,7 @@ pub enum NavbarMsg {
     CreateSpreadsheetDocument,
 
     SetLoggedInUser(String),
+    SetFileName(String),
 }
 
 /// Enum que define las salidas posibles del componente `NavbarModel`.
@@ -59,7 +61,7 @@ impl SimpleComponent for NavbarModel {
                 set_label: &(model.username),
                 add_css_class: "username"
             },
-            /* #[wrap(Some)]
+            #[wrap(Some)]
             set_title_widget = &gtk::Box {
                 #[name="new_file_button"]
                 gtk::Button {
@@ -77,6 +79,15 @@ impl SimpleComponent for NavbarModel {
                     gtk::Box {
                         set_orientation: gtk::Orientation::Vertical,
                         set_spacing: 5,
+                        gtk::Label {
+                            set_label: "Nombre del archivo:",
+                        },
+                        #[name = "file_name"]
+                        gtk::Entry {
+                            connect_changed[sender] => move |entry| {
+                                sender.input(NavbarMsg::SetFileName(entry.text().to_string()));
+                            }
+                        },
                         gtk::Button {
                             set_label: "Hoja de texto",
                             connect_clicked => NavbarMsg::CreateTextDocument,
@@ -89,7 +100,7 @@ impl SimpleComponent for NavbarModel {
                 },
                 #[watch]
                 set_visible: model.is_connected,
-            }, */
+            },
 
             pack_end = &gtk::Button {
                 #[watch]
@@ -112,10 +123,11 @@ impl SimpleComponent for NavbarModel {
             is_connected: false,
             new_file_popover: None,
             username: "".to_string(),
+            file_name: "".to_string(),
         };
 
         let widgets = view_output!();
-        model.new_file_popover = None;
+        model.new_file_popover = Some(widgets.new_file_popover.clone());
         ComponentParts { model, widgets }
     }
 
@@ -133,21 +145,28 @@ impl SimpleComponent for NavbarModel {
                 if let Some(popover) = &self.new_file_popover {
                     popover.popdown();
                 }
-                println!("Crear hoja de texto");
-                let file_id =
-                    "text".to_string() + &rand::thread_rng().gen_range(1..1000000).to_string();
+                if self.file_name.trim().is_empty() {
+                    println!("El nombre del archivo es obligatorio.");
+                    return;
+                }
+                let file_id = format!("{}.txt", self.file_name.trim());
                 sender
-                    .output(NavbarOutput::CreateFileRequested(
-                        file_id,
-                        "nuevo contenido".to_string(),
-                    ))
+                    .output(NavbarOutput::CreateFileRequested(file_id, "".to_string()))
                     .unwrap();
             }
+            NavbarMsg::SetFileName(file_name) => self.file_name = file_name,
             NavbarMsg::CreateSpreadsheetDocument => {
                 if let Some(popover) = &self.new_file_popover {
                     popover.popdown();
                 }
-                println!("Crear hoja de cálculo");
+                if self.file_name.trim().is_empty() {
+                    println!("El nombre del archivo es obligatorio.");
+                    return;
+                }
+                let file_id = format!("{}.xlsx", self.file_name.trim());
+                sender
+                    .output(NavbarOutput::CreateFileRequested(file_id, "".to_string()))
+                    .unwrap();
             }
             NavbarMsg::SetLoggedInUser(username) => {
                 self.username = username;
