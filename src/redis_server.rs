@@ -623,7 +623,7 @@ pub fn persist_documents(
                     let mut document_data = format!("{}/++/", document_id);
                     if !filas.is_empty() {
                         for fila in filas {
-                            document_data.push_str(&fila.join(","));
+                            document_data.push_str(fila);
                             document_data.push_str("/--/");
                         }
                     }
@@ -664,10 +664,10 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Documen
                 .collect();
             documents.insert(document_id, Documento::Texto(messages));
         } else if document_id.ends_with(".xlsx") {
-            let filas: Vec<Vec<String>> = messages_data
+            let filas: Vec<String> = messages_data
                 .split("/--/")
                 .filter(|s| !s.is_empty())
-                .map(|fila| fila.split(',').map(|c| c.to_string()).collect())
+                .map(|s| s.to_string())
                 .collect();
             documents.insert(document_id, Documento::Calculo(filas));
         }
