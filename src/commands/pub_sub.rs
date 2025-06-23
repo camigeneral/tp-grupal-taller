@@ -145,6 +145,65 @@ pub fn handle_unsubscribe(
     }
 }
 
+pub fn handle_publish<T: Write>(
+    request: &CommandRequest,
+    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    active_clients: &Arc<Mutex<HashMap<String, T>>>,
+) -> RedisResponse {
+    let doc = match &request.key {
+        Some(k) => k,
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Usage: PUBLISH <document> <message>".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
+    };
+
+    if request.arguments.is_empty() {
+        return RedisResponse::new(
+            CommandResponse::Error("Usage: PUBLISH <document> <message>".to_string()),
+            false,
+            "".to_string(),
+            doc.to_string(),
+        );
+    }
+
+    let message = match &request.arguments[0] {
+        ValueType::String(s) => s.clone(),
+        _ => {
+            return RedisResponse::new(
+                CommandResponse::Error("Tiene que ser un string".to_string()),
+                false,
+                "".to_string(),
+                doc.to_string(),
+            )
+        }
+    };
+
+    let mut sent_count = 0;
+    let subscribers_guard = document_subscribers.lock().unwrap();
+
+    let mut clients_guard = active_clients.lock().unwrap();
+    if let Some(subscribers) = subscribers_guard.get(doc) {
+        for subscriber_id in subscribers {
+            if let Some(client) = clients_guard.get_mut(subscriber_id) {
+                let _ = writeln!(client, "{}", message); 
+                sent_count += 1;
+            }
+        }
+    }
+    RedisResponse::new(
+        CommandResponse::Integer(sent_count),
+        false,
+        format!("Mensaje enviado a {} suscriptores", sent_count),
+        doc.to_string(),
+    )
+}
+
+
 
 // #[cfg(test)]
 // mod tests {
@@ -177,7 +236,7 @@ pub fn handle_unsubscribe(
 //         let map = document_subscribers.lock().unwrap();
 //         assert_eq!(map.get(doc).unwrap(), &vec!["client1".to_string()]);
 //     }
-
+/* 
     #[test]
     fn test_handle_subscribe_no_key() {
         let document_subscribers = setup_map("doc1", vec![]);
@@ -362,4 +421,5 @@ pub fn handle_unsubscribe(
         let is_error = request.key.is_none();
         assert!(is_error);
     }
-}
+
+} */

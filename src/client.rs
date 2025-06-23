@@ -7,6 +7,7 @@ use std::net::TcpStream;
 use std::sync::mpsc::{Receiver, channel, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use commands::redis_parser::{format_resp_command, format_resp_publish};
 
 #[path = "utils/redis_parser.rs"]
 mod redis_parser;

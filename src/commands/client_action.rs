@@ -5,8 +5,8 @@ use crate::client_info;
 use crate::commands::list::{handle_llen, handle_lset, handle_rpush};
 use crate::commands::set::handle_scard;
 #[allow(unused_imports)]
-use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
+use commands::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
@@ -236,7 +236,6 @@ fn error_response(msg: &str, doc: &str) -> RedisResponse {
 #[cfg(test)]
  mod tests {
     use super::*;
-    use crate::utils::redis_parser::{CommandRequest, ValueType};
     use std::sync::{Arc, Mutex};
     use std::collections::HashMap;
 
