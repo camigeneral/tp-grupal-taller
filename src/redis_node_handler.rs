@@ -245,11 +245,8 @@ fn handle_node(
     let mut command_string = String::new();
     let mut serialized_hashmap = Vec::new();
     let mut serialized_vec = Vec::new();
-
-    println!("aca");
-
-    for command in reader.lines().map_while(Result::ok) {
-        println!("aaaaa");
+    
+    for command in reader.lines().map_while(Result::ok) {        
 
         let encrypted_bytes = command.as_bytes();
         let decrypted_bytes = decrypt_xor(encrypted_bytes, ENCRYPTION_KEY);
