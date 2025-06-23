@@ -44,11 +44,11 @@ impl SimpleComponent for LoginForm {
 
             gtk::Box {
                 set_halign: gtk::Align::Center,
-                set_margin_bottom: 60,
+                set_margin_bottom: 80,
 
                 gtk::Image {
                     set_from_file: Some("src/components/images/logo.png"),
-                    set_widget_name: "Logo", 
+                    set_widget_name: "LoginLogo", 
                 }
             },
 
@@ -113,7 +113,7 @@ impl SimpleComponent for LoginForm {
 
         let provider = gtk::CssProvider::new();
         provider.load_from_data(
-            "#Logo {
+            "#LoginLogo {
                 transform: scale(25);
                 transform-origin: center;
             }"
