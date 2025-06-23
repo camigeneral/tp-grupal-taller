@@ -53,18 +53,22 @@ pub fn handle_welcome(
     )
 }
 
+struct ConfigurationFile {
+    doc: String,
+    final_text: String,
+}
+
 pub fn set_content_file(
     request: &CommandRequest,
     docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
-
     let doc = match get_document_name(request) {
         Ok(doc) => doc,
         Err(resp) => return resp,
     };
 
     if request.arguments.len() < 2 {
-        return error_response("Faltan argumentos: índice y carácter", &doc);
+        return error_response("Faltan argumentos: índice, carácter", &doc);
     }
 
     let is_calc = !doc.ends_with(".txt");
@@ -80,26 +84,30 @@ pub fn set_content_file(
         text.clone()
     };
 
+    let config = ConfigurationFile {
+        doc: doc.clone(),
+        final_text,
+    };
+
     if is_calc {
-        proccess_as_calc(docs, doc, final_text, request)
+        proccess_as_calc(docs, &config, request)
     } else {
-        proccess_as_text(docs, doc, final_text, request)
+        proccess_as_text(docs, &config, request)
     }
 }
 
 fn proccess_as_text(
     docs: &Arc<Mutex<HashMap<String, Documento>>>,
-    doc: String,
-    final_text: String,
+    config: &ConfigurationFile,
     request: &CommandRequest,
 ) -> RedisResponse {
-    let line_number = match parse_line_number(&request.arguments[0], &doc) {
+    let line_number = match parse_line_number(&request.arguments[0], &config.doc) {
         Ok(num) => num,
         Err(resp) => return resp,
     };
     let len_request: CommandRequest = CommandRequest {
         command: "llen".to_string(),
-        key: Some(doc.clone()),
+        key: Some(config.doc.clone()),
         arguments: vec![],
         unparsed_command: "".to_string(),
     };
@@ -110,75 +118,74 @@ fn proccess_as_text(
             if line_number >= len {
                 let rpush_request = CommandRequest {
                     command: "rpush".to_string(),
-                    key: Some(doc.clone()),
-                    arguments: vec![ValueType::String(final_text.clone())],
+                    key: Some(config.doc.clone()),
+                    arguments: vec![ValueType::String(config.final_text.clone())],
                     unparsed_command: "".to_string(),
                 };
 
                 let response = handle_rpush(&rpush_request, docs);
                 if matches!(response.response, CommandResponse::Error(_)) {
-                    return error_response("Error al hacer rpush", &doc);
+                    return error_response("Error al hacer rpush", &config.doc);
                 }
             } else {
                 let lset_request = CommandRequest {
                     command: "lset".to_string(),
-                    key: Some(doc.clone()),
+                    key: Some(config.doc.clone()),
                     arguments: vec![
                         ValueType::Integer(line_number),
-                        ValueType::String(final_text.clone()),
+                        ValueType::String(config.final_text.clone()),
                     ],
                     unparsed_command: "".to_string(),
                 };
 
                 let response = handle_lset(&lset_request, docs);
                 if matches!(response.response, CommandResponse::Error(_)) {
-                    return error_response("Error al hacer lset", &doc);
+                    return error_response("Error al hacer lset", &config.doc);
                 }
             }
         }
-        _ => return error_response("Error al obtener la longitud de la lista", &doc),
+        _ => return error_response("Error al obtener la longitud de la lista", &config.doc),
     }
 
     RedisResponse::new(
         CommandResponse::String(format!(
-            "UPDATE-FILES {} {} {}",
-            doc, line_number, final_text
+            "UPDATE-FILES|{}|{}|{}",
+            config.doc, line_number, config.final_text
         )),
         true,
         "Texto actualizado".to_string(),
-        doc,
+        config.doc.clone(),
     )
 }
 
 fn proccess_as_calc(
     docs: &Arc<Mutex<HashMap<String, Documento>>>,
-    doc: String,
-    final_text: String,
+    config: &ConfigurationFile,
     request: &CommandRequest,
 ) -> RedisResponse {
-    let cell_id = match get_text_argument(&request.arguments[0], &doc) {
+    let cell_id = match get_text_argument(&request.arguments[0], &config.doc) {
         Ok(id) => id,
         Err(resp) => return resp,
     };
 
     let (col_index, row_index) = match parse_cell_id(&cell_id) {
         Ok(indices) => indices,
-        Err(e) => return error_response(e, &doc),
+        Err(e) => return error_response(e, &config.doc),
     };
 
     let total_columns = 10;
     let index = col_index + total_columns * row_index;
 
     if index >= 100 {
-        return error_response("Celda fuera de rango", &doc);
+        return error_response("Celda fuera de rango", &config.doc);
     }
 
     let lset_request = CommandRequest {
         command: "lset".to_string(),
-        key: Some(doc.clone()),
+        key: Some(config.doc.clone()),
         arguments: vec![
             ValueType::Integer(index as i64),
-            ValueType::String(final_text.clone()),
+            ValueType::String(config.final_text.clone()),
         ],
         unparsed_command: "".to_string(),
     };
@@ -189,10 +196,10 @@ fn proccess_as_calc(
     }
 
     RedisResponse::new(
-        CommandResponse::String(format!("UPDATE-FILES|{}|{}|{}", doc, index, final_text)),
+        CommandResponse::String(format!("UPDATE-FILES|{}|{}|{}", config.doc, index, config.final_text)),
         true,
         "Celda actualizada".to_string(),
-        doc,
+        config.doc.clone(),
     )
 }
 
