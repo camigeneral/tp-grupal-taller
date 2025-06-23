@@ -61,9 +61,9 @@ pub fn handle_subscribe(
 
         let notification = format!("CLIENT {}|{}", client_addr, doc);
         RedisResponse::new(
-            CommandResponse::String(notification),
-            false,
-            "".to_string(),
+            CommandResponse::String(notification.clone()),
+            true,
+            notification,
             doc.to_string(),
         )
     } else {

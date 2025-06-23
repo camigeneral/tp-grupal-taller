@@ -139,7 +139,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             match node_streams_clone.lock() {
                 Ok(streams) => {
                     if let Some(mut stream) = streams.get(&main_address_clone) {
-                        let command_parts = vec!["SET", "docprueba.txt", "hola"];
+                        let command_parts = vec!["SET", "docprueba.txt", ""];
                         let resp_command = format_resp_command(&command_parts);
 
                         match last_command_sent_clone.lock() {
