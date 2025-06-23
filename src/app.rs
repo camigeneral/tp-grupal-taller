@@ -1,7 +1,7 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::{
-    prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, PopoverExt, WidgetExt},
+    prelude::{BoxExt, GtkWindowExt, OrientableExt, PopoverExt, WidgetExt},
     CssProvider,
 };
 use crate::components::{
@@ -119,7 +119,7 @@ impl SimpleComponent for AppModel {
                          }
                     },
 
-                    gtk::Box {
+    /*                 gtk::Box {
                         set_hexpand: true,
                         set_halign: gtk::Align::End,
 
@@ -159,7 +159,7 @@ impl SimpleComponent for AppModel {
                                 }
                             },
                         },
-                    }
+                    } */
                 },
 
                 append: model.files_manager_cont.widget(),
@@ -257,7 +257,7 @@ impl SimpleComponent for AppModel {
             Propagation::Proceed
         });
         let widgets = view_output!();
-        model.new_file_popover = Some(widgets.new_file_popover.clone());
+        //model.new_file_popover = Some(widgets.new_file_popover.clone());
         let ui_sender: relm4::Sender<AppMsg> = sender.input_sender().clone();
         let (tx, rx) = channel::<String>();
         let command_sender = Some(tx.clone());
