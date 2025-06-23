@@ -4,6 +4,7 @@ use self::gtk4::{
     prelude::{BoxExt, GtkWindowExt, OrientableExt, PopoverExt, WidgetExt},
     CssProvider,
 };
+use components::types::FileType;
 use crate::components::{
     error_modal::ErrorModal,
     login::{LoginForm, LoginMsg, LoginOutput},
@@ -56,13 +57,14 @@ pub enum AppMsg {
     CommandChanged(String),
     ExecuteCommand,
     CloseApplication,
+    GetFiles,
     RefreshData(String, String, String),
     CreateFile(String, String),
     SubscribeFile(String),
     UnsubscribeFile(String),
     PrepareAndExecuteCommand(String, String),
     ManageResponse(String),
-    ManageSubscribeResponse(String),
+    ManageSubscribeResponse(String, String, String),
     ManageUnsubscribeResponse(String),
     SetContentFileCommand(String),
     Error(String),
@@ -75,6 +77,8 @@ pub enum AppMsg {
     CreateSpreadsheetDocument,
     AddContent(String, String, i32),
     AddContentSpreadSheet(String, String, String, String),
+    UpdateFilesList(Vec<String>),
+    FilesLoaded
 }
 
 #[relm4::component(pub)]
@@ -221,6 +225,7 @@ impl SimpleComponent for AppModel {
                 FileWorkspaceOutputMessage::ContentAddedSpreadSheet(file, col, row, text) => {
                     AppMsg::AddContentSpreadSheet(file, col, row, text)
                 }
+                FileWorkspaceOutputMessage::FilesLoaded => AppMsg::FilesLoaded,
             },
         );
 
@@ -324,32 +329,37 @@ impl SimpleComponent for AppModel {
                 self.command = command;
                 println!("comando {}", self.command);
             }
+            
+            AppMsg::FilesLoaded => {
+                sender.input(AppMsg::LoginSuccess(self.username.clone()));
+            }
 
             AppMsg::ManageResponse(resp) => {
                 if resp != "OK" {
                     return;
                 }
                 if self.command.contains("AUTH") {
-                    sender.input(AppMsg::LoginSuccess(self.username.clone()));
+                    sender.input(AppMsg::GetFiles);                
                 }
-                self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
-                self.command.clear();
             }
-            AppMsg::ManageSubscribeResponse(qty_subs) => {
-                let qty_subs_int = match qty_subs.parse::<i32>() {
-                    Ok(n) => n,
-                    Err(_e) => -1,
+            AppMsg::GetFiles => {
+                self.command = format!("get_files redis");
+                sender.input(AppMsg::ExecuteCommand);
+            }
+            AppMsg::ManageSubscribeResponse(file, qty_subs, content) => {
+                let file_type = if file.ends_with(".xlsx") {
+                    FileType::Sheet
+                } else {
+                    FileType::Text
                 };
-
-                if qty_subs_int == -1 {
-                    println!("Error");
-                }
 
                 self.subscribed_files
                     .insert(self.current_file.clone(), true);
                 self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(
                     self.current_file.clone(),
-                    crate::components::types::FileType::Text,
+                    qty_subs,
+                    file_type,
+                    content
                 ));
             }
 
@@ -478,6 +488,22 @@ impl SimpleComponent for AppModel {
                 }
                 let file_id = format!("{}.xlsx", self.file_name.trim());
                 sender.input(AppMsg::CreateFile(file_id, "".to_string()));
+            }
+
+            AppMsg::UpdateFilesList(archivos) => {
+                let archivos_tipos: Vec<(String, FileType)> = archivos
+                    .into_iter()
+                    .filter(|name| !name.is_empty())
+                    .map(|name| {
+                        let tipo = if name.ends_with(".xlsx") {
+                            FileType::Sheet
+                        } else {
+                            FileType::Text
+                        };
+                        (name, tipo)
+                    })
+                    .collect();
+                self.files_manager_cont.emit(FileWorkspaceMsg::UpdateFilesList(archivos_tipos));            
             }
         }
     }
