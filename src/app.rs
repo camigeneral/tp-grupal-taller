@@ -105,31 +105,6 @@ impl SimpleComponent for AppModel {
                     set_spacing: 15,
                     set_hexpand: true,
 
-                    // inicio barra comandos - borrar
-
-                    gtk::Box {
-                        set_spacing: 10,
-
-                        gtk::Label {
-                            set_label: "Comandos:",
-                        },
-                        #[name = "command_entry"]
-                        gtk::Entry {
-                            connect_changed[sender] => move |entry| {
-                                sender.input(AppMsg::CommandChanged(entry.text().to_string()));
-                            }
-                        },
-                        gtk::Button {
-                            set_label: "Ejecutar",
-                            add_css_class: "execute-command",
-                            connect_clicked[sender] => move |_| {
-                                sender.input(AppMsg::ExecuteCommand);
-                            }
-                        },
-                    },
-
-                    // fina barra comandos - borrar
-
                     gtk::Box {
                         set_halign: gtk::Align::Center,
 
