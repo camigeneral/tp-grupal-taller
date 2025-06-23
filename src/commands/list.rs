@@ -138,8 +138,8 @@ pub fn handle_lset(
     }
 
     let (index, element) = (&request.arguments[0], &request.arguments[1]);
-    let (index_i32, element_str) = match (index, element) {
-        (ValueType::Integer(i), ValueType::String(s)) => (*i as i32, s.clone()),
+    let (index_i64, element_str) = match (index, element) {
+        (ValueType::Integer(i), ValueType::String(s)) => (*i, s.clone()),
         _ => {
             return RedisResponse::new(
                 CommandResponse::Error("Invalid arguments for LSET".to_string()),
@@ -151,45 +151,48 @@ pub fn handle_lset(
     };
 
     let mut docs_lock = docs.lock().unwrap();
-    let list = docs_lock.entry(doc.clone()).or_default();
+    let doc_entry = docs_lock.entry(doc.clone()).or_default();
 
-    let index_usize = if index_i32 < 0 {
-        let abs_index = index_i32.unsigned_abs() as usize;
-        if abs_index > list.len() {
-            return RedisResponse::new(
-                CommandResponse::Error("Index out of bounds".to_string()),
+    match doc_entry {
+        Documento::Calculo(vec) | Documento::Texto(vec) => {
+            let index_usize = if index_i64 < 0 {
+                let abs_index = index_i64.unsigned_abs() as usize;
+                if abs_index > vec.len() {
+                    return RedisResponse::new(
+                        CommandResponse::Error("Index out of bounds".to_string()),
+                        false,
+                        "".to_string(),
+                        doc.clone(),
+                    );
+                }
+                vec.len() - abs_index
+            } else {
+                index_i64 as usize
+            };
+
+            if index_usize >= vec.len() {
+                return RedisResponse::new(
+                    CommandResponse::Error("Index out of bounds".to_string()),
+                    false,
+                    "".to_string(),
+                    doc.clone(),
+                );
+            }
+
+            vec[index_usize] = element_str.clone();
+
+            let message = format!("Updated index {} with '{}'", index_i64, element_str);
+            RedisResponse::new(
+                CommandResponse::String("Ok".to_string()),
                 false,
-                "".to_string(),
-                doc,
-            );
-        }
-        list.len() - abs_index
-    } else {
-        index_i32 as usize
-    };
-
-    if index_usize >= list.len() {
-        return RedisResponse::new(
-            CommandResponse::Error("Index out of bounds".to_string()),
-            false,
-            "".to_string(),
-            doc,
-        );
+                message,
+                doc.clone(),
+            )
+        }        
     }
-
-    // list[index_usize] = element_str.clone();
-    if let Some(val) = list.get_mut(index_usize) {
-        *val = element_str.clone();
-    }
-
-    let message = format!("Updated index {} with '{}'", index_i32, element_str);
-    RedisResponse::new(
-        CommandResponse::String("Ok".to_string()),
-        false,
-        message,
-        doc,
-    )
 }
+
+
 
 /// Maneja el comando LLEN que devuelve la longitud de una lista
 ///
@@ -202,7 +205,7 @@ pub fn handle_lset(
 pub fn handle_llen(
     request: &CommandRequest,
     docs: &Arc<Mutex<HashMap<String, Documento>>>,
-) -> RedisResponse {
+) -> RedisResponse {    
     let doc = match &request.key {
         Some(k) => k.clone(),
         None => {
@@ -215,9 +218,8 @@ pub fn handle_llen(
         }
     };
 
-    let docs_lock = docs.lock().unwrap();
+    let docs_lock = docs.lock().unwrap();    
     let list = docs_lock.get(&doc);
-
     let length = match list {
         Some(l) => l.len(),
         None => 0,
@@ -391,17 +393,7 @@ mod tests {
         let response = handle_llen(&request, &docs);
         assert!(matches!(response.response, CommandResponse::Integer(1)));
     }
-        let docs = setup();
-        let request = CommandRequest {
-            command: "LTRIM".to_string(),
-            key: Some("test2".to_string()),
-            arguments: vec![],
-            unparsed_command: String::new(),
-        };
-        let response = handle_ltrim(&request, &docs);
-        assert!(matches!(response.response, CommandResponse::Error(_)));
-    }
-
+      
     #[test]
     fn test_handle_rpush() {
         let docs = setup();
