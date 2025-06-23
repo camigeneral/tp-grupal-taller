@@ -6,7 +6,7 @@ use super::set;
 use super::string;
 use crate::client_info;
 use crate::documento::Documento;
-use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
+use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
@@ -41,6 +41,7 @@ pub fn execute_command(
         "linsert" => list::handle_linsert(&request, docs),
         "auth" => auth::handle_auth(&request, logged_clients, active_clients, client_addr),
         "welcome" => string::handle_welcome(&request, active_clients, shared_sets),
+        "list_files" => string::handle_list_files(),
         _ => RedisResponse::new(
             CommandResponse::Error("Unknown".to_string()),
             false,

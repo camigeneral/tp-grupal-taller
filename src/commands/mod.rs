@@ -21,3 +21,6 @@ pub mod client;
 
 //Modulo para el manejo del auth
 pub mod auth;
+
+ #[path = "../utils/redis_parser.rs"]
+pub mod redis_parser;
