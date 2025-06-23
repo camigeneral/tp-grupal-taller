@@ -300,10 +300,13 @@ impl SimpleComponent for SpreadsheetModel {
                 self.update_display();
             }
 
-            SpreadsheetMsg::UpdateSheetContent(_file_name, index_set,  content) => {
+            SpreadsheetMsg::UpdateSheetContent(_file_name, index_set, content) => {
                 let row = index_set / 10;
                 let col = index_set % 10;
-                println!("Estamos en ele xcel, fila: {} columna {} dato {}", row, col, content);
+                println!(
+                    "Estamos en ele xcel, fila: {} columna {} dato {}",
+                    row, col, content
+                );
                 if row < 10 && col < 10 {
                     self.update_cell(row as usize, col as usize, content);
                 }

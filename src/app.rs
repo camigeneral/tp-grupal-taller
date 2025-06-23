@@ -4,7 +4,6 @@ use self::gtk4::{
     prelude::{BoxExt, GtkWindowExt, OrientableExt, PopoverExt, WidgetExt},
     CssProvider,
 };
-use components::types::FileType;
 use crate::components::{
     error_modal::ErrorModal,
     login::{LoginForm, LoginMsg, LoginOutput},
@@ -14,6 +13,7 @@ use client::client_run;
 use components::error_modal::ErrorModalMsg;
 use components::file_workspace::{FileWorkspace, FileWorkspaceMsg, FileWorkspaceOutputMessage};
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
+use components::types::FileType;
 use std::collections::HashMap;
 use std::thread;
 
@@ -78,7 +78,7 @@ pub enum AppMsg {
     AddContent(String, String, i32),
     AddContentSpreadSheet(String, String, String, String),
     UpdateFilesList(Vec<String>),
-    FilesLoaded
+    FilesLoaded,
 }
 
 #[relm4::component(pub)]
@@ -329,7 +329,7 @@ impl SimpleComponent for AppModel {
                 self.command = command;
                 println!("comando {}", self.command);
             }
-            
+
             AppMsg::FilesLoaded => {
                 sender.input(AppMsg::LoginSuccess(self.username.clone()));
             }
@@ -339,7 +339,7 @@ impl SimpleComponent for AppModel {
                     return;
                 }
                 if self.command.contains("AUTH") {
-                    sender.input(AppMsg::GetFiles);                
+                    sender.input(AppMsg::GetFiles);
                 }
             }
             AppMsg::GetFiles => {
@@ -359,7 +359,7 @@ impl SimpleComponent for AppModel {
                     self.current_file.clone(),
                     qty_subs,
                     file_type,
-                    content
+                    content,
                 ));
             }
 
@@ -445,7 +445,8 @@ impl SimpleComponent for AppModel {
                 }
             }
             AppMsg::RefreshData(file, index, value) => {
-                self.files_manager_cont.emit(FileWorkspaceMsg::UpdateFile(file, index, value));
+                self.files_manager_cont
+                    .emit(FileWorkspaceMsg::UpdateFile(file, index, value));
             }
 
             AppMsg::CloseApplication => {
@@ -503,7 +504,8 @@ impl SimpleComponent for AppModel {
                         (name, tipo)
                     })
                     .collect();
-                self.files_manager_cont.emit(FileWorkspaceMsg::UpdateFilesList(archivos_tipos));            
+                self.files_manager_cont
+                    .emit(FileWorkspaceMsg::UpdateFilesList(archivos_tipos));
             }
         }
     }

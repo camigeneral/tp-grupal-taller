@@ -13,7 +13,7 @@ struct FileListItem {
     /// Nombre del archivo.
     name: String,
     /// Tipo de archivo (texto o hoja de cálculo).
-    file_type: FileType,        
+    file_type: FileType,
 }
 
 /// Estructura que representa la vista de la lista de archivos. Contiene una lista de archivos
@@ -146,9 +146,7 @@ impl SimpleComponent for FileListView {
                 self.update_file_list_based_on_filter();
             }
             FileFilterAction::SelectFile(file_name, file_type) => sender
-                .output(FileFilterAction::SelectFile(
-                    file_name, file_type,
-                ))
+                .output(FileFilterAction::SelectFile(file_name, file_type))
                 .unwrap(),
 
             FileFilterAction::UpdateFiles(new_files) => {
@@ -164,10 +162,9 @@ impl FileListView {
         self.filtered_files.guard().clear();
         for (name, file_type) in &self.all_filles {
             if self.selected_filter == FileType::Any || *file_type == self.selected_filter {
-                self.filtered_files.guard().push_back((
-                    name.clone(),
-                    file_type.clone(),                    
-                ));
+                self.filtered_files
+                    .guard()
+                    .push_back((name.clone(), file_type.clone()));
             }
         }
     }
@@ -212,7 +209,7 @@ impl FactoryComponent for FileListItem {
     fn init_model(value: Self::Init, _index: &DynamicIndex, _sender: FactorySender<Self>) -> Self {
         Self {
             name: value.0,
-            file_type: value.1,            
+            file_type: value.1,
         }
     }
 }

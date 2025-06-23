@@ -1,7 +1,6 @@
 extern crate gtk4;
 extern crate relm4;
 
-use std::collections::HashMap;
 use self::gtk4::prelude::{OrientableExt, WidgetExt};
 use self::relm4::{
     gtk, Component, ComponentController, ComponentParts, ComponentSender, Controller,
@@ -14,6 +13,7 @@ use crate::documento::Documento;
 use components::file_editor::FileEditorMessage;
 use components::list_files::FileFilterAction;
 use components::types::FileType;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 /// Estructura principal que gestiona el espacio de trabajo de archivos, que incluye una lista de archivos
@@ -105,18 +105,15 @@ impl SimpleComponent for FileWorkspace {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-
-        let list_files_cont: Controller<FileListView> =
-            FileListView::builder().launch(()).forward(
-                sender.input_sender(),
-                |msg: crate::components::list_files::FileFilterAction| match msg {
-                    crate::components::list_files::FileFilterAction::SelectFile(
-                        file,
-                        _file_type,
-                    ) => FileWorkspaceMsg::SubscribeFile(file),
-                    _ => FileWorkspaceMsg::Ignore,
-                },
-            );
+        let list_files_cont: Controller<FileListView> = FileListView::builder().launch(()).forward(
+            sender.input_sender(),
+            |msg: crate::components::list_files::FileFilterAction| match msg {
+                crate::components::list_files::FileFilterAction::SelectFile(file, _file_type) => {
+                    FileWorkspaceMsg::SubscribeFile(file)
+                }
+                _ => FileWorkspaceMsg::Ignore,
+            },
+        );
         let editor_file_cont = FileEditorModel::builder()
             .launch(("".to_string(), 0, "".to_string()))
             .forward(
@@ -169,7 +166,7 @@ impl SimpleComponent for FileWorkspace {
             FileWorkspaceMsg::SubscribeFile(file) => {
                 sender
                     .output(FileWorkspaceOutputMessage::SubscribeFile(file.clone()))
-                    .unwrap();                
+                    .unwrap();
             }
 
             FileWorkspaceMsg::OpenFile(file, qty_subs, file_type, content) => {
@@ -180,9 +177,12 @@ impl SimpleComponent for FileWorkspace {
                 let qty = qty_subs.parse::<i32>().unwrap_or(0);
 
                 match file_type {
-                    FileType::Text => {                        
+                    FileType::Text => {
                         let text_content = items.join("\n");
-                        self.files.insert((file.clone(), file_type.clone()), Documento::Texto(items.clone()));
+                        self.files.insert(
+                            (file.clone(), file_type.clone()),
+                            Documento::Texto(items.clone()),
+                        );
                         self.file_editor_ctrl
                             .sender()
                             .send(FileEditorMessage::UpdateFile(
@@ -193,11 +193,14 @@ impl SimpleComponent for FileWorkspace {
                             ))
                             .unwrap();
                     }
-                    FileType::Sheet => {                        
+                    FileType::Sheet => {
                         while items.len() < 100 {
                             items.push(String::new());
                         }
-                        self.files.insert((file.clone(), file_type.clone()), Documento::Calculo(items.clone()));
+                        self.files.insert(
+                            (file.clone(), file_type.clone()),
+                            Documento::Calculo(items.clone()),
+                        );
                         let sheet_content = items.join("\n");
                         self.file_editor_ctrl
                             .sender()
@@ -228,7 +231,6 @@ impl SimpleComponent for FileWorkspace {
                 self.editor_visible = false;
             }
 
-
             FileWorkspaceMsg::UpdateFile(file, index, value) => {
                 let file_type = if file.ends_with(".xlsx") {
                     FileType::Sheet
@@ -244,37 +246,36 @@ impl SimpleComponent for FileWorkspace {
                             Documento::Calculo(data) => {
                                 if parsed_index < data.len() {
                                     data[parsed_index] = val.clone();
-                            
                                 }
                             }
                             Documento::Texto(lines) => {
                                 if parsed_index < lines.len() {
                                     lines[parsed_index] = val.clone();
-                                    
                                 } else {
                                     lines.push(val.clone());
                                 }
                                 val = lines.join("\n");
                             }
                         }
-                        println!("Se actualizo el archivo {} en {} con {}: {:#?} ", file, index, val, doc);
-                        
-                        file_editor_sender
-                        .send(FileEditorMessage::UpdateFileContent(
-                            file.clone(),
-                            parsed_index as i32,
-                            val,
-                            file_type.clone(),
-                        ))
-                        .unwrap();                                            
-                    }
+                        println!(
+                            "Se actualizo el archivo {} en {} con {}: {:#?} ",
+                            file, index, val, doc
+                        );
 
-                    
+                        file_editor_sender
+                            .send(FileEditorMessage::UpdateFileContent(
+                                file.clone(),
+                                parsed_index as i32,
+                                val,
+                                file_type.clone(),
+                            ))
+                            .unwrap();
+                    }
                 }
             }
 
             FileWorkspaceMsg::UpdateFilesList(archivos_tipos) => {
-                // Limpiar y actualizar self.files solo con los nombres y tipos                
+                // Limpiar y actualizar self.files solo con los nombres y tipos
                 for (name, tipo) in &archivos_tipos {
                     let doc = if *tipo == FileType::Sheet {
                         Documento::Calculo(vec![])
@@ -283,8 +284,13 @@ impl SimpleComponent for FileWorkspace {
                     };
                     self.files.insert((name.clone(), tipo.clone()), doc);
                 }
-                self.file_list_ctrl.sender().send(FileFilterAction::UpdateFiles(archivos_tipos)).unwrap();
-                sender.output(FileWorkspaceOutputMessage::FilesLoaded).unwrap();
+                self.file_list_ctrl
+                    .sender()
+                    .send(FileFilterAction::UpdateFiles(archivos_tipos))
+                    .unwrap();
+                sender
+                    .output(FileWorkspaceOutputMessage::FilesLoaded)
+                    .unwrap();
             }
 
             _ => {}

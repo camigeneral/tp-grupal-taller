@@ -9,8 +9,8 @@ use documento::Documento;
 #[allow(unused_imports)]
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
 use std::fs;
+use std::sync::{Arc, Mutex};
 
 pub fn handle_welcome(
     request: &CommandRequest,
@@ -73,13 +73,15 @@ pub fn handle_welcome(
                     }
                 }
                 CommandResponse::Null => {
-                    notification = format!("STATUS {}|{}|<vacio>|{}", client_addr_str, qty_subs, doc);
+                    notification =
+                        format!("STATUS {}|{}|<vacio>|{}", client_addr_str, qty_subs, doc);
                     for _ in 0..99 {
                         notification.push(',');
                     }
                 }
                 _ => {
-                    notification = format!("STATUS {}|{}|<error>|{}", client_addr_str, qty_subs, doc);
+                    notification =
+                        format!("STATUS {}|{}|<error>|{}", client_addr_str, qty_subs, doc);
                     for _ in 0..99 {
                         notification.push(',');
                     }
@@ -87,7 +89,6 @@ pub fn handle_welcome(
             }
         }
     }
-
 
     println!("Llegue aca {}", notification.clone());
     RedisResponse::new(
@@ -241,7 +242,10 @@ fn proccess_as_calc(
     }
 
     RedisResponse::new(
-        CommandResponse::String(format!("UPDATE-FILES|{}|{}|{}", config.doc, index, config.final_text)),
+        CommandResponse::String(format!(
+            "UPDATE-FILES|{}|{}|{}",
+            config.doc, index, config.final_text
+        )),
         true,
         "Celda actualizada".to_string(),
         config.doc.clone(),
@@ -307,16 +311,18 @@ fn error_response(msg: &str, doc: &str) -> RedisResponse {
     )
 }
 
-pub fn get_files(
-    _docs: &Arc<Mutex<HashMap<String, Documento>>>,
-) -> RedisResponse {
+pub fn get_files(_docs: &Arc<Mutex<HashMap<String, Documento>>>) -> RedisResponse {
     let mut doc_names = HashSet::new();
 
     if let Ok(entries) = fs::read_dir(".") {
         println!("entries {:#?}", entries);
         for entry in entries.flatten() {
             let path = entry.path();
-            let fname = path.file_name().and_then(|f| f.to_str()).unwrap_or("").to_string();
+            let fname = path
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or("")
+                .to_string();
             if fname.starts_with("redis_node_") && fname.ends_with(".rdb") {
                 if let Ok(file) = fs::File::open(&path) {
                     use std::io::{BufRead, BufReader};

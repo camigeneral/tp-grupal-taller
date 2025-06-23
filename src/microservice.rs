@@ -252,13 +252,13 @@ fn listen_to_redis_response(
             s if s.starts_with("UPDATE-FILES") => {
                 println!("response: {:?}", response);
 
-                let parts: Vec<&str> =   line_clone.trim_end_matches('\n').split('|').collect();
-            
+                let parts: Vec<&str> = line_clone.trim_end_matches('\n').split('|').collect();
+
                 println!("parts: {:?}", parts);
                 let doc_name: &str = parts[1];
                 let index = parts[2];
-                let text: &str = parts[3];            
-                let notification = format!("UPDATE-CLIENT|{}|{}|{}", doc_name, index, text); 
+                let text: &str = parts[3];
+                let notification = format!("UPDATE-CLIENT|{}|{}|{}", doc_name, index, text);
                 let command_parts = vec!["PUBLISH", doc_name, &notification];
                 let resp_command = format_resp_command(&command_parts);
                 if let Err(e) = microservice_socket.write_all(resp_command.as_bytes()) {
@@ -268,7 +268,6 @@ fn listen_to_redis_response(
                         &format!("Error al enviar mensaje de actualizacion de archivo: {}", e),
                     );
                 }
-                
             }
 
             s if s.contains("WRITE|") => {
@@ -276,7 +275,7 @@ fn listen_to_redis_response(
                     line.trim_end_matches('\n').split('|').collect()
                 } else {
                     response[0].trim_end_matches('\n').split('|').collect()
-                };                  
+                };
 
                 if parts.len() == 4 {
                     let line_number: &str = parts[1];
@@ -313,7 +312,6 @@ fn listen_to_redis_response(
 
         let first = response[0].to_uppercase();
         let _first_response = first.as_str();
-       
     }
     Ok(())
 }

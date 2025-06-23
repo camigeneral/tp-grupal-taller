@@ -205,10 +205,14 @@ impl SimpleComponent for FileEditorModel {
                     }
                     FileType::Sheet => {
                         self.text_editor_visible = false;
-                        self.spreadsheet_visible = true;                        
+                        self.spreadsheet_visible = true;
                         self.spreadsheet_ctrl
                             .sender()
-                            .send(SpreadsheetMsg::UpdateSheetContent(file_name.clone(), index, content))
+                            .send(SpreadsheetMsg::UpdateSheetContent(
+                                file_name.clone(),
+                                index,
+                                content,
+                            ))
                             .unwrap();
                     }
                     _ => {

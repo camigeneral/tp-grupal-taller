@@ -1,7 +1,7 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::prelude::{
-    BoxExt, OrientableExt, TextBufferExt, TextViewExt, WidgetExt, EventControllerExt, Cast
+    BoxExt, Cast, EventControllerExt, OrientableExt, TextBufferExt, TextViewExt, WidgetExt,
 };
 use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
 use std::cell::RefCell;
@@ -94,8 +94,8 @@ impl SimpleComponent for TextEditorModel {
         let widgets = view_output!();
 
         let key_controller = gtk4::EventControllerKey::new();
-        
-        key_controller.connect_key_pressed(move |_controller, key, _keycode, _state| {            
+
+        key_controller.connect_key_pressed(move |_controller, key, _keycode, _state| {
             if key == gtk4::gdk::Key::Return || key == gtk4::gdk::Key::KP_Enter {
                 if let Some(widget) = _controller.widget() {
                     if let Ok(text_view) = widget.downcast::<gtk4::TextView>() {
@@ -103,30 +103,34 @@ impl SimpleComponent for TextEditorModel {
                         let insert_mark = buffer.get_insert();
                         let cursor_iter = buffer.iter_at_mark(&insert_mark);
                         let line_number = cursor_iter.line();
-                        if let Some( line_start) = buffer.iter_at_line(line_number) {
+                        if let Some(line_start) = buffer.iter_at_line(line_number) {
                             let mut line_end = line_start.clone();
                             line_end.forward_to_line_end();
-                            let full_line_content = buffer.text(&line_start, &line_end, false).to_string();
+                            let full_line_content =
+                                buffer.text(&line_start, &line_end, false).to_string();
                             let cursor_position_in_line = cursor_iter.line_offset();
-                            let before_cursor = &full_line_content[..cursor_position_in_line as usize];
-                            let after_cursor = &full_line_content[cursor_position_in_line as usize..];
+                            let before_cursor =
+                                &full_line_content[..cursor_position_in_line as usize];
+                            let after_cursor =
+                                &full_line_content[cursor_position_in_line as usize..];
                             let final_string = if after_cursor.is_empty() {
                                 before_cursor.to_string()
                             } else {
                                 format!("{}\n{}", before_cursor, after_cursor)
                             };
-                            sender_insert.input(TextEditorMessage::ContentAdded(final_string, line_number));
+                            sender_insert
+                                .input(TextEditorMessage::ContentAdded(final_string, line_number));
                         }
                     }
                 }
-                gtk4::glib::Propagation::Proceed 
+                gtk4::glib::Propagation::Proceed
             } else {
                 gtk4::glib::Propagation::Proceed
             }
         });
 
         widgets.textview.add_controller(key_controller);
-        
+
         ComponentParts { model, widgets }
     }
 

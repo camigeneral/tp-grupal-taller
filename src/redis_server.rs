@@ -484,7 +484,6 @@ fn _is_authorized_client(
     logged_clients: Arc<Mutex<HashMap<String, bool>>>,
     client_id: String,
 ) -> bool {
-
     let locked = match logged_clients.lock() {
         Ok(lock) => lock,
         Err(poisoned) => {
