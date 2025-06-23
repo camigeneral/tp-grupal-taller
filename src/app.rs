@@ -61,8 +61,8 @@ pub enum AppMsg {
     ManageUnsubscribeResponse(String),
     SetContentFileCommand(String),
     Error(String),
-    AddContent(String, String, i32)
-
+    AddContent(String, String, i32),
+    AddContentSpreadSheet(String,String,String,String)
 }
 
 #[relm4::component(pub)]
@@ -162,8 +162,8 @@ impl SimpleComponent for AppModel {
             |command: FileWorkspaceOutputMessage| match command {
                 FileWorkspaceOutputMessage::SubscribeFile(file) => AppMsg::SubscribeFile(file),
                 FileWorkspaceOutputMessage::UnsubscribeFile(file) => AppMsg::UnsubscribeFile(file),
-                FileWorkspaceOutputMessage::ContentAdded(file, text , offset) => AppMsg::AddContent(file, text, offset),
-                FileWorkspaceOutputMessage::ContentRemoved(file, start_offset , stop_offset) => AppMsg::RefreshData,
+                FileWorkspaceOutputMessage::ContentAdded(file, text , line_number) => AppMsg::AddContent(file, text, line_number),
+                FileWorkspaceOutputMessage::ContentAddedSpreadSheet(file,col , row , text ) => AppMsg::AddContentSpreadSheet(file, col, row,  text)
             },
         );
 
@@ -288,7 +288,6 @@ impl SimpleComponent for AppModel {
 
                 self.subscribed_files
                     .insert(self.current_file.clone(), true);
-                println!("Archivos suscriptos : {:#?}", self.subscribed_files);
                 self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(
                     self.current_file.clone(),
                     crate::components::types::FileType::Text,
@@ -298,10 +297,42 @@ impl SimpleComponent for AppModel {
             AppMsg::CreateFile(file_id, content) => {
                 self.command = format!("SET {} \"{}\"", file_id, content);
                 sender.input(AppMsg::ExecuteCommand);
-                // self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
             }
-            AppMsg::AddContent(file_id, text, offset) => {
-                self.command = format!("WRITE|{}|{}|{} {}", offset, text, file_id, file_id);
+            AppMsg::AddContent(file_id, text, line_number) => {
+                let clean_text= if text.trim_end_matches('\n').len() == 0 {
+                    "<delete>".to_string()
+                } else {
+                    text
+                };
+                self.command = format!("WRITE|{}|{}|{}", line_number, clean_text, file_id);
+                sender.input(AppMsg::ExecuteCommand);
+            }
+            AppMsg::AddContentSpreadSheet(file_id, col, row, text) => {
+                let clean_text= if text.is_empty(){
+                    "<delete>".to_string()
+                } else {
+                    text
+                };
+
+                let col_index = match col.parse::<usize>() {
+                    Ok(val) => val,
+                    Err(_) => {
+                        println!("Error: col no es un número válido: {}", col);
+                        return; 
+                    }
+                };
+
+                let row_index = match row.parse::<usize>() {
+                    Ok(val) => val,
+                    Err(_) => {
+                        println!("Error: row no es un número válido: {}", row);
+                        return; 
+                    }
+                };
+
+                let cell_name = format!("{}{}", (b'A' + row_index as u8) as char, col_index + 1);
+                self.command = format!("WRITE|{}|{}|{}", cell_name, clean_text, file_id);
+                println!("comando: {}", self.command);
                 sender.input(AppMsg::ExecuteCommand);
             }
 
@@ -327,7 +358,6 @@ impl SimpleComponent for AppModel {
             AppMsg::ManageUnsubscribeResponse(response) => {
                 if response == "OK" {
                     self.subscribed_files.remove(&self.current_file);
-                    println!("Desuscrito del archivo: {}", self.current_file);
                 } else {
                     println!("Error al desuscribirse: {}", response);
                 }
@@ -337,7 +367,6 @@ impl SimpleComponent for AppModel {
             }
 
             AppMsg::ExecuteCommand => {
-                println!("Se ejecuto el siguiente comando: {:#?}", self.command);
                 if let Some(channel_sender) = &self.command_sender {
                     if let Err(e) = channel_sender.send(self.command.to_string()) {
                         println!("Error enviando comando: {}", e);
@@ -352,7 +381,6 @@ impl SimpleComponent for AppModel {
 
             AppMsg::CloseApplication => {
                 if let Some(channel_sender) = &self.command_sender {
-                    println!("Enviando comando de cierre al servidor");
                     if let Err(e) = channel_sender.send("close".to_string()) {
                         eprintln!("Error al enviar comando de cierre: {:?}", e);
                     }
