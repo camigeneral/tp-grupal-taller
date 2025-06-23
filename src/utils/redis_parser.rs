@@ -21,7 +21,7 @@ use std::thread;
 /// - `Null`: representa un valor nulo (`$-1`)
 /// - `Error`: mensaje de error
 /// - `Array`: lista de valores anidados
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
 pub enum ValueType {
     Integer(i64),
