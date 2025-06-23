@@ -182,6 +182,14 @@ fn listen_to_redis_response(
         if bytes_read == 0 {
             break;
         }
+        let local_addr = match client_socket_cloned.local_addr() {
+            Ok(addr) => addr,
+            Err(e) => {
+                eprintln!("Error al obtener la dirección local: {}", e);
+                return Err(e);
+            }
+        };
+
 
         println!("Respuesta de redis: {}", line);
 
@@ -220,14 +228,7 @@ fn listen_to_redis_response(
             "STATUS" => {
                 let response_status: Vec<&str> = response[1].split('|').collect();
                 let socket = response_status[0];
-                let local_addr = match client_socket_cloned.local_addr() {
-                    Ok(addr) => addr,
-                    Err(e) => {
-                        eprintln!("Error al obtener la dirección local: {}", e);
-                        return Err(e);
-                    }
-                };
-
+                
                 if socket != local_addr.to_string() {
                     continue;
                 }
@@ -250,13 +251,12 @@ fn listen_to_redis_response(
                         .split('|')
                         .map(|s| s.trim_end_matches('\r'))
                         .collect()
-                    };
-                    
+                    };                 
+                    println!("partes: {:#?}", parts);
                     let file = parts[1].to_string();
                     let index = parts[2].to_string();
-                    let text = parts[3].to_string();
-                    println!("Recargar archivo {}, en {} con {}", file, index, text);
-                    let _ = sender.send(AppMsg::RefreshData(file, index, text));
+                    let text = parts[3].to_string();                    
+                    let _ = sender.send(AppMsg::RefreshData(file, index, text));                                        
                 }
             }
             _ => {
