@@ -114,9 +114,8 @@ impl SimpleComponent for FileWorkspace {
 
         let files_list = get_all_files_list(&redis_nodes_files);
 
-        let list_files_cont: Controller<FileListView> = FileListView::builder()
-            .launch(files_list.clone())
-            .forward(
+        let list_files_cont: Controller<FileListView> =
+            FileListView::builder().launch(files_list.clone()).forward(
                 sender.input_sender(),
                 |msg: crate::components::list_files::FileFilterAction| match msg {
                     crate::components::list_files::FileFilterAction::SelectFile(
@@ -351,9 +350,7 @@ pub fn get_file_content_workspace(
     Ok(docs)
 }
 
-fn get_all_files_list(
-    file_paths: &[&str],
-) -> Vec<(String, FileType, String, i32)> {
+fn get_all_files_list(file_paths: &[&str]) -> Vec<(String, FileType, String, i32)> {
     let mut files_list = Vec::new();
     for path in file_paths {
         let list = get_files_list(&path.to_string());
@@ -362,9 +359,7 @@ fn get_all_files_list(
     files_list
 }
 
-fn get_all_files_content(
-    file_paths: &[&str],
-) -> HashMap<String, Documento> {
+fn get_all_files_content(file_paths: &[&str]) -> HashMap<String, Documento> {
     let mut docs = HashMap::new();
     for path in file_paths {
         if let Ok(file_docs) = get_file_content_workspace(&path.to_string()) {

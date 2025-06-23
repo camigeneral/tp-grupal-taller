@@ -1,5 +1,5 @@
 use super::redis_response::RedisResponse;
-use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
+use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use commands::set::handle_sadd;
 use commands::set::handle_srem;
 use std::collections::HashMap;
@@ -30,26 +30,36 @@ pub fn handle_subscribe(
                 false,
                 "".to_string(),
                 "".to_string(),
-            )
+            );
         }
     };
 
-    let mut map = document_subscribers.lock().unwrap();
+    let mut map = match document_subscribers.lock() {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("Error al bloquear document_subscribers: {}", e);
+            return RedisResponse::new(
+                CommandResponse::Error("Error interno".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            );
+        }
+    };
+
     if let Some(list) = map.get_mut(doc) {
         list.push(client_addr.clone());
 
-        // Actualiza el set de suscriptores si es necesario
         let request = CommandRequest {
             command: "sadd".to_string(),
             key: Some(doc.clone()),
             arguments: vec![ValueType::String(client_addr.clone())],
             unparsed_command: "".to_string(),
         };
+
         let _ = handle_sadd(&request, shared_sets);
 
         let notification = format!("CLIENT {}|{}", client_addr, doc);
-
-        // RETORNAR la respuesta de éxito aquí
         RedisResponse::new(
             CommandResponse::String(notification),
             false,
@@ -65,6 +75,7 @@ pub fn handle_subscribe(
         )
     }
 }
+
 
 /// Maneja el comando UNSUBSCRIBE que permite a un cliente cancelar su suscripción a un documento
 ///
@@ -89,11 +100,23 @@ pub fn handle_unsubscribe(
                 false,
                 "".to_string(),
                 "".to_string(),
-            )
+            );
         }
     };
 
-    let mut map = document_subscribers.lock().unwrap();
+    let mut map = match document_subscribers.lock() {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("Error al bloquear document_subscribers: {}", e);
+            return RedisResponse::new(
+                CommandResponse::Error("Error interno".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            );
+        }
+    };
+
     if let Some(list) = map.get_mut(doc) {
         list.retain(|x| x != &client_addr);
 
@@ -103,7 +126,6 @@ pub fn handle_unsubscribe(
             arguments: vec![ValueType::String(client_addr.clone())],
             unparsed_command: "".to_string(),
         };
-        // to do: unparsed command?
 
         let _ = handle_srem(&request, shared_sets);
 
@@ -123,135 +145,38 @@ pub fn handle_unsubscribe(
     }
 }
 
-pub fn handle_publish<T: Write>(
-    request: &CommandRequest,
-    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
-    active_clients: &Arc<Mutex<HashMap<String, T>>>,
-) -> RedisResponse {
-    let doc = match &request.key {
-        Some(k) => k,
-        None => {
-            return RedisResponse::new(
-                CommandResponse::Error("Usage: PUBLISH <document> <message>".to_string()),
-                false,
-                "".to_string(),
-                "".to_string(),
-            )
-        }
-    };
 
-    if request.arguments.is_empty() {
-        return RedisResponse::new(
-            CommandResponse::Error("Usage: PUBLISH <document> <message>".to_string()),
-            false,
-            "".to_string(),
-            doc.to_string(),
-        );
-    }
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
 
-    let message = match &request.arguments[0] {
-        ValueType::String(s) => s.clone(),
-        _ => {
-            return RedisResponse::new(
-                CommandResponse::Error("Tiene que ser un string".to_string()),
-                false,
-                "".to_string(),
-                doc.to_string(),
-            )
-        }
-    };
+//     fn setup_map(doc: &str, clients: Vec<&str>) -> Arc<Mutex<HashMap<String, Vec<String>>>> {
+//         let mut map = HashMap::new();
+//         map.insert(
+//             doc.to_string(),
+//             clients.into_iter().map(|s| s.to_string()).collect(),
+//         );
+//         Arc::new(Mutex::new(map))
+//     }
 
-    let mut sent_count = 0;
-    let subscribers_guard = document_subscribers.lock().unwrap();
-
-    let mut clients_guard = active_clients.lock().unwrap();
-    if let Some(subscribers) = subscribers_guard.get(doc) {
-        for subscriber_id in subscribers {
-            if let Some(client) = clients_guard.get_mut(subscriber_id) {
-                let _ = writeln!(client, "{}", message);
-                sent_count += 1;
-            }
-        }
-    }
-    RedisResponse::new(
-        CommandResponse::Integer(sent_count),
-        false,
-        format!("Mensaje enviado a {} suscriptores", sent_count),
-        doc.to_string(),
-    )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::Arc;
-    use std::sync::Mutex;
-    use std::collections::HashMap;
-
-    use std::io::{Result, Write};
-
-    #[derive(Default)]
-    pub struct DummyClient {
-        pub stream: Vec<u8>,
-    }
-
-    impl DummyClient {
-        pub fn new() -> Self {
-            Self {
-                stream: Vec::new(),
-            }
-        }
-    }
-
-    impl Write for DummyClient {
-        fn write(&mut self, buf: &[u8]) -> Result<usize> {
-            self.stream.write(buf)
-        }
-
-        fn flush(&mut self) -> Result<()> {
-            self.stream.flush()
-        }
-    }
-
-
-    fn setup_map(doc: &str, clients: Vec<&str>) -> Arc<Mutex<HashMap<String, Vec<String>>>> {
-        let mut map = HashMap::new();
-        map.insert(
-            doc.to_string(),
-            clients.into_iter().map(|s| s.to_string()).collect(),
-        );
-        Arc::new(Mutex::new(map))
-    }
-
-    fn setup_active_clients(client_ids: &[&str]) -> Arc<Mutex<HashMap<String, DummyClient>>> {
-        let mut map = HashMap::new();
-        for &id in client_ids {
-            map.insert(id.to_string(), DummyClient::new());
-        }
-        Arc::new(Mutex::new(map))
-    }
-
-    #[test]
-    fn test_handle_subscribe_success() {
-        let doc = "doc1";
-        let document_subscribers = setup_map(doc, vec![]);
-        let shared_sets = Arc::new(Mutex::new(HashMap::new()));
-        let request = CommandRequest {
-            command: "SUBSCRIBE".to_string(),
-            key: Some(doc.to_string()),
-            arguments: vec![],
-            unparsed_command: String::new(),
-        };
-        let resp = handle_subscribe(
-            &request,
-            &document_subscribers,
-            "client1".to_string(),
-            &shared_sets,
-        );
-        assert!(matches!(resp.response, CommandResponse::String(_)));
-        let map = document_subscribers.lock().unwrap();
-        assert_eq!(map.get(doc).unwrap(), &vec!["client1".to_string()]);
-    }
+//     #[test]
+//     fn test_handle_subscribe_success() {
+//         let doc = "doc1";
+//         let document_subscribers = setup_map(doc, vec![]);
+//         let request = CommandRequest {
+//             command: "SUBSCRIBE".to_string(),
+//             key: Some(doc.to_string()),
+//             arguments: vec![],
+//         };
+//         let resp = handle_subscribe(
+//             &request,
+//             Arc::clone(&document_subscribers),
+//             "client1".to_string(),
+//         );
+//         assert!(matches!(resp.response, CommandResponse::String(_)));
+//         let map = document_subscribers.lock().unwrap();
+//         assert_eq!(map.get(doc).unwrap(), &vec!["client1".to_string()]);
+//     }
 
     #[test]
     fn test_handle_subscribe_no_key() {

@@ -1,4 +1,4 @@
-use crate::utils::redis_parser::CommandResponse;
+use super::redis_parser::CommandResponse;
 
 #[derive(Debug)]
 pub struct RedisResponse {

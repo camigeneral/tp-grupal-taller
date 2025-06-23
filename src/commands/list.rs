@@ -1,6 +1,6 @@
 use super::redis_response::RedisResponse;
 use crate::documento::Documento;
-use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
+use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -20,13 +20,11 @@ pub fn handle_linsert(
         Some(k) => k.clone(),
         None => {
             return RedisResponse::new(
-                CommandResponse::Error(
-                    "Usage: LINSERT <doc> BEFORE|AFTER <pivot> <element>".to_string(),
-                ),
+                CommandResponse::Error("Usage: LINSERT <doc> BEFORE|AFTER <pivot> <element>".to_string()),
                 false,
                 "".to_string(),
                 "".to_string(),
-            )
+            );
         }
     };
 
@@ -35,7 +33,7 @@ pub fn handle_linsert(
             CommandResponse::Error("Incorrect number of arguments for LINSERT".to_string()),
             false,
             "".to_string(),
-            "".to_string(),
+            doc,
         );
     }
 
@@ -55,14 +53,25 @@ pub fn handle_linsert(
                 false,
                 "".to_string(),
                 doc,
-            )
+            );
         }
     };
 
-    let mut docs_lock = docs.lock().unwrap();
-    let entry_doc = docs_lock.entry(doc.clone()).or_default();
+    let mut docs_lock = match docs.lock() {
+        Ok(lock) => lock,
+        Err(e) => {
+            eprintln!("Error locking docs: {}", e);
+            return RedisResponse::new(
+                CommandResponse::Error("Error interno al acceder a los documentos".to_string()),
+                false,
+                "".to_string(),
+                doc,
+            );
+        }
+    };
 
-    // if let Some(index) = entry_doc.iter().position(|x| x == &pivot_str) {
+    let entry_doc = docs_lock.entry(doc.clone()).or_insert_with(|| Documento::Texto(vec![]));
+
     if let Some(index) = entry_doc
         .as_texto()
         .and_then(|v| v.iter().position(|x| x == &pivot_str))
@@ -94,7 +103,6 @@ pub fn handle_linsert(
             doc,
         )
     } else {
-        println!("pivot: {}", pivot_str);
         RedisResponse::new(
             CommandResponse::Error("Invalid pivot argument".to_string()),
             false,
@@ -124,7 +132,7 @@ pub fn handle_lset(
                 false,
                 "".to_string(),
                 "".to_string(),
-            )
+            );
         }
     };
 
@@ -146,12 +154,26 @@ pub fn handle_lset(
                 false,
                 "".to_string(),
                 doc,
-            )
+            );
         }
     };
 
     let mut docs_lock = docs.lock().unwrap();
     let doc_entry = docs_lock.entry(doc.clone()).or_default();
+    let mut docs_lock = match docs.lock() {
+        Ok(lock) => lock,
+        Err(e) => {
+            eprintln!("Error al bloquear acceso a documentos: {}", e);
+            return RedisResponse::new(
+                CommandResponse::Error("Error interno al acceder a documentos".to_string()),
+                false,
+                "".to_string(),
+                doc,
+            );
+        }
+    };
+
+    let list = docs_lock.entry(doc.clone()).or_insert_with(|| Documento::Texto(Vec::new()));
 
     match doc_entry {
         Documento::Calculo(vec) | Documento::Texto(vec) => {
@@ -214,14 +236,25 @@ pub fn handle_llen(
                 false,
                 "".to_string(),
                 "".to_string(),
-            )
+            );
         }
     };
 
-    let docs_lock = docs.lock().unwrap();    
-    let list = docs_lock.get(&doc);
-    let length = match list {
-        Some(l) => l.len(),
+    let docs_lock = match docs.lock() {
+        Ok(lock) => lock,
+        Err(e) => {
+            eprintln!("Error al bloquear acceso a documentos: {}", e);
+            return RedisResponse::new(
+                CommandResponse::Error("Error interno al acceder a documentos".to_string()),
+                false,
+                "".to_string(),
+                doc,
+            );
+        }
+    };
+
+    let length = match docs_lock.get(&doc) {
+        Some(documento) => documento.len(),
         None => 0,
     };
 
@@ -232,6 +265,7 @@ pub fn handle_llen(
         doc,
     )
 }
+
 
 /// Maneja el comando RPUSH que añade uno o más elementos al final de una lista
 ///
@@ -253,7 +287,7 @@ pub fn handle_rpush(
                 false,
                 "".to_string(),
                 "".to_string(),
-            )
+            );
         }
     };
 
@@ -266,21 +300,36 @@ pub fn handle_rpush(
         );
     }
 
-    let mut docs_lock = docs.lock().unwrap();
-    let list = docs_lock.entry(doc.clone()).or_default();
-
-    let mut pushed_count = 0;
-    for val in &request.arguments {
-        if let ValueType::String(s) = val {
-            list.push(s.clone());
-            pushed_count += 1;
-        } else {
+    let mut docs_lock = match docs.lock() {
+        Ok(lock) => lock,
+        Err(e) => {
+            eprintln!("Error al bloquear acceso a documentos: {}", e);
             return RedisResponse::new(
-                CommandResponse::Error("Invalid arguments for RPUSH".to_string()),
+                CommandResponse::Error("Error interno al acceder a documentos".to_string()),
                 false,
                 "".to_string(),
                 doc,
             );
+        }
+    };
+
+    let list = docs_lock.entry(doc.clone()).or_default();
+
+    let mut pushed_count = 0;
+    for val in &request.arguments {
+        match val {
+            ValueType::String(s) => {
+                list.push(s.clone());
+                pushed_count += 1;
+            }
+            _ => {
+                return RedisResponse::new(
+                    CommandResponse::Error("Invalid arguments for RPUSH".to_string()),
+                    false,
+                    "".to_string(),
+                    doc,
+                );
+            }
         }
     }
 
@@ -291,6 +340,7 @@ pub fn handle_rpush(
         doc,
     )
 }
+
 
 
 #[cfg(test)]

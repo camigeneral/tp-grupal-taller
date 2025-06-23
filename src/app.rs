@@ -1,13 +1,16 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::{
-    prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, WidgetExt},
+    prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, PopoverExt, WidgetExt},
     CssProvider,
 };
-use components::error_modal::ErrorModalMsg;
-use crate::components::{error_modal::ErrorModal, login::{LoginForm, LoginMsg, LoginOutput}};
+use crate::components::{
+    error_modal::ErrorModal,
+    login::{LoginForm, LoginMsg, LoginOutput},
+};
 use app::gtk4::glib::Propagation;
 use client::client_run;
+use components::error_modal::ErrorModalMsg;
 use components::file_workspace::{FileWorkspace, FileWorkspaceMsg, FileWorkspaceOutputMessage};
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
 use std::collections::HashMap;
@@ -36,9 +39,11 @@ pub struct AppModel {
     command: String,
     command_sender: Option<Sender<String>>,
     username: String,
-    current_file:String,
+    current_file: String,
     subscribed_files: HashMap<String, bool>,
     error_modal: Controller<ErrorModal>,
+    new_file_popover: Option<gtk::Popover>,
+    file_name: String,
 }
 
 #[derive(Debug)]
@@ -61,6 +66,13 @@ pub enum AppMsg {
     ManageUnsubscribeResponse(String),
     SetContentFileCommand(String),
     Error(String),
+    /// Mensaje para alternar la visibilidad del popover para nuevos archivos.
+    ToggleNewFilePopover,
+    SetFileName(String),
+    /// Mensaje para crear un documento de tipo texto.
+    CreateTextDocument,
+    /// Mensaje para crear un documento de tipo hoja de cálculo.
+    CreateSpreadsheetDocument,    
     AddContent(String, String, i32),
     AddContentSpreadSheet(String,String,String,String)
 }
@@ -87,25 +99,93 @@ impl SimpleComponent for AppModel {
                 set_margin_all: 10,
                 set_hexpand: true,
                 set_vexpand: true,
+
                 gtk::Box {
                     set_orientation: gtk::Orientation::Horizontal,
                     set_spacing: 15,
-                    gtk::Label {
-                        set_label: "Comandos:",
+                    set_hexpand: true,
+
+                    // inicio barra comandos - borrar
+
+                    gtk::Box {
+                        set_spacing: 10,
+
+                        gtk::Label {
+                            set_label: "Comandos:",
+                        },
+                        #[name = "command_entry"]
+                        gtk::Entry {
+                            connect_changed[sender] => move |entry| {
+                                sender.input(AppMsg::CommandChanged(entry.text().to_string()));
+                            }
+                        },
+                        gtk::Button {
+                            set_label: "Ejecutar",
+                            add_css_class: "execute-command",
+                            connect_clicked[sender] => move |_| {
+                                sender.input(AppMsg::ExecuteCommand);
+                            }
+                        },
                     },
-                    #[name = "command_entry"]
-                    gtk::Entry {
-                        connect_changed[sender] => move |entry| {
-                            sender.input(AppMsg::CommandChanged(entry.text().to_string()));
-                        }
+
+                    // fina barra comandos - borrar
+
+                    gtk::Box {
+                        set_halign: gtk::Align::Center,
+        
+                        // logo - descomentar
+                        // gtk::Image {
+                        //     set_from_file: Some("src/components/images/logo.png"),
+                        //     set_widget_name: "AppLogo",
+                        //     set_valign: gtk::Align::Center,
+                        //     set_halign: gtk::Align::Center, 
+                        //     set_margin_bottom: 0,
+                        //     set_margin_start: 100,
+                        //     set_margin_top: 20,
+                        // }
                     },
-                    gtk::Button {
-                        set_label: "Ejecutar",
-                        add_css_class: "execute-command",
-                        connect_clicked[sender] => move |_| {
-                            sender.input(AppMsg::ExecuteCommand);
-                        }
-                    },
+
+                    gtk::Box {
+                        set_hexpand: true,
+                        set_halign: gtk::Align::End,
+
+                        #[name="new_file_button"]
+                        gtk::Button {
+                            add_css_class: "new-file",
+                            add_css_class: "button",
+                            set_label: "Nuevo Archivo",
+                            connect_clicked => AppMsg::ToggleNewFilePopover,
+                        },
+
+                        #[name="new_file_popover"]
+                        gtk::Popover {
+                            set_has_arrow: true,
+                            set_autohide: true,
+                            set_position: gtk::PositionType::Bottom,
+                            #[name="popover_content"]
+                            gtk::Box {
+                                set_orientation: gtk::Orientation::Vertical,
+                                set_spacing: 5,
+                                gtk::Label {
+                                    set_label: "Nombre del archivo:",
+                                },
+                                #[name = "file_name"]
+                                gtk::Entry {
+                                    connect_changed[sender] => move |entry| {
+                                        sender.input(AppMsg::SetFileName(entry.text().to_string()));
+                                    }
+                                },
+                                gtk::Button {
+                                    set_label: "Hoja de texto",
+                                    connect_clicked => AppMsg::CreateTextDocument,
+                                },
+                                gtk::Button {
+                                    set_label: "Hoja de cálculo",
+                                    connect_clicked => AppMsg::CreateSpreadsheetDocument	,
+                                }
+                            },
+                        },
+                    }
                 },
 
                 append: model.files_manager_cont.widget(),
@@ -145,7 +225,6 @@ impl SimpleComponent for AppModel {
             .transient_for(&root)
             .launch(())
             .detach();
-
 
         let header_model = NavbarModel::builder().launch(()).forward(
             sender.input_sender(),
@@ -187,8 +266,9 @@ impl SimpleComponent for AppModel {
             username: "".to_string(),
             current_file: "".to_string(),
             subscribed_files: HashMap::new(),
-            error_modal
-
+            error_modal,
+            new_file_popover: None,
+            file_name: "".to_string(),
         };
 
         let sender_clone = sender.clone();
@@ -199,6 +279,7 @@ impl SimpleComponent for AppModel {
             Propagation::Proceed
         });
         let widgets = view_output!();
+        model.new_file_popover = Some(widgets.new_file_popover.clone());
         let ui_sender: relm4::Sender<AppMsg> = sender.input_sender().clone();
         let (tx, rx) = channel::<String>();
         let command_sender = Some(tx.clone());
@@ -385,6 +466,40 @@ impl SimpleComponent for AppModel {
                         eprintln!("Error al enviar comando de cierre: {:?}", e);
                     }
                 }
+            }
+
+            AppMsg::ToggleNewFilePopover => {
+                if let Some(popover) = &self.new_file_popover {
+                    popover.popup();
+                }
+            }
+
+            AppMsg::SetFileName(file_name) => {
+                self.file_name = file_name;
+            }
+
+            AppMsg::CreateTextDocument => {
+                if let Some(popover) = &self.new_file_popover {
+                    popover.popdown();
+                }
+                if self.file_name.trim().is_empty() {
+                    println!("El nombre del archivo es obligatorio.");
+                    return;
+                }
+                let file_id = format!("{}.txt", self.file_name.trim());
+                sender.input(AppMsg::CreateFile(file_id, "".to_string()));
+            }
+            
+            AppMsg::CreateSpreadsheetDocument => {
+                if let Some(popover) = &self.new_file_popover {
+                    popover.popdown();
+                }
+                if self.file_name.trim().is_empty() {
+                    println!("El nombre del archivo es obligatorio.");
+                    return;
+                }
+                let file_id = format!("{}.xlsx", self.file_name.trim());
+                sender.input(AppMsg::CreateFile(file_id, "".to_string()));
             }
         }
     }
