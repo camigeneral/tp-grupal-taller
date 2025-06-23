@@ -252,7 +252,6 @@ fn listen_to_redis_response(
                         .map(|s| s.trim_end_matches('\r'))
                         .collect()
                     };                 
-                    println!("partes: {:#?}", parts);
                     let file = parts[1].to_string();
                     let index = parts[2].to_string();
                     let text = parts[3].to_string();                    
