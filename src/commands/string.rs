@@ -46,12 +46,11 @@ pub fn handle_get(
                 "".to_string(),
             )
         }
-        Some(Documento::Calculo(_)) => {
-            // Maneja el caso de cálculo si es necesario
+        Some(Documento::Calculo(spreadsheet_data)) => {
+            // Para documentos de cálculo, simplemente une las líneas con \n
+            let content = spreadsheet_data.join("\n");
             RedisResponse::new(
-                CommandResponse::Error(
-                    "No se puede hacer GET de un documento de cálculo".to_string(),
-                ),
+                CommandResponse::String(content),
                 false,
                 "".to_string(),
                 "".to_string(),
