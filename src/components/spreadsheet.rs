@@ -43,7 +43,6 @@ pub enum SpreadsheetOutput {
 }
 
 impl SpreadsheetModel {
-    
     fn parse_cell_reference(&self, cell_ref: &str) -> Option<(usize, usize)> {
         if cell_ref.len() < 2 {
             return None;
@@ -58,7 +57,7 @@ impl SpreadsheetModel {
         }
 
         let col = (col_char.to_ascii_uppercase() as u8 - b'A') as usize;
-        let row = row_str.parse::<usize>().ok()?.saturating_sub(1);        
+        let row = row_str.parse::<usize>().ok()?.saturating_sub(1);
         if row < 10 && col < 10 {
             Some((row, col))
         } else {
@@ -276,7 +275,6 @@ impl SimpleComponent for SpreadsheetModel {
                 self.recalculate_all();
                 self.update_display();
 
-
                 sender
                     .output(SpreadsheetOutput::ContentChanged(
                         row.to_string(),
@@ -293,17 +291,13 @@ impl SimpleComponent for SpreadsheetModel {
                 for i in 0..10 {
                     for j in 0..10 {
                         let index = i * 10 + j;
-                        let value = filas_data
-                            .get(index)
-                            .cloned()
-                            .unwrap_or_default();
+                        let value = filas_data.get(index).cloned().unwrap_or_default();
                         self.cells[i][j] = Cell::new();
                         self.update_cell(i, j, value);
                     }
                 }
                 self.update_display();
             }
-
         }
     }
 }

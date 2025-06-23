@@ -1,13 +1,13 @@
 extern crate relm4;
 use self::relm4::Sender;
 use crate::app::AppMsg;
+use commands::redis_parser::{format_resp_command, format_resp_publish};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
-use std::sync::mpsc::{Receiver, channel, Sender as MpscSender};
+use std::sync::mpsc::{channel, Receiver, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use commands::redis_parser::{format_resp_command, format_resp_publish};
 
 #[path = "utils/redis_parser.rs"]
 mod redis_parser;
@@ -15,7 +15,7 @@ mod redis_parser;
 pub fn client_run(
     port: u16,
     rx: Receiver<String>,
-    ui_sender: Option<Sender<AppMsg>> ,
+    ui_sender: Option<Sender<AppMsg>>,
 ) -> std::io::Result<()> {
     let node_streams: Arc<Mutex<HashMap<String, TcpStream>>> = Arc::new(Mutex::new(HashMap::new()));
     let last_command_sent: Arc<Mutex<String>> = Arc::new(Mutex::new("".to_string()));
@@ -66,7 +66,10 @@ pub fn client_run(
             Ok(locked) => locked,
             Err(e) => {
                 eprintln!("Error al bloquear el mutex de node_streams: {}", e);
-                return Err(std::io::Error::new(std::io::ErrorKind::Other, "Mutex lock failed"));
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Mutex lock failed",
+                ));
             }
         };
         locked_node_streams.insert(cloned_address, redis_socket_clone_for_hashmap);
@@ -111,9 +114,9 @@ pub fn client_run(
 
             let parts: Vec<&str> = command.split_whitespace().collect();
             let resp_command =
-             if parts[0] == "AUTH" || parts[0] == "subscribe"  || parts[0] == "unsubscribe" {
+                if parts[0] == "AUTH" || parts[0] == "subscribe" || parts[0] == "unsubscribe" {
                     format_resp_command(&parts)
-                }else if parts[0].contains("WRITE") {
+                } else if parts[0].contains("WRITE") {
                     let splited_command: Vec<&str> = command.split("|").collect();
                     format_resp_publish(splited_command[3], &command)
                 } else {
@@ -125,7 +128,10 @@ pub fn client_run(
                     Ok(locked) => locked,
                     Err(e) => {
                         eprintln!("Error al bloquear el mutex de last_command_sent: {}", e);
-                        return Err(std::io::Error::new(std::io::ErrorKind::Other, "Mutex lock failed"));
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "Mutex lock failed",
+                        ));
                     }
                 };
                 *last_command = resp_command.clone();
@@ -145,16 +151,19 @@ pub fn client_run(
 
 fn listen_to_redis_response(
     client_socket: TcpStream,
-    ui_sender: Option<Sender<AppMsg>> ,
+    ui_sender: Option<Sender<AppMsg>>,
     connect_node_sender: MpscSender<TcpStream>,
-    node_streams: Arc<Mutex<HashMap<String, TcpStream>>> ,
-    last_command_sent: Arc<Mutex<String>> ,
+    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+    last_command_sent: Arc<Mutex<String>>,
 ) -> std::io::Result<()> {
     let client_socket_cloned = match client_socket.try_clone() {
         Ok(clone) => clone,
         Err(e) => {
             eprintln!("Error al clonar el socket del cliente: {}", e);
-            return Err(std::io::Error::new(std::io::ErrorKind::Other, "Socket clone failed"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Socket clone failed",
+            ));
         }
     };
 
@@ -247,10 +256,10 @@ fn listen_to_redis_response(
 }
 
 fn send_command_to_nodes(
-    _ui_sender: Option<Sender<AppMsg>> ,
+    _ui_sender: Option<Sender<AppMsg>>,
     connect_node_sender: MpscSender<TcpStream>,
-    node_streams: Arc<Mutex<HashMap<String, TcpStream>>> ,
-    last_command_sent: Arc<Mutex<String>> ,
+    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+    last_command_sent: Arc<Mutex<String>>,
     response: Vec<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let last_line_cloned = match last_command_sent.lock() {
@@ -328,9 +337,9 @@ fn send_command_to_nodes(
 fn connect_to_nodes(
     sender: MpscSender<TcpStream>,
     reciever: Receiver<TcpStream>,
-    ui_sender: Option<Sender<AppMsg>> ,
-    node_streams: Arc<Mutex<HashMap<String, TcpStream>>> ,
-    last_command_sent: Arc<Mutex<String>> ,
+    ui_sender: Option<Sender<AppMsg>>,
+    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+    last_command_sent: Arc<Mutex<String>>,
 ) -> std::io::Result<()> {
     for stream in reciever {
         let cloned_node_streams = Arc::clone(&node_streams);

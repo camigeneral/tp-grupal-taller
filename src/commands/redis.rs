@@ -1,13 +1,13 @@
 use super::auth;
+use super::client_action;
 use super::list;
 use super::pub_sub;
+use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use super::redis_response::RedisResponse;
 use super::set;
 use super::string;
-use super::client_action;
 use crate::client_info;
 use crate::documento::Documento;
-use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
@@ -30,9 +30,7 @@ pub fn execute_command(
         "unsubscribe" => {
             pub_sub::handle_unsubscribe(&request, document_subscribers, client_addr, shared_sets)
         }
-        "publish" => {
-            pub_sub::handle_publish(&request, document_subscribers, active_clients)
-        }
+        "publish" => pub_sub::handle_publish(&request, document_subscribers, active_clients),
         "append" => string::handle_append(&request, docs),
         "scard" => set::handle_scard(&request, shared_sets),
         "smembers" => set::handle_smembers(&request, shared_sets),
@@ -42,10 +40,10 @@ pub fn execute_command(
         "llen" => list::handle_llen(&request, docs),
         "rpush" => list::handle_rpush(&request, docs),
         "lset" => list::handle_lset(&request, docs),
-        "linsert" => list::handle_linsert(&request, docs),        
+        "linsert" => list::handle_linsert(&request, docs),
         "auth" => auth::handle_auth(&request, logged_clients, active_clients, client_addr),
-        "add_content" => client_action::set_content_file(&request, docs),        
-        "welcome" => client_action::handle_welcome(&request, active_clients,shared_sets),    
+        "add_content" => client_action::set_content_file(&request, docs),
+        "welcome" => client_action::handle_welcome(&request, active_clients, shared_sets),
         "list_files" => string::handle_list_files(),
         _ => RedisResponse::new(
             CommandResponse::Error("Unknown".to_string()),
@@ -55,7 +53,6 @@ pub fn execute_command(
         ),
     }
 }
-
 
 pub fn execute_replica_command(
     request: CommandRequest,

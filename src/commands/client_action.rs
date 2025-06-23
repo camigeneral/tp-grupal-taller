@@ -1,16 +1,20 @@
 use super::redis;
-use documento::Documento;
 use super::redis_response::RedisResponse;
 use crate::client_info;
 use crate::commands::list::{handle_llen, handle_lset, handle_rpush};
 use crate::commands::set::handle_scard;
+use commands::redis_parser::{CommandRequest, CommandResponse, ValueType};
+use documento::Documento;
 #[allow(unused_imports)]
 use std::collections::HashMap;
-use commands::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-pub fn handle_welcome(request: &CommandRequest, _active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>, shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>) -> RedisResponse {
+pub fn handle_welcome(
+    request: &CommandRequest,
+    _active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
+    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
+) -> RedisResponse {
     let client_addr_str = redis::extract_string_arguments(&request.arguments);
 
     let doc = match &request.key {
@@ -29,19 +33,24 @@ pub fn handle_welcome(request: &CommandRequest, _active_clients: &Arc<Mutex<Hash
         command: "scard".to_string(),
         key: Some(doc.clone()),
         arguments: vec![],
-        unparsed_command: format!("scard {}", doc.clone())
+        unparsed_command: format!("scard {}", doc.clone()),
     };
 
     let response = handle_scard(&request, shared_sets);
 
-    let mut notification= " ".to_string();
+    let mut notification = " ".to_string();
 
     if let CommandResponse::String(ref s) = response.response {
         if let Some(qty_subs) = s.split_whitespace().last() {
             notification = format!("status {}|{:?}", client_addr_str, qty_subs);
         };
     }
-    RedisResponse::new(CommandResponse::String(notification.clone()), true, notification, doc)
+    RedisResponse::new(
+        CommandResponse::String(notification.clone()),
+        true,
+        notification,
+        doc,
+    )
 }
 
 pub fn set_content_file(
@@ -59,7 +68,7 @@ pub fn set_content_file(
         return error_response("Faltan argumentos: índice y carácter", &doc);
     }
 
-    let is_calc = !doc.ends_with(".txt");    
+    let is_calc = !doc.ends_with(".txt");
 
     let text = match get_text_argument(&request.arguments[1], &doc) {
         Ok(text) => text,
@@ -79,7 +88,12 @@ pub fn set_content_file(
     }
 }
 
-fn proccess_as_text(docs: &Arc<Mutex<HashMap<String, Documento>>>, doc: String, final_text: String, request: &CommandRequest) -> RedisResponse {
+fn proccess_as_text(
+    docs: &Arc<Mutex<HashMap<String, Documento>>>,
+    doc: String,
+    final_text: String,
+    request: &CommandRequest,
+) -> RedisResponse {
     let line_number = match parse_line_number(&request.arguments[0], &doc) {
         Ok(num) => num,
         Err(resp) => return resp,
@@ -90,7 +104,7 @@ fn proccess_as_text(docs: &Arc<Mutex<HashMap<String, Documento>>>, doc: String, 
         arguments: vec![],
         unparsed_command: "".to_string(),
     };
-    
+
     let response_len: RedisResponse = handle_llen(&len_request, docs);
     match response_len.response {
         CommandResponse::Integer(len) => {
@@ -105,8 +119,8 @@ fn proccess_as_text(docs: &Arc<Mutex<HashMap<String, Documento>>>, doc: String, 
                 let response = handle_rpush(&rpush_request, docs);
                 if matches!(response.response, CommandResponse::Error(_)) {
                     return error_response("Error al hacer rpush", &doc);
-                } 
-            } else {                
+                }
+            } else {
                 let lset_request = CommandRequest {
                     command: "lset".to_string(),
                     key: Some(doc.clone()),
@@ -127,15 +141,22 @@ fn proccess_as_text(docs: &Arc<Mutex<HashMap<String, Documento>>>, doc: String, 
     }
 
     RedisResponse::new(
-        CommandResponse::String(format!("UPDATE-FILES {} {} {}", doc, line_number, final_text)),
+        CommandResponse::String(format!(
+            "UPDATE-FILES {} {} {}",
+            doc, line_number, final_text
+        )),
         true,
         "Texto actualizado".to_string(),
         doc,
     )
-
 }
 
-fn proccess_as_calc(docs: &Arc<Mutex<HashMap<String, Documento>>>, doc: String, final_text: String, request: &CommandRequest) -> RedisResponse {
+fn proccess_as_calc(
+    docs: &Arc<Mutex<HashMap<String, Documento>>>,
+    doc: String,
+    final_text: String,
+    request: &CommandRequest,
+) -> RedisResponse {
     let cell_id = match get_text_argument(&request.arguments[0], &doc) {
         Ok(id) => id,
         Err(resp) => return resp,
@@ -146,13 +167,13 @@ fn proccess_as_calc(docs: &Arc<Mutex<HashMap<String, Documento>>>, doc: String, 
         Err(e) => return error_response(e, &doc),
     };
 
-    let total_columns = 10; 
+    let total_columns = 10;
     let index = col_index + total_columns * row_index;
 
     if index >= 100 {
         return error_response("Celda fuera de rango", &doc);
     }
-    
+
     let lset_request = CommandRequest {
         command: "lset".to_string(),
         key: Some(doc.clone()),
@@ -178,7 +199,9 @@ fn proccess_as_calc(docs: &Arc<Mutex<HashMap<String, Documento>>>, doc: String, 
 
 fn parse_cell_id(cell_id: &str) -> Result<(usize, usize), &'static str> {
     let mut chars = cell_id.chars();
-    let col_char = chars.next().ok_or("Formato de celda invalido: falta la columna")?;
+    let col_char = chars
+        .next()
+        .ok_or("Formato de celda invalido: falta la columna")?;
     if !col_char.is_ascii_alphabetic() {
         return Err("Formato de celda invalido: la columna no es alfabetica");
     }
@@ -210,9 +233,9 @@ fn get_document_name(request: &CommandRequest) -> Result<String, RedisResponse> 
 fn parse_line_number(arg: &ValueType, doc: &str) -> Result<i64, RedisResponse> {
     match arg {
         ValueType::Integer(i) => Ok(*i),
-        ValueType::String(s) => s.parse::<i64>().map_err(|_| {
-            error_response("El índice debe ser un entero válido", doc)
-        }),
+        ValueType::String(s) => s
+            .parse::<i64>()
+            .map_err(|_| error_response("El índice debe ser un entero válido", doc)),
         _ => Err(error_response("El índice debe ser un entero", doc)),
     }
 }
@@ -234,10 +257,10 @@ fn error_response(msg: &str, doc: &str) -> RedisResponse {
 }
 
 #[cfg(test)]
- mod tests {
+mod tests {
     use super::*;
-    use std::sync::{Arc, Mutex};
     use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn test_texto_insertar() {
@@ -254,7 +277,7 @@ fn error_response(msg: &str, doc: &str) -> RedisResponse {
         let docs_lock = docs.lock().unwrap();
         if let Some(Documento::Texto(vec)) = docs_lock.get(&doc_name) {
             assert_eq!(vec[0], "Hola");
-        } 
+        }
     }
 
     #[test]
@@ -298,7 +321,10 @@ fn error_response(msg: &str, doc: &str) -> RedisResponse {
         let req = CommandRequest {
             command: "add_content".to_string(),
             key: Some(doc_name.clone()),
-            arguments: vec![ValueType::Integer(0), ValueType::String("<delete>".to_string())],
+            arguments: vec![
+                ValueType::Integer(0),
+                ValueType::String("<delete>".to_string()),
+            ],
             unparsed_command: String::new(),
         };
         let resp = set_content_file(&req, &docs);
@@ -311,16 +337,22 @@ fn error_response(msg: &str, doc: &str) -> RedisResponse {
         }
     }
     #[test]
-    fn test_calculo_escribir_a1() {        
+    fn test_calculo_escribir_a1() {
         let doc_name = "archivo.xlsx".to_string();
         let mut initial_map = HashMap::new();
-        initial_map.insert(doc_name.clone(), Documento::Calculo(vec![String::new(); 100]));
+        initial_map.insert(
+            doc_name.clone(),
+            Documento::Calculo(vec![String::new(); 100]),
+        );
         let docs = Arc::new(Mutex::new(initial_map));
 
         let req = CommandRequest {
             command: "add_content".to_string(),
             key: Some(doc_name.clone()),
-            arguments: vec![ValueType::String("A1".to_string()), ValueType::String("123".to_string())],
+            arguments: vec![
+                ValueType::String("A1".to_string()),
+                ValueType::String("123".to_string()),
+            ],
             unparsed_command: String::new(),
         };
 
@@ -339,12 +371,18 @@ fn error_response(msg: &str, doc: &str) -> RedisResponse {
     fn test_calculo_escribir_b2() {
         let doc_name = "archivo.xlsx".to_string();
         let mut initial_map = HashMap::new();
-        initial_map.insert(doc_name.clone(), Documento::Calculo(vec![String::new(); 100]));
+        initial_map.insert(
+            doc_name.clone(),
+            Documento::Calculo(vec![String::new(); 100]),
+        );
         let docs = Arc::new(Mutex::new(initial_map));
         let req = CommandRequest {
             command: "add_content".to_string(),
             key: Some(doc_name.clone()),
-            arguments: vec![ValueType::String("B2".to_string()), ValueType::String("abc".to_string())],
+            arguments: vec![
+                ValueType::String("B2".to_string()),
+                ValueType::String("abc".to_string()),
+            ],
             unparsed_command: String::new(),
         };
         let resp = set_content_file(&req, &docs);
@@ -357,24 +395,32 @@ fn error_response(msg: &str, doc: &str) -> RedisResponse {
         }
     }
 
-    
     #[test]
     fn test_calculo_borrar_b2() {
         let doc_name = "archivo.xlsx".to_string();
         let mut initial_map = HashMap::new();
-        initial_map.insert(doc_name.clone(), Documento::Calculo(vec![String::new(); 100]));
+        initial_map.insert(
+            doc_name.clone(),
+            Documento::Calculo(vec![String::new(); 100]),
+        );
         let docs = Arc::new(Mutex::new(initial_map));
         let req_insert = CommandRequest {
             command: "add_content".to_string(),
             key: Some(doc_name.clone()),
-            arguments: vec![ValueType::String("B2".to_string()), ValueType::String("abc".to_string())],
+            arguments: vec![
+                ValueType::String("B2".to_string()),
+                ValueType::String("abc".to_string()),
+            ],
             unparsed_command: String::new(),
         };
         set_content_file(&req_insert, &docs);
         let req = CommandRequest {
             command: "add_content".to_string(),
             key: Some(doc_name.clone()),
-            arguments: vec![ValueType::String("B2".to_string()), ValueType::String("<delete>".to_string())],
+            arguments: vec![
+                ValueType::String("B2".to_string()),
+                ValueType::String("<delete>".to_string()),
+            ],
             unparsed_command: String::new(),
         };
         let resp = set_content_file(&req, &docs);
@@ -387,4 +433,3 @@ fn error_response(msg: &str, doc: &str) -> RedisResponse {
         }
     }
 }
-

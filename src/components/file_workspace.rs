@@ -51,7 +51,7 @@ pub enum FileWorkspaceMsg {
     SubscribeFile(String, String, i32),
     ReloadFiles,
     ContentAdded(String, i32),
-    ContentAddedSpreadSheet(String, String, String)
+    ContentAddedSpreadSheet(String, String, String),
 }
 
 #[derive(Debug)]
@@ -59,7 +59,7 @@ pub enum FileWorkspaceOutputMessage {
     SubscribeFile(String),
     UnsubscribeFile(String),
     ContentAdded(String, String, i32),
-    ContentAddedSpreadSheet(String, String, String, String)
+    ContentAddedSpreadSheet(String, String, String, String),
 }
 
 #[relm4::component(pub)]
@@ -133,8 +133,12 @@ impl SimpleComponent for FileWorkspace {
                 sender.input_sender(),
                 |msg: FileEditorOutputMessage| match msg {
                     FileEditorOutputMessage::GoBack => FileWorkspaceMsg::CloseEditor,
-                    FileEditorOutputMessage::ContentAdded(new_text, offset) => FileWorkspaceMsg::ContentAdded(new_text, offset),
-                    FileEditorOutputMessage::ContentAddedSpreadSheet(row, col, text ) =>  FileWorkspaceMsg::ContentAddedSpreadSheet(row, col, text ),
+                    FileEditorOutputMessage::ContentAdded(new_text, offset) => {
+                        FileWorkspaceMsg::ContentAdded(new_text, offset)
+                    }
+                    FileEditorOutputMessage::ContentAddedSpreadSheet(row, col, text) => {
+                        FileWorkspaceMsg::ContentAddedSpreadSheet(row, col, text)
+                    }
                 },
             );
 
@@ -174,10 +178,19 @@ impl SimpleComponent for FileWorkspace {
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
             FileWorkspaceMsg::ContentAddedSpreadSheet(row, col, text) => {
-                let _ = sender.output(FileWorkspaceOutputMessage::ContentAddedSpreadSheet(self.current_file.clone(), row, col, text));
+                let _ = sender.output(FileWorkspaceOutputMessage::ContentAddedSpreadSheet(
+                    self.current_file.clone(),
+                    row,
+                    col,
+                    text,
+                ));
             }
             FileWorkspaceMsg::ContentAdded(text, offset) => {
-                let _ = sender.output(FileWorkspaceOutputMessage::ContentAdded(self.current_file.clone(), text, offset));
+                let _ = sender.output(FileWorkspaceOutputMessage::ContentAdded(
+                    self.current_file.clone(),
+                    text,
+                    offset,
+                ));
             }
 
             FileWorkspaceMsg::SubscribeFile(file, _content, _qty) => {
@@ -201,9 +214,7 @@ impl SimpleComponent for FileWorkspace {
                 if let Some(doc) = self.files.get(&(file.clone(), file_type.clone())) {
                     let (content, qty) = match doc {
                         Documento::Texto(lineas) => (lineas.join("\n"), lineas.len() as i32),
-                        Documento::Calculo(filas) => (
-                            filas.join("\n"), filas.len() as i32
-                        ),
+                        Documento::Calculo(filas) => (filas.join("\n"), filas.len() as i32),
                     };
 
                     self.file_editor_ctrl
@@ -241,7 +252,8 @@ impl SimpleComponent for FileWorkspace {
                 ];
 
                 let mut files_map: HashMap<(String, FileType), Documento> = HashMap::new();
-                let new_files: Vec<(String, FileType, String, i32)> = get_all_files_list(&redis_nodes_files);
+                let new_files: Vec<(String, FileType, String, i32)> =
+                    get_all_files_list(&redis_nodes_files);
                 let docs: HashMap<String, Documento> = get_all_files_content(&redis_nodes_files);
                 for (nombre, mensajes) in docs {
                     let file_type = if nombre.ends_with(".xlsx") {
@@ -251,7 +263,7 @@ impl SimpleComponent for FileWorkspace {
                     };
                     files_map.insert((nombre, file_type), mensajes);
                 }
-            
+
                 self.files = files_map.clone();
                 glib::timeout_add_local(Duration::from_millis(100), move || {
                     file_list_sender
@@ -277,7 +289,6 @@ impl SimpleComponent for FileWorkspace {
                                 .unwrap();
                         }
                     }
-                    
 
                     glib::ControlFlow::Break
                 });
@@ -330,16 +341,11 @@ pub fn get_file_content_workspace(
                 let data = parts[1];
 
                 if doc_name.ends_with(".txt") {
-                    let messages: Vec<String> = data
-                        .split("/--/")
-                        .map(|s| s.to_string())
-                        .collect();
+                    let messages: Vec<String> = data.split("/--/").map(|s| s.to_string()).collect();
                     docs.insert(doc_name, Documento::Texto(messages));
                 } else if doc_name.ends_with(".xlsx") {
-                    let calc_entries: Vec<String> = data
-                        .split("/--/")
-                        .map(|s| s.to_string())
-                        .collect();                    
+                    let calc_entries: Vec<String> =
+                        data.split("/--/").map(|s| s.to_string()).collect();
                     docs.insert(doc_name, Documento::Calculo(calc_entries));
                 }
             }

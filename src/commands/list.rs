@@ -1,6 +1,6 @@
+use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use super::redis_response::RedisResponse;
 use crate::documento::Documento;
-use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -20,7 +20,9 @@ pub fn handle_linsert(
         Some(k) => k.clone(),
         None => {
             return RedisResponse::new(
-                CommandResponse::Error("Usage: LINSERT <doc> BEFORE|AFTER <pivot> <element>".to_string()),
+                CommandResponse::Error(
+                    "Usage: LINSERT <doc> BEFORE|AFTER <pivot> <element>".to_string(),
+                ),
                 false,
                 "".to_string(),
                 "".to_string(),
@@ -70,7 +72,9 @@ pub fn handle_linsert(
         }
     };
 
-    let entry_doc = docs_lock.entry(doc.clone()).or_insert_with(|| Documento::Texto(vec![]));
+    let entry_doc = docs_lock
+        .entry(doc.clone())
+        .or_insert_with(|| Documento::Texto(vec![]));
 
     if let Some(index) = entry_doc
         .as_texto()
@@ -157,7 +161,7 @@ pub fn handle_lset(
             );
         }
     };
-    
+
     let mut docs_lock = match docs.lock() {
         Ok(lock) => lock,
         Err(e) => {
@@ -206,11 +210,9 @@ pub fn handle_lset(
                 message,
                 doc.clone(),
             )
-        }        
+        }
     }
 }
-
-
 
 /// Maneja el comando LLEN que devuelve la longitud de una lista
 ///
@@ -223,7 +225,7 @@ pub fn handle_lset(
 pub fn handle_llen(
     request: &CommandRequest,
     docs: &Arc<Mutex<HashMap<String, Documento>>>,
-) -> RedisResponse {    
+) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
         None => {
@@ -261,7 +263,6 @@ pub fn handle_llen(
         doc,
     )
 }
-
 
 /// Maneja el comando RPUSH que añade uno o más elementos al final de una lista
 ///
@@ -337,8 +338,6 @@ pub fn handle_rpush(
     )
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -369,7 +368,10 @@ mod tests {
         // Test inserting after existing element
         {
             let mut docs_lock = docs.lock().unwrap();
-            docs_lock.insert("test".to_string(), Documento::Texto(vec!["pivot".to_string()]));
+            docs_lock.insert(
+                "test".to_string(),
+                Documento::Texto(vec!["pivot".to_string()]),
+            );
         }
 
         let request = CommandRequest {
@@ -408,7 +410,10 @@ mod tests {
         // Test valid set
         {
             let mut docs_lock = docs.lock().unwrap();
-            docs_lock.insert("test".to_string(), Documento::Texto(vec!["old".to_string()]));
+            docs_lock.insert(
+                "test".to_string(),
+                Documento::Texto(vec!["old".to_string()]),
+            );
         }
 
         let response = handle_lset(&request, &docs);
@@ -433,40 +438,43 @@ mod tests {
         // Test non-empty list
         {
             let mut docs_lock = docs.lock().unwrap();
-            docs_lock.insert("test".to_string(), Documento::Texto(vec!["value".to_string()]));
+            docs_lock.insert(
+                "test".to_string(),
+                Documento::Texto(vec!["value".to_string()]),
+            );
         }
 
         let response = handle_llen(&request, &docs);
         assert!(matches!(response.response, CommandResponse::Integer(1)));
     }
-      
+
     #[test]
     fn test_handle_rpush() {
         let docs = setup();
 
-         // Test pushing single value
-         let request = CommandRequest {
-             command: "RPUSH".to_string(),
-             key: Some("test".to_string()),
-             arguments: vec![ValueType::String("value".to_string())],
-             unparsed_command: String::new(),
-         };
+        // Test pushing single value
+        let request = CommandRequest {
+            command: "RPUSH".to_string(),
+            key: Some("test".to_string()),
+            arguments: vec![ValueType::String("value".to_string())],
+            unparsed_command: String::new(),
+        };
 
-         let response = handle_rpush(&request, &docs);
-         assert!(matches!(response.response, CommandResponse::Integer(1)));
+        let response = handle_rpush(&request, &docs);
+        assert!(matches!(response.response, CommandResponse::Integer(1)));
 
-          //Test pushing multiple values
-         let request = CommandRequest {
-             command: "RPUSH".to_string(),
-             key: Some("test".to_string()),
-             arguments: vec![
-                 ValueType::String("value1".to_string()),
-                 ValueType::String("value2".to_string()),
-             ],
-             unparsed_command: String::new(),
-         };
+        //Test pushing multiple values
+        let request = CommandRequest {
+            command: "RPUSH".to_string(),
+            key: Some("test".to_string()),
+            arguments: vec![
+                ValueType::String("value1".to_string()),
+                ValueType::String("value2".to_string()),
+            ],
+            unparsed_command: String::new(),
+        };
 
-         let response = handle_rpush(&request, &docs);
-         assert!(matches!(response.response, CommandResponse::Integer(3)));
-     }
- }
+        let response = handle_rpush(&request, &docs);
+        assert!(matches!(response.response, CommandResponse::Integer(3)));
+    }
+}

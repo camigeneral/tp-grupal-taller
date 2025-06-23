@@ -1,9 +1,9 @@
 use super::redis;
+#[allow(unused_imports)]
+use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use super::redis_response::RedisResponse;
 use crate::client_info;
 use crate::documento::Documento;
-#[allow(unused_imports)]
-use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use client_info::ClientType;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -49,7 +49,9 @@ pub fn handle_get(
         Some(Documento::Calculo(_)) => {
             // Maneja el caso de cálculo si es necesario
             RedisResponse::new(
-                CommandResponse::Error("No se puede hacer GET de un documento de cálculo".to_string()),
+                CommandResponse::Error(
+                    "No se puede hacer GET de un documento de cálculo".to_string(),
+                ),
                 false,
                 "".to_string(),
                 "".to_string(),
@@ -58,7 +60,6 @@ pub fn handle_get(
         None => RedisResponse::new(CommandResponse::Null, false, "".to_string(), "".to_string()),
     }
 }
-
 
 /// Maneja el comando SET para sobrescribir el contenido de un documento.
 ///
@@ -133,13 +134,18 @@ pub fn handle_set(
         for (addr, client) in clients_lock.iter() {
             if client.client_type == ClientType::Microservicio && !subscribers.contains(addr) {
                 subscribers.push(addr.clone());
-                println!("Microservicio {} suscripto automáticamente a {}", addr, doc_name);
+                println!(
+                    "Microservicio {} suscripto automáticamente a {}",
+                    addr, doc_name
+                );
                 break;
             }
         }
     } else {
         return RedisResponse::new(
-            CommandResponse::Error("Internal error accessing client or subscription data".to_string()),
+            CommandResponse::Error(
+                "Internal error accessing client or subscription data".to_string(),
+            ),
             false,
             "".to_string(),
             "".to_string(),
@@ -147,12 +153,13 @@ pub fn handle_set(
     }
 
     let notification = format!("Document {} was replaced with: {}", doc_name, content);
-    println!("Publishing to subscribers of {}: {}", doc_name, notification);
+    println!(
+        "Publishing to subscribers of {}: {}",
+        doc_name, notification
+    );
 
     RedisResponse::new(CommandResponse::Ok, true, notification, doc_name)
 }
-
-
 
 /// Maneja el comando APPEND para agregar contenido a un documento línea por línea.
 ///
@@ -222,9 +229,7 @@ pub fn handle_append(
     )
 }
 
-pub fn handle_list_files(
-) -> RedisResponse {
-    
+pub fn handle_list_files() -> RedisResponse {
     let notification = "NODEFILES".to_string();
 
     RedisResponse::new(

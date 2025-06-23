@@ -1,3 +1,4 @@
+use crate::commands::redis_parser::{parse_replica_command, write_response, CommandResponse};
 use crate::documento::Documento;
 use commands::redis;
 use encryption::{decrypt_xor, encrypt_xor, ENCRYPTION_KEY};
@@ -13,7 +14,6 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
-use crate::commands::redis_parser::{CommandResponse, parse_replica_command, write_response};
 
 #[derive(Debug)]
 pub enum RedisMessage {
@@ -100,12 +100,22 @@ pub fn start_node_connection(
     // Bloque para conexión con otros nodos
     let locked_local_node = match local_node.lock() {
         Ok(node) => node,
-        Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Error al bloquear local_node")),
+        Err(_) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Error al bloquear local_node",
+            ))
+        }
     };
 
     let mut lock_peer_nodes = match peer_nodes.lock() {
         Ok(lock) => lock,
-        Err(_) => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Error al bloquear peer_nodes")),
+        Err(_) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Error al bloquear peer_nodes",
+            ))
+        }
     };
 
     for connection_port in node_ports {
@@ -156,7 +166,6 @@ pub fn start_node_connection(
 
     Ok(())
 }
-
 
 /// Permite que un nodo esuche mensajes, y maneja las conexiones con los otros nodos.
 ///
@@ -323,8 +332,7 @@ fn handle_node(
                                 local_node_locked.replica_nodes.push(parsed_port);
                             } else {
                                 local_node_locked.master_node = Some(parsed_port);
-                                let message =
-                                    format!("sync_request {}\n", local_node_locked.port);
+                                let message = format!("sync_request {}\n", local_node_locked.port);
                                 let encrypted_message =
                                     encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
                                 let _ = stream_to_respond.write_all(&encrypted_message);
@@ -347,7 +355,7 @@ fn handle_node(
 
                     let encrypted_message = encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
                     let _ = stream_to_respond.write_all(&encrypted_message);
-                } else if let Some(peer_node_to_update) = lock_nodes.get_mut(&node_address) {            
+                } else if let Some(peer_node_to_update) = lock_nodes.get_mut(&node_address) {
                     peer_node_to_update.role = node_role.clone();
                     peer_node_to_update.hash_range = (hash_range_start, hash_range_end);
 
@@ -357,13 +365,10 @@ fn handle_node(
                                 local_node_locked.replica_nodes.push(parsed_port);
                             } else {
                                 local_node_locked.master_node = Some(parsed_port);
-                                let message =
-                                    format!("sync_request {}\n", local_node_locked.port);
+                                let message = format!("sync_request {}\n", local_node_locked.port);
                                 let encrypted_message =
                                     encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
-                                let _ = peer_node_to_update
-                                    .stream
-                                    .write_all(&encrypted_message);
+                                let _ = peer_node_to_update.stream.write_all(&encrypted_message);
                             }
                         } else {
                             local_node_locked.replica_nodes.push(parsed_port);
@@ -487,7 +492,6 @@ fn handle_node(
     Ok(())
 }
 
-
 /// Lee un archivo de configuracion y genera una lista de los puertos a los que un nodo se debe conectar
 ///
 /// # Errores
@@ -567,14 +571,13 @@ pub fn broadcast_to_replicas(
     Ok(())
 }
 
-
 fn handle_replica_sync(
     replica_port: &String,
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
     shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
     shared_documents: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> std::io::Result<()> {
-    let replica_addr = format!("127.0.0.1:{}", replica_port);    
+    let replica_addr = format!("127.0.0.1:{}", replica_port);
     // Clonar conjuntos
     let cloned_sets = match shared_sets.lock() {
         Ok(locked_sets) => locked_sets.clone(),
@@ -641,7 +644,6 @@ fn handle_replica_sync(
     Ok(())
 }
 
-
 fn serialize_vec_hashmap(
     map: &HashMap<String, Documento>,
     mut stream: TcpStream,
@@ -701,7 +703,6 @@ fn deserialize_hashset_hashmap(
     }
 }
 
-
 fn deserialize_vec_hashmap(
     lines: &Vec<String>,
     shared_documents: &Arc<Mutex<HashMap<String, Documento>>>,
@@ -720,7 +721,6 @@ fn deserialize_vec_hashmap(
         eprintln!("No se pudo bloquear shared_documents en deserialize_vec_hashmap");
     }
 }
-
 
 fn ping_to_master(
     local_node: Arc<Mutex<LocalNode>>,
@@ -828,7 +828,6 @@ fn ping_to_master(
     }
 }
 
-
 fn request_master_state_confirmation(
     local_node: &Arc<Mutex<LocalNode>>,
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
@@ -908,7 +907,6 @@ fn request_master_state_confirmation(
     }
 }
 
-
 fn confirm_master_state(
     local_node: &Arc<Mutex<LocalNode>>,
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
@@ -963,10 +961,7 @@ fn initialize_replica_promotion(
 ) {
     println!("initializing replica promotion");
 
-    let (mut locked_local_node, locked_peer_nodes) = match (
-        local_node.lock(),
-        peer_nodes.lock(),
-    ) {
+    let (mut locked_local_node, locked_peer_nodes) = match (local_node.lock(), peer_nodes.lock()) {
         (Ok(local), Ok(peers)) => (local, peers),
         _ => {
             eprintln!("Error locking local_node or peer_nodes");

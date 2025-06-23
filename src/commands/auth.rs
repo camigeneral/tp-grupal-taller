@@ -1,5 +1,5 @@
-use crate::commands::redis_response::RedisResponse;
 use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
+use crate::commands::redis_response::RedisResponse;
 use client_info;
 use hashing::get_hash_slots;
 use std::collections::HashMap;
@@ -72,7 +72,9 @@ pub fn handle_auth(
         Some(client) => client.username = username.clone(),
         None => {
             return RedisResponse::new(
-                CommandResponse::Error("Hubo problemas al actualizar la informacion del cliente".to_string()),
+                CommandResponse::Error(
+                    "Hubo problemas al actualizar la informacion del cliente".to_string(),
+                ),
                 false,
                 "".to_string(),
                 "".to_string(),

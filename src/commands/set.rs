@@ -1,5 +1,5 @@
-use super::redis_response::RedisResponse;
 use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
+use super::redis_response::RedisResponse;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
@@ -119,7 +119,6 @@ pub fn handle_smembers(
     }
 }
 
-
 /// Maneja el comando SREM que elimina uno o más elementos de un conjunto.
 ///
 /// # Argumentos
@@ -184,7 +183,6 @@ pub fn handle_srem(
     }
 }
 
-
 /// Maneja el comando SADD que agrega uno o más elementos a un conjunto.
 ///
 /// # Argumentos
@@ -240,7 +238,6 @@ pub fn handle_sadd(
         "".to_string(),
     )
 }
-
 
 fn extract_string(value: &ValueType) -> Option<String> {
     match value {

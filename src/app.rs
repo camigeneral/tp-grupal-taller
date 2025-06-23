@@ -72,9 +72,9 @@ pub enum AppMsg {
     /// Mensaje para crear un documento de tipo texto.
     CreateTextDocument,
     /// Mensaje para crear un documento de tipo hoja de cálculo.
-    CreateSpreadsheetDocument,    
+    CreateSpreadsheetDocument,
     AddContent(String, String, i32),
-    AddContentSpreadSheet(String,String,String,String)
+    AddContentSpreadSheet(String, String, String, String),
 }
 
 #[relm4::component(pub)]
@@ -132,13 +132,13 @@ impl SimpleComponent for AppModel {
 
                     gtk::Box {
                         set_halign: gtk::Align::Center,
-        
+
                         // logo - descomentar
                         // gtk::Image {
                         //     set_from_file: Some("src/components/images/logo.png"),
                         //     set_widget_name: "AppLogo",
                         //     set_valign: gtk::Align::Center,
-                        //     set_halign: gtk::Align::Center, 
+                        //     set_halign: gtk::Align::Center,
                         //     set_margin_bottom: 0,
                         //     set_margin_start: 100,
                         //     set_margin_top: 20,
@@ -241,8 +241,12 @@ impl SimpleComponent for AppModel {
             |command: FileWorkspaceOutputMessage| match command {
                 FileWorkspaceOutputMessage::SubscribeFile(file) => AppMsg::SubscribeFile(file),
                 FileWorkspaceOutputMessage::UnsubscribeFile(file) => AppMsg::UnsubscribeFile(file),
-                FileWorkspaceOutputMessage::ContentAdded(file, text , line_number) => AppMsg::AddContent(file, text, line_number),
-                FileWorkspaceOutputMessage::ContentAddedSpreadSheet(file,col , row , text ) => AppMsg::AddContentSpreadSheet(file, col, row,  text)
+                FileWorkspaceOutputMessage::ContentAdded(file, text, line_number) => {
+                    AppMsg::AddContent(file, text, line_number)
+                }
+                FileWorkspaceOutputMessage::ContentAddedSpreadSheet(file, col, row, text) => {
+                    AppMsg::AddContentSpreadSheet(file, col, row, text)
+                }
             },
         );
 
@@ -348,7 +352,7 @@ impl SimpleComponent for AppModel {
             }
 
             AppMsg::ManageResponse(resp) => {
-                if resp != "OK" {                
+                if resp != "OK" {
                     return;
                 }
                 if self.command.contains("AUTH") {
@@ -380,7 +384,7 @@ impl SimpleComponent for AppModel {
                 sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::AddContent(file_id, text, line_number) => {
-                let clean_text= if text.trim_end_matches('\n').is_empty() {
+                let clean_text = if text.trim_end_matches('\n').is_empty() {
                     "<delete>".to_string()
                 } else {
                     text
@@ -389,7 +393,7 @@ impl SimpleComponent for AppModel {
                 sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::AddContentSpreadSheet(file_id, col, row, text) => {
-                let clean_text= if text.is_empty(){
+                let clean_text = if text.is_empty() {
                     "<delete>".to_string()
                 } else {
                     text
@@ -399,7 +403,7 @@ impl SimpleComponent for AppModel {
                     Ok(val) => val,
                     Err(_) => {
                         println!("Error: col no es un número válido: {}", col);
-                        return; 
+                        return;
                     }
                 };
 
@@ -407,7 +411,7 @@ impl SimpleComponent for AppModel {
                     Ok(val) => val,
                     Err(_) => {
                         println!("Error: row no es un número válido: {}", row);
-                        return; 
+                        return;
                     }
                 };
 
@@ -489,7 +493,7 @@ impl SimpleComponent for AppModel {
                 let file_id = format!("{}.txt", self.file_name.trim());
                 sender.input(AppMsg::CreateFile(file_id, "".to_string()));
             }
-            
+
             AppMsg::CreateSpreadsheetDocument => {
                 if let Some(popover) = &self.new_file_popover {
                     popover.popdown();

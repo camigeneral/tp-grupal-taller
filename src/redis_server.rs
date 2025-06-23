@@ -21,18 +21,17 @@ mod hashing;
 mod local_node;
 mod peer_node;
 mod redis_node_handler;
-mod utils;
 mod server_context;
+mod utils;
+use crate::server_context::ServerContext;
 use client_info::ClientType;
 use documento::Documento;
-use crate::server_context::ServerContext;
 #[path = "utils/logger.rs"]
 mod logger;
-use crate::commands::redis_parser::{CommandResponse, parse_command, write_response};
+use crate::commands::redis_parser::{parse_command, write_response, CommandResponse};
 
 type SubscribersMap = Arc<Mutex<HashMap<String, Vec<String>>>>;
 type SetsMap = Arc<Mutex<HashMap<String, HashSet<String>>>>;
-
 
 /// Número de argumentos esperados para iniciar el servidor
 static REQUIRED_ARGS: usize = 2;
@@ -179,7 +178,10 @@ fn start_server(
             Ok(client_stream) => {
                 if let Err(e) = handle_new_client_connection(client_stream, Arc::clone(&ctx)) {
                     eprintln!("Error al manejar nueva conexión: {}", e);
-                    logger::log_event(&log_path, &format!("Error al manejar nueva conexión: {}", e));
+                    logger::log_event(
+                        &log_path,
+                        &format!("Error al manejar nueva conexión: {}", e),
+                    );
                 }
             }
             Err(e) => {
@@ -191,7 +193,6 @@ fn start_server(
 
     Ok(())
 }
-
 
 /// Inicializa el mapa de suscriptores para cada documento y los sets para cada documento.
 ///
@@ -206,10 +207,7 @@ fn start_server(
 /// inicializadas y los sets iniciales
 fn initialize_datasets(
     documents: &Arc<Mutex<HashMap<String, Documento>>>,
-) -> (
-    SubscribersMap,
-    SetsMap,
-) {
+) -> (SubscribersMap, SetsMap) {
     // Intentamos obtener la lista de keys; si falla el lock, devolvemos vectores vacíos
     let document_keys: Vec<String> = match documents.lock() {
         Ok(locked_documents) => locked_documents.keys().cloned().collect(),
@@ -232,7 +230,6 @@ fn initialize_datasets(
         Arc::new(Mutex::new(doc_set)),
     )
 }
-
 
 fn handle_new_client_connection(
     mut client_stream: TcpStream,
@@ -282,7 +279,10 @@ fn handle_new_client_connection(
         ClientType::Cliente
     };
 
-    logger::log_event(&ctx.log_path, &format!("Cliente conectado: {}", client_addr));
+    logger::log_event(
+        &ctx.log_path,
+        &format!("Cliente conectado: {}", client_addr),
+    );
 
     let client_stream_clone = match client_stream.try_clone() {
         Ok(clone) => clone,
@@ -315,10 +315,7 @@ fn handle_new_client_connection(
             Ok(_) => {
                 println!("Client {} disconnected.", client_addr);
 
-                logger::log_event(
-                    &log_path,
-                    &format!("Cliente desconectado: {}", client_addr),
-                );
+                logger::log_event(&log_path, &format!("Cliente desconectado: {}", client_addr));
             }
             Err(e) => {
                 eprintln!("Error in connection with {}: {}", client_addr, e);
@@ -333,7 +330,6 @@ fn handle_new_client_connection(
 
     Ok(())
 }
-
 
 /// Maneja la comunicación con un cliente conectado.
 ///
@@ -372,7 +368,10 @@ fn handle_client(
                     stream,
                     &CommandResponse::Error("Comando inválido".to_string()),
                 ) {
-                    eprintln!("Error al escribir respuesta de comando inválido: {}", write_err);
+                    eprintln!(
+                        "Error al escribir respuesta de comando inválido: {}",
+                        write_err
+                    );
                     break;
                 }
                 continue;
@@ -428,7 +427,6 @@ fn handle_client(
         let response = match resolve_key_location(key, &ctx.local_node, &ctx.peer_nodes) {
             Ok(()) => {
                 let unparsed_command = command_request.unparsed_command.clone();
-
 
                 let redis_response = redis::execute_command(
                     command_request,
@@ -488,14 +486,13 @@ fn handle_client(
     Ok(())
 }
 
-
 fn _is_authorized_client(
     logged_clients: Arc<Mutex<HashMap<String, bool>>>,
     client_id: String,
 ) -> bool {
     println!("Verificando autorización para client_id: {}", client_id);
     println!("Formato exacto del client_id: {:?}", client_id);
-    
+
     let locked = match logged_clients.lock() {
         Ok(lock) => lock,
         Err(poisoned) => {
@@ -505,7 +502,10 @@ fn _is_authorized_client(
     };
 
     println!("Estado actual del HashMap: {:#?}", *locked);
-    println!("Claves en el HashMap: {:?}", locked.keys().collect::<Vec<_>>());
+    println!(
+        "Claves en el HashMap: {:?}",
+        locked.keys().collect::<Vec<_>>()
+    );
 
     match locked.get(&client_id) {
         Some(&true) => {
@@ -522,7 +522,6 @@ fn _is_authorized_client(
         }
     }
 }
-
 
 /// Determina si la key recibida corresponde al nodo actual o si debe ser redirigida a otro nodo,
 /// a traves del mensaje "ASK *key hasheada* *ip del nodo correspondiente*". En el caso de que
@@ -548,7 +547,11 @@ pub fn resolve_key_location(
             Err(poisoned) => poisoned.into_inner(),
         };
 
-        (locked_node.hash_range.0, locked_node.hash_range.1, locked_peers)
+        (
+            locked_node.hash_range.0,
+            locked_node.hash_range.1,
+            locked_peers,
+        )
     };
 
     println!("Hash: {}", hashed_key);
@@ -571,7 +574,10 @@ pub fn resolve_key_location(
             let response_string = format!("ASK {}", hashed_key);
             let redis_redirect_response = CommandResponse::String(response_string.clone());
 
-            println!("Hashing para nodo indefinido: {:?}", response_string.clone());
+            println!(
+                "Hashing para nodo indefinido: {:?}",
+                response_string.clone()
+            );
 
             return Err(redis_redirect_response);
         }
@@ -579,7 +585,6 @@ pub fn resolve_key_location(
 
     Ok(())
 }
-
 
 /// Publica una actualización a todos los clientes suscritos a un documento.
 ///
@@ -618,7 +623,6 @@ pub fn publish_update(
     Ok(())
 }
 
-
 /// Limpia los recursos asociados a un cliente cuando se desconecta.
 ///
 /// Elimina al cliente de:
@@ -645,7 +649,6 @@ fn cleanup_client_resources(
     }
 }
 
-
 /// Persiste el estado actual de los documentos en el archivo.
 ///
 /// # Errores
@@ -656,11 +659,17 @@ pub fn persist_documents(
 ) -> io::Result<()> {
     let file_name = match local_node.lock() {
         Ok(locked_node) => {
-            format!("redis_node_{}_{}.rdb", locked_node.hash_range.0, locked_node.hash_range.1)
+            format!(
+                "redis_node_{}_{}.rdb",
+                locked_node.hash_range.0, locked_node.hash_range.1
+            )
         }
         Err(poisoned) => {
             let locked_node = poisoned.into_inner();
-            format!("redis_node_{}_{}.rdb", locked_node.hash_range.0, locked_node.hash_range.1)
+            format!(
+                "redis_node_{}_{}.rdb",
+                locked_node.hash_range.0, locked_node.hash_range.1
+            )
         }
     };
 
@@ -694,21 +703,20 @@ pub fn persist_documents(
                 }
             }
             Documento::Calculo(filas) => {
-                    let mut document_data = format!("{}/++/", document_id);
-                    for i in 0..100 {
-                        let empty = String::new();
-                        let value = filas.get(i).unwrap_or(&empty);
-                        document_data.push_str(value);
-                        document_data.push_str("/--/");
-                    }
-                    writeln!(persistence_file, "{}", document_data)?;
+                let mut document_data = format!("{}/++/", document_id);
+                for i in 0..100 {
+                    let empty = String::new();
+                    let value = filas.get(i).unwrap_or(&empty);
+                    document_data.push_str(value);
+                    document_data.push_str("/--/");
                 }
+                writeln!(persistence_file, "{}", document_data)?;
+            }
         }
     }
 
     Ok(())
 }
-
 
 /// Carga los documentos persistidos desde el archivo.
 ///
@@ -748,10 +756,8 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Documen
                 .collect();
             documents.insert(document_id, Documento::Texto(messages));
         } else {
-            let mut rows: Vec<String> = messages_data
-                .split("/--/")
-                .map(|s| s.to_string())
-                .collect();
+            let mut rows: Vec<String> =
+                messages_data.split("/--/").map(|s| s.to_string()).collect();
 
             while rows.len() < 100 {
                 rows.push(String::new());
@@ -762,11 +768,8 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Documen
         }
     }
 
-
     Ok(documents)
 }
-
-
 
 pub fn subscribe_microservice_to_all_docs(
     addr: String,
@@ -798,8 +801,10 @@ pub fn subscribe_microservice_to_all_docs(
         // Agregar el addr si no está aún
         if !subscribers.contains(&addr) {
             subscribers.push(addr.clone());
-            println!("Microservicio {} suscripto automáticamente a {}", addr, doc_name);
+            println!(
+                "Microservicio {} suscripto automáticamente a {}",
+                addr, doc_name
+            );
         }
     }
 }
-

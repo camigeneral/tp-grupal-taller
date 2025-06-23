@@ -1,11 +1,11 @@
-use super::redis_response::RedisResponse;
 use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
+use super::redis_response::RedisResponse;
 use commands::set::handle_sadd;
 use commands::set::handle_srem;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
 use std::io::Write;
+use std::sync::{Arc, Mutex};
 
 /// Maneja el comando SUBSCRIBE que permite a un cliente suscribirse a un documento
 ///
@@ -75,7 +75,6 @@ pub fn handle_subscribe(
         )
     }
 }
-
 
 /// Maneja el comando UNSUBSCRIBE que permite a un cliente cancelar su suscripción a un documento
 ///
@@ -190,7 +189,7 @@ pub fn handle_publish<T: Write>(
     if let Some(subscribers) = subscribers_guard.get(doc) {
         for subscriber_id in subscribers {
             if let Some(client) = clients_guard.get_mut(subscriber_id) {
-                let _ = writeln!(client, "{}", message); 
+                let _ = writeln!(client, "{}", message);
                 sent_count += 1;
             }
         }
@@ -202,8 +201,6 @@ pub fn handle_publish<T: Write>(
         doc.to_string(),
     )
 }
-
-
 
 // #[cfg(test)]
 // mod tests {
@@ -236,7 +233,7 @@ pub fn handle_publish<T: Write>(
 //         let map = document_subscribers.lock().unwrap();
 //         assert_eq!(map.get(doc).unwrap(), &vec!["client1".to_string()]);
 //     }
-/* 
+/*
     #[test]
     fn test_handle_subscribe_no_key() {
         let document_subscribers = setup_map("doc1", vec![]);
@@ -370,7 +367,7 @@ pub fn handle_publish<T: Write>(
         };
 
         let resp: RedisResponse = handle_publish(&request, &document_subscribers, &active_clients);
-        
+
         assert_eq!(resp.response, CommandResponse::Integer(2));
     }
 

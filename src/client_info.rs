@@ -1,5 +1,5 @@
-use std::net::TcpStream;
 use std::io::{Result, Write};
+use std::net::TcpStream;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClientType {
@@ -12,7 +12,6 @@ pub struct Client {
     pub client_type: ClientType,
     pub username: String,
 }
-
 
 impl Write for Client {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {

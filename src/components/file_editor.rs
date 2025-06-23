@@ -9,7 +9,6 @@ use self::relm4::{
 };
 use components::spreadsheet::SpreadsheetOutput;
 
-
 use components::spreadsheet::SpreadsheetModel;
 use components::spreadsheet::SpreadsheetMsg;
 use components::text_editor::TextEditorMessage;
@@ -44,7 +43,7 @@ pub struct FileEditorModel {
 #[derive(Debug)]
 pub enum FileEditorMessage {
     ContentAdded(String, i32),
-    ContentAddedSpreadSheet(String,String,String ),
+    ContentAddedSpreadSheet(String, String, String),
     UpdateFile(String, i32, String, FileType),
     ResetEditor,
 }
@@ -115,16 +114,20 @@ impl SimpleComponent for FileEditorModel {
             sender.input_sender(),
             |msg| match msg {
                 SpreadsheetOutput::GoBack => FileEditorMessage::ResetEditor,
-                SpreadsheetOutput::ContentChanged(row, col, text) => FileEditorMessage::ContentAddedSpreadSheet(row, col, text),
+                SpreadsheetOutput::ContentChanged(row, col, text) => {
+                    FileEditorMessage::ContentAddedSpreadSheet(row, col, text)
+                }
             },
         );
 
         let text_editor_cont = TextEditorModel::builder()
             .launch((file_name.clone(), num_contributors, content.clone()))
-            .forward(sender.input_sender(),|msg| match msg {
+            .forward(sender.input_sender(), |msg| match msg {
                 TextEditorOutputMessage::GoBack => FileEditorMessage::ResetEditor,
-                TextEditorOutputMessage::ContentAdded(text, line_number) => FileEditorMessage::ContentAdded(text, line_number),
-            }, );
+                TextEditorOutputMessage::ContentAdded(text, line_number) => {
+                    FileEditorMessage::ContentAdded(text, line_number)
+                }
+            });
 
         let model = FileEditorModel {
             file_name,
@@ -144,16 +147,16 @@ impl SimpleComponent for FileEditorModel {
 
     fn update(&mut self, message: FileEditorMessage, sender: ComponentSender<Self>) {
         match message {
-
             FileEditorMessage::ContentAddedSpreadSheet(row, col, text) => {
-                let _ = sender.output(FileEditorOutputMessage::ContentAddedSpreadSheet(row, col, text));
+                let _ = sender.output(FileEditorOutputMessage::ContentAddedSpreadSheet(
+                    row, col, text,
+                ));
             }
 
             FileEditorMessage::ContentAdded(new_text, line_number) => {
                 let _ = sender.output(FileEditorOutputMessage::ContentAdded(new_text, line_number));
             }
             FileEditorMessage::UpdateFile(file_name, contributors, content, file_type) => {
-                
                 self.file_name = file_name.clone();
                 self.num_contributors = contributors;
                 self.content = content.clone();
@@ -171,8 +174,8 @@ impl SimpleComponent for FileEditorModel {
                     FileType::Sheet => {
                         self.text_editor_visible = false;
                         self.spreadsheet_visible = true;
-                        let filas: Vec<String> = content.split("\n").map(|s| s.to_string()).collect();
-
+                        let filas: Vec<String> =
+                            content.split("\n").map(|s| s.to_string()).collect();
 
                         self.spreadsheet_ctrl
                             .sender()
