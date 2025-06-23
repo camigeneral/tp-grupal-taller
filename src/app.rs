@@ -108,16 +108,15 @@ impl SimpleComponent for AppModel {
                     gtk::Box {
                         set_halign: gtk::Align::Center,
 
-                        // logo - descomentar
-                        // gtk::Image {
-                        //     set_from_file: Some("src/components/images/logo.png"),
-                        //     set_widget_name: "AppLogo",
-                        //     set_valign: gtk::Align::Center,
-                        //     set_halign: gtk::Align::Center,
-                        //     set_margin_bottom: 0,
-                        //     set_margin_start: 100,
-                        //     set_margin_top: 20,
-                        // }
+                         gtk::Image {
+                            set_from_file: Some("src/components/images/logo.png"),
+                            set_widget_name: "AppLogo",
+                            set_valign: gtk::Align::Center,
+                            set_halign: gtk::Align::Center,
+                            set_margin_bottom: 0,
+                            set_margin_start: 100,
+                            set_margin_top: 20,
+                         }
                     },
 
                     gtk::Box {
