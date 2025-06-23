@@ -257,7 +257,6 @@ impl SimpleComponent for FileWorkspace {
                                 val = lines.join("\n");
                             }
                         }
-                
 
                         file_editor_sender
                             .send(FileEditorMessage::UpdateFileContent(

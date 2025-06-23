@@ -248,7 +248,6 @@ fn listen_to_redis_response(
                 }
             }
             s if s.starts_with("UPDATE-FILES") => {
-
                 let parts: Vec<&str> = line_clone.trim_end_matches('\n').split('|').collect();
 
                 let doc_name: &str = parts[1];

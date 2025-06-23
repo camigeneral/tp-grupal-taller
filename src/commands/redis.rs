@@ -60,7 +60,8 @@ pub fn execute_replica_command(
     document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
     shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> RedisResponse {
-    let shared_map: Arc<Mutex<HashMap<String, client_info::Client>>> = Arc::new(Mutex::new(HashMap::new()));
+    let shared_map: Arc<Mutex<HashMap<String, client_info::Client>>> =
+        Arc::new(Mutex::new(HashMap::new()));
     match request.command.as_str() {
         "get" => string::handle_get(&request, docs),
         "set" => string::handle_set(&request, docs, document_subscribers, &shared_map),

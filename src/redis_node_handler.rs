@@ -138,11 +138,6 @@ pub fn start_node_connection(
                         locked_local_node.hash_range.1
                     );
 
-                    // let encrypted_message = encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
-
-                    // if let Err(e) = cloned_stream.write_all(&encrypted_message) {
-                    //     return Err(e);
-                    // }
                     if let Err(e) = cloned_stream.write_all(message.as_bytes()) {
                         return Err(e);
                     }
@@ -250,21 +245,9 @@ fn handle_node(
 
     for command in reader.lines().map_while(Result::ok) {
         let input: Vec<String> = command
-        .split_whitespace()
-        .map(|s| s.to_string().to_lowercase())
-        .collect();
-
-        // let encrypted_bytes = command.as_bytes();
-        // let decrypted_bytes = decrypt_xor(encrypted_bytes, ENCRYPTION_KEY);
-        // let decrypted_line = String::from_utf8_lossy(&decrypted_bytes);
-        // let input: Vec<String> = decrypted_line
-        //     .split_whitespace()
-        //     .map(|s| s.to_lowercase())
-        //     .collect();
-
-        // if input.is_empty() {
-        //     continue;
-        // }
+            .split_whitespace()
+            .map(|s| s.to_string().to_lowercase())
+            .collect();
 
         let command = &input[0];
         println!("Recibido: {:?}", input);
@@ -336,9 +319,6 @@ fn handle_node(
                             } else {
                                 local_node_locked.master_node = Some(parsed_port);
                                 let message = format!("sync_request {}\n", local_node_locked.port);
-                                // let encrypted_message =
-                                //     encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
-                                // let _ = stream_to_respond.write_all(&encrypted_message);
                                 let _ = stream_to_respond.write_all(message.as_bytes());
                             }
                         } else {
@@ -357,8 +337,6 @@ fn handle_node(
                         local_node_locked.hash_range.1
                     );
 
-                    // let encrypted_message = encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
-                    // let _ = stream_to_respond.write_all(&encrypted_message);
                     let _ = stream_to_respond.write_all(message.as_bytes());
                 } else if let Some(peer_node_to_update) = lock_nodes.get_mut(&node_address) {
                     peer_node_to_update.role = node_role.clone();
@@ -371,9 +349,6 @@ fn handle_node(
                             } else {
                                 local_node_locked.master_node = Some(parsed_port);
                                 let message = format!("sync_request {}\n", local_node_locked.port);
-                                // let encrypted_message =
-                                    // encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
-                                // let _ = peer_node_to_update.stream.write_all(&encrypted_message);
                                 let _ = peer_node_to_update.stream.write_all(message.as_bytes());
                             }
                         } else {
@@ -437,8 +412,6 @@ fn handle_node(
             }
             "ping" => {
                 let message = "pong\n";
-                // let encrypted = encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
-                // let _ = stream.write_all(&encrypted);
                 let _ = stream.write_all(message.as_bytes());
             }
             "confirm_master_down" => {
@@ -446,7 +419,6 @@ fn handle_node(
                     Ok(master_state) => {
                         println!("master state: {:?}", master_state);
                         if master_state == NodeState::Inactive {
-
                             println!("01");
 
                             let locked_nodes = match nodes.lock() {
@@ -471,10 +443,6 @@ fn handle_node(
                                 if peer.role == NodeRole::Replica && peer.hash_range == hash_range {
                                     if let Ok(mut peer_stream) = peer.stream.try_clone() {
                                         let message = format!("initialize_replica_promotion\n");
-                                        // let message = "initialize_replica_promotion\n".to_string();
-                                        // let encrypted_message =
-                                        //     encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
-                                        // let _ = peer_stream.write_all(&encrypted_message);
                                         let _ = peer_stream.write_all(message.as_bytes());
                                         println!("04");
                                     }
@@ -505,8 +473,6 @@ fn handle_node(
                     command_string.push_str(&format!("{}\r\n", command));
                 } else {
                     let message = "Comando no reconocido\n";
-                    // let encrypted = encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
-                    // let _ = stream.write_all(&encrypted);
                     let _ = stream.write_all(message.as_bytes());
                 }
             }
@@ -571,24 +537,10 @@ pub fn broadcast_to_replicas(
         if let Some(peer_node) = locked_peer_nodes.get_mut(&key) {
             let stream = &mut peer_node.stream;
 
-            // let encrypted_message = encrypt_xor(unparsed_command.as_bytes(), ENCRYPTION_KEY);
-            // let encrypted_start = encrypt_xor(b"start_replica_command\n", ENCRYPTION_KEY);
-            // let encrypted_end = encrypt_xor(b"end_replica_command\n", ENCRYPTION_KEY);
-
-            // if stream.write_all(&encrypted_start).is_err() {
-            //     eprintln!("Error escribiendo start_replica_command a {}", key);
-            //     continue;
-            // }
-            // if stream.write_all(&encrypted_message).is_err() {
-            //     eprintln!("Error enviando comando a {}", key);
-            //     continue;
-            // }
-            // if stream.write_all(&encrypted_end).is_err() {
-            //     eprintln!("Error escribiendo end_replica_command a {}", key);
-            //     continue;
-            // }
-            
-            if stream.write_all("start_replica_command\n".as_bytes()).is_err() {
+            if stream
+                .write_all("start_replica_command\n".as_bytes())
+                .is_err()
+            {
                 eprintln!("Error escribiendo start_replica_command a {}", key);
                 continue;
             }
@@ -596,11 +548,13 @@ pub fn broadcast_to_replicas(
                 eprintln!("Error enviando comando a {}", key);
                 continue;
             }
-            if stream.write_all("end_replica_command\n".as_bytes()).is_err() {
+            if stream
+                .write_all("end_replica_command\n".as_bytes())
+                .is_err()
+            {
                 eprintln!("Error escribiendo end_replica_command a {}", key);
                 continue;
             }
-
         } else {
             eprintln!("No se encontró nodo réplica para {}", key);
         }
@@ -689,21 +643,15 @@ fn serialize_vec_hashmap(
     for (key, doc) in map {
         let line = match doc {
             Documento::Texto(vec) => {
-                //ARREGLAR
                 let joined = vec.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(",");
 
                 format!("serialize_vec {}:{}\n", key, joined)
             }
-            // Si tienes otros tipos de Documento, agrégalos aquí
             _ => continue,
         };
-        // let encrypted_message = encrypt_xor(line.as_bytes(), ENCRYPTION_KEY);
-        // stream.write_all(&encrypted_message)?;
         stream.write_all(line.as_bytes())?;
     }
     let message = "end_serialize_vec\n";
-    // let encrypted_message = encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
-    // stream.write_all(&encrypted_message)?;
     stream.write_all(message.as_bytes())?;
     Ok(())
 }
@@ -715,14 +663,10 @@ fn serialize_hashset_hashmap(
     for (key, set) in map {
         let values: Vec<String> = set.iter().cloned().collect();
         let line = format!("serialize_hashmap {}:{}\n", key, values.join(","));
-        // let encrypted_message = encrypt_xor(line.as_bytes(), ENCRYPTION_KEY);
-        // stream.write_all(&encrypted_message)?;
         stream.write_all(line.as_bytes())?;
         println!("se mando start");
     }
     let message = "end_serialize_hashmap\n";
-    // let encrypted_message = encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
-    // stream.write_all(&encrypted_message)?;
     stream.write_all(message.as_bytes())?;
     println!("se mando end");
     Ok(())
@@ -766,126 +710,13 @@ fn deserialize_vec_hashmap(
     }
 }
 
-// fn ping_to_master(
-//     local_node: Arc<Mutex<LocalNode>>,
-//     peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
-// ) -> std::io::Result<()> {
-//     let ping_interval = Duration::from_secs(5);
-//     let error_interval = Duration::from_secs(50);
-//     let mut last_sent = Instant::now();
-//     let mut stream_to_ping = None;
-
-//     loop {
-//         let now = Instant::now();
-//         if now.duration_since(last_sent) >= ping_interval {
-//             if stream_to_ping.is_none() {
-//                 {
-//                     let locked_local_node = match local_node.lock() {
-//                         Ok(n) => n,
-//                         Err(_) => {
-//                             eprintln!("Error al bloquear local_node");
-//                             std::hint::spin_loop();
-//                             continue;
-//                         }
-//                     };
-
-//                     let mut locked_peer_nodes = match peer_nodes.lock() {
-//                         Ok(n) => n,
-//                         Err(_) => {
-//                             eprintln!("Error al bloquear peer_nodes");
-//                             std::hint::spin_loop();
-//                             continue;
-//                         }
-//                     };
-
-//                     if let Some(port) = locked_local_node.master_node {
-//                         let key = format!("127.0.0.1:{}", port);
-//                         if let Some(peer_node) = locked_peer_nodes.get_mut(&key) {
-//                             if peer_node.state == NodeState::Active {
-//                                 match peer_node.stream.try_clone() {
-//                                     Ok(cloned_stream) => stream_to_ping = Some(cloned_stream),
-//                                     Err(_) => {
-//                                         eprintln!("Error al clonar stream para ping");
-//                                     }
-//                                 }
-//                             }
-//                         }
-//                     }
-//                 }
-//             }
-
-//             if let Some(mut stream) = stream_to_ping.as_ref() {
-//                 if let Err(e) = stream.set_read_timeout(Some(error_interval)) {
-//                     eprintln!("Error seteando timeout: {}", e);
-//                     stream_to_ping = None;
-//                     std::hint::spin_loop();
-//                     continue;
-//                 }
-
-//                 let reader_stream = match stream.try_clone() {
-//                     Ok(s) => s,
-//                     Err(e) => {
-//                         eprintln!("Error clonando stream para lectura: {}", e);
-//                         stream_to_ping = None;
-//                         std::hint::spin_loop();
-//                         continue;
-//                     }
-//                 };
-
-//                 let mut reader = BufReader::new(reader_stream);
-//                 // let encrypted_message = encrypt_xor(b"ping\n", ENCRYPTION_KEY);
-//                 // if let Err(e) = stream.write_all(&encrypted_message) {
-//                 //     eprintln!("Error enviando ping: {}", e);
-//                 //     stream_to_ping = None;
-//                 //     std::hint::spin_loop();
-//                 //     continue;
-//                 // }
-//                 if let Err(e) = stream.write_all("ping".as_bytes()) {
-//                     eprintln!("Error enviando ping: {}", e);
-//                     stream_to_ping = None;
-//                     std::hint::spin_loop();
-//                     continue;
-//                 }
-
-//                 let mut line = String::new();
-//                 match reader.read_line(&mut line) {
-//                     Ok(0) => {
-//                         println!("Conexión cerrada por el master");
-//                         request_master_state_confirmation(&local_node, &peer_nodes);
-//                         stream_to_ping = None;
-//                     }
-//                     Ok(_) => {
-//                         // ping exitoso
-//                         println!("Respuesta del master (encriptada): {:?}", line);
-//                     }
-//                     Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
-//                         println!("Timeout esperando respuesta del master");
-//                         request_master_state_confirmation(&local_node, &peer_nodes);
-//                         stream_to_ping = None;
-//                     }
-//                     Err(e) => {
-//                         println!("Error inesperado en ping: {}", e);
-//                         request_master_state_confirmation(&local_node, &peer_nodes);
-//                         stream_to_ping = None;
-//                     }
-//                 }
-
-//                 last_sent = Instant::now();
-//             } else {
-//                 std::hint::spin_loop();
-//             }
-//         }
-
-//         std::hint::spin_loop();
-//     }
-// }
-
-
-fn ping_to_master(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>)-> std::io::Result<()> {
+fn ping_to_master(
+    local_node: Arc<Mutex<LocalNode>>,
+    peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
+) -> std::io::Result<()> {
     let ping_interval = Duration::from_secs(5);
     let error_interval = Duration::from_secs(50);
     let mut last_sent = Instant::now();
-    
 
     let mut stream_to_ping = None;
 
@@ -907,7 +738,7 @@ fn ping_to_master(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashM
                     }
                 }
             }
-            
+
             match stream_to_ping.as_ref() {
                 Some(mut stream) => {
                     stream.set_read_timeout(Some(error_interval))?;
@@ -924,7 +755,6 @@ fn ping_to_master(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashM
                             std::hint::spin_loop();
                         }
                         Ok(_) => {
-                            // todo ok
                             println!("Received response: {}", line.trim());
                         }
                         Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
@@ -940,9 +770,9 @@ fn ping_to_master(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashM
                             std::hint::spin_loop();
                         }
                     }
-        
+
                     last_sent = now;
-                },
+                }
                 None => {
                     std::hint::spin_loop();
                 }
@@ -951,8 +781,6 @@ fn ping_to_master(local_node: Arc<Mutex<LocalNode>>, peer_nodes: Arc<Mutex<HashM
         std::hint::spin_loop();
     }
 }
-
-
 
 fn request_master_state_confirmation(
     local_node: &Arc<Mutex<LocalNode>>,
@@ -988,7 +816,7 @@ fn request_master_state_confirmation(
             }
         };
     }
-    
+
     let mut contacted_replica = false;
 
     {
@@ -1015,11 +843,8 @@ fn request_master_state_confirmation(
                 && peer.port != master_port
             {
                 let message = format!("confirm_master_down {}\n", master_port);
-                // let encrypted_message = encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
                 match peer.stream.try_clone() {
                     Ok(mut peer_stream) => {
-                        // if peer_stream.write_all(&encrypted_message).is_ok() {
-                        //     contacted_replica = true;
                         if peer_stream.write_all(message.as_bytes()).is_ok() {
                             contacted_replica = true;
                         } else {
@@ -1034,7 +859,6 @@ fn request_master_state_confirmation(
         }
     }
 
-    // Si no se pudo contactar a nadie, iniciar promoción local
     if !contacted_replica {
         initialize_replica_promotion(local_node, peer_nodes);
     }
@@ -1079,11 +903,10 @@ fn confirm_master_state(
                 ));
             }
         };
-        
+
         for (_addr, peer_node) in peer_nodes_locked.iter() {
             if peer_node.port == master_port && peer_node.state == NodeState::Inactive {
                 master_state = NodeState::Inactive;
-                // break;
             }
         }
     }
@@ -1126,34 +949,26 @@ fn initialize_replica_promotion(
         locked_local_node.hash_range.0,
         locked_local_node.hash_range.1
     );
-    // let encrypted_node_message = encrypt_xor(node_info_message.as_bytes(), ENCRYPTION_KEY);
 
     let inactive_node_message = format!("inactive_node {}\n", inactive_port);
-    // let encrypted_inactive_message = encrypt_xor(inactive_node_message.as_bytes(), ENCRYPTION_KEY);
 
     for (_, peer) in locked_peer_nodes.iter() {
         if peer.state == NodeState::Active {
             println!("sending to: {}", peer.port);
-        match peer.stream.try_clone() {
-            Ok(mut peer_stream) => {
-                // if let Err(e) = peer_stream.write_all(&encrypted_node_message) {
-                //     eprintln!("Error writing node_info_message: {}", e);
-                // }
-                // if let Err(e) = peer_stream.write_all(&encrypted_inactive_message) {
-                //     eprintln!("Error writing inactive_node_message: {}", e);
-                // }
-                if let Err(e) = peer_stream.write_all(node_info_message.as_bytes()) {
-                    eprintln!("Error writing node_info_message: {}", e);
+            match peer.stream.try_clone() {
+                Ok(mut peer_stream) => {
+                    if let Err(e) = peer_stream.write_all(node_info_message.as_bytes()) {
+                        eprintln!("Error writing node_info_message: {}", e);
+                    }
+                    if let Err(e) = peer_stream.write_all(inactive_node_message.as_bytes()) {
+                        eprintln!("Error writing inactive_node_message: {}", e);
+                    }
+                    println!("sent");
                 }
-                if let Err(e) = peer_stream.write_all(inactive_node_message.as_bytes()) {
-                    eprintln!("Error writing inactive_node_message: {}", e);
+                Err(_) => {
+                    eprintln!("Error cloning stream");
                 }
-                println!("sent");
             }
-            Err(_) => {
-                eprintln!("Error cloning stream");
-            }
-        }
         }
     }
 }

@@ -298,7 +298,10 @@ fn send_command_to_nodes(
         Ok(locked) => locked,
         Err(e) => {
             eprintln!("Error al bloquear el mutex de node_streams: {}", e);
-            return Err(Box::new(std::io::Error::other(format!("Mutex lock failed: {}", e))));
+            return Err(Box::new(std::io::Error::other(format!(
+                "Mutex lock failed: {}",
+                e
+            ))));
         }
     };
 

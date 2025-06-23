@@ -547,7 +547,10 @@ pub fn resolve_key_location(
 
     println!("Hash: {}", hashed_key);
 
-    if node_role != NodeRole::Master || hashed_key < lower_hash_bound || hashed_key >= upper_hash_bound {
+    if node_role != NodeRole::Master
+        || hashed_key < lower_hash_bound
+        || hashed_key >= upper_hash_bound
+    {
         if let Some(peer_node) = locked_peer_nodes.values().find(|p| {
             p.role == NodeRole::Master
                 && p.state == NodeState::Active
