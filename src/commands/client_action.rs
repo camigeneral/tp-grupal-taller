@@ -189,7 +189,7 @@ fn proccess_as_calc(
     }
 
     RedisResponse::new(
-        CommandResponse::String(format!("UPDATE-FILES {} {} {}", doc, index, final_text)),
+        CommandResponse::String(format!("UPDATE-FILES|{}|{}|{}", doc, index, final_text)),
         true,
         "Celda actualizada".to_string(),
         doc,
