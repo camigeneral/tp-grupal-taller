@@ -191,10 +191,10 @@ fn listen_to_redis_response(
             break;
         }
 
-        logger::log_event(log_path, &format!("Respuesta de redis: {}", line));
+        logger::log_event(log_path, &format!("Respuesta de redis en el microservicio: {}", line));
 
+        
         let response: Vec<&str> = line.split_whitespace().collect();
-
 
         let first = response[0].to_uppercase();
         let first_response = first.as_str();
@@ -238,15 +238,20 @@ fn listen_to_redis_response(
                 }
             }
 
-            s if s.starts_with("WRITE|") => {
-                let partes: Vec<&str> = response[0].split('|').collect();
-                if partes.len() == 5 {
-                    let index = partes[1];
-                    let caracter = partes[2];
-                    let file_name = partes[3]; 
-                    let addr = partes[4];
+            s if s.contains("WRITE|") => {
+                let parts: Vec<&str> = if response.len() > 1 {
+                    line.trim_end_matches('\n').split('|').collect()
+                } else {
+                    response[0].trim_end_matches('\n').split('|').collect()
+                };
+                
+                if parts.len() == 4 {
+                    let line_number: &str = parts[1];
+                    let text = parts[2];
+                    let file_name = parts[3];
 
-                    let command_parts = ["add_content", file_name, index, caracter, addr];
+
+                    let command_parts = ["add_content", file_name, line_number, text];
 
                     let resp_command = format_resp_command(&command_parts);
                     {
@@ -256,7 +261,7 @@ fn listen_to_redis_response(
                     println!("RESP enviado: {}", resp_command);
                     microservice_socket.write_all(resp_command.as_bytes())?; 
                 }
-            }
+            }        
             "ASK" => { 
                 if response.len() < 3 {
                     println!("Nodo de redireccion no disponible");
@@ -265,17 +270,14 @@ fn listen_to_redis_response(
                 }
             }
             _ => { 
-                // if let Some(sender) = &ui_sender {
-                //     let _ = sender.send(AppMsg::ManageResponse(first));
-                // }
             }
         }
 
-        let response: Vec<&str> = line.split_whitespace().collect();
+/*         let response: Vec<&str> = line.split_whitespace().collect();
 
         let first = response[0].to_uppercase();
         let _first_response = first.as_str();
-
+ */
         
     }
     Ok(())
