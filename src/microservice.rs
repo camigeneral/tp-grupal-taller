@@ -321,32 +321,6 @@ fn listen_to_redis_response(
                 )?;
                 continue;
             }
-            "NODEFILES" => {
-                let paths = match std::fs::read_dir(".") {
-                    Ok(entries) => entries.filter_map(|entry| {
-                        let entry = entry.ok()?;
-                        let path = entry.path();
-                        let fname = path.file_name()?.to_str()?.to_string();
-                        if fname.starts_with("redis_node_") && fname.ends_with(".rdb") {
-                            Some(fname)
-                        } else {
-                            None
-                        }
-                    }).collect::<Vec<_>>(),
-                    Err(e) => {
-                        eprintln!("Error leyendo directorio actual: {}", e);
-                        vec![]
-                    }
-                };
-
-
-                let response = paths.join(",");
-                redis_parser::write_response(
-                    &microservice_socket,
-                    &redis_parser::CommandResponse::String(response),
-                )?;
-                continue;
-            }
             _ => { 
             }
         }

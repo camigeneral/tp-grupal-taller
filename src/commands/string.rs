@@ -194,13 +194,11 @@ pub fn handle_append(
     }
 
     let content = redis::extract_string_arguments(&request.arguments);
-    let line_number;
-
-    match docs.lock() {
+    let line_number: usize = match docs.lock() {
         Ok(mut docs_lock) => {
             let entry = docs_lock.entry(doc.clone()).or_default();
             entry.push(content.clone());
-            line_number = entry.len();
+            entry.len()
         }
         Err(_) => {
             return RedisResponse::new(
@@ -210,7 +208,7 @@ pub fn handle_append(
                 "".to_string(),
             );
         }
-    }
+    };
 
     // let notification = format!("New content in {}: {} L{}", doc, content, line_number);
     let notification = format!("WRITTEN {}|{}|{} ", doc, line_number, content);
@@ -227,7 +225,7 @@ pub fn handle_append(
 pub fn handle_list_files(
 ) -> RedisResponse {
     
-    let notification = format!("NODEFILES");
+    let notification = "NODEFILES".to_string();
 
     RedisResponse::new(
         CommandResponse::String(notification.clone()),

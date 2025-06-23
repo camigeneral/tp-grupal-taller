@@ -1,5 +1,4 @@
 use commands::redis;
-use commands::redis_response::RedisResponse;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env::args;
@@ -29,7 +28,7 @@ use documento::Documento;
 use crate::server_context::ServerContext;
 #[path = "utils/logger.rs"]
 mod logger;
-use crate::commands::redis_parser::{CommandRequest, CommandResponse, parse_command, write_response};
+use crate::commands::redis_parser::{CommandResponse, parse_command, write_response};
 
 type SubscribersMap = Arc<Mutex<HashMap<String, Vec<String>>>>;
 type SetsMap = Arc<Mutex<HashMap<String, HashSet<String>>>>;

@@ -44,7 +44,7 @@ pub fn execute_command(
         "lset" => list::handle_lset(&request, docs),
         "linsert" => list::handle_linsert(&request, docs),        
         "auth" => auth::handle_auth(&request, logged_clients, active_clients, client_addr),
-        "add_content" => client_action::set_content_file(&request, &docs),        
+        "add_content" => client_action::set_content_file(&request, docs),        
         "welcome" => client_action::handle_welcome(&request, active_clients,shared_sets),    
         "list_files" => string::handle_list_files(),
         _ => RedisResponse::new(
@@ -71,7 +71,7 @@ pub fn execute_replica_command(
         "srem" => set::handle_srem(&request, shared_sets),
         "rpush" => list::handle_rpush(&request, docs),
         "lset" => list::handle_lset(&request, docs),
-        "add_content" => client_action::set_content_file(&request, &docs),
+        "add_content" => client_action::set_content_file(&request, docs),
         "linsert" => list::handle_linsert(&request, docs),
         _ => RedisResponse::new(
             CommandResponse::Error("Unknown".to_string()),

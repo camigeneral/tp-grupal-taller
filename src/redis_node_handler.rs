@@ -13,8 +13,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
-use utils;
-use crate::commands::redis_parser::{CommandRequest, CommandResponse, parse_replica_command, write_response};
+use crate::commands::redis_parser::{CommandResponse, parse_replica_command, write_response};
 
 #[derive(Debug)]
 pub enum RedisMessage {
@@ -348,28 +347,26 @@ fn handle_node(
 
                     let encrypted_message = encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
                     let _ = stream_to_respond.write_all(&encrypted_message);
-                } else {
-                    if let Some(peer_node_to_update) = lock_nodes.get_mut(&node_address) {
-                        peer_node_to_update.role = node_role.clone();
-                        peer_node_to_update.hash_range = (hash_range_start, hash_range_end);
+                } else if let Some(peer_node_to_update) = lock_nodes.get_mut(&node_address) {            
+                    peer_node_to_update.role = node_role.clone();
+                    peer_node_to_update.hash_range = (hash_range_start, hash_range_end);
 
-                        if peer_node_to_update.hash_range == local_node_locked.hash_range {
-                            if node_role != local_node_locked.role {
-                                if local_node_locked.role == NodeRole::Master {
-                                    local_node_locked.replica_nodes.push(parsed_port);
-                                } else {
-                                    local_node_locked.master_node = Some(parsed_port);
-                                    let message =
-                                        format!("sync_request {}\n", local_node_locked.port);
-                                    let encrypted_message =
-                                        encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
-                                    let _ = peer_node_to_update
-                                        .stream
-                                        .write_all(&encrypted_message);
-                                }
-                            } else {
+                    if peer_node_to_update.hash_range == local_node_locked.hash_range {
+                        if node_role != local_node_locked.role {
+                            if local_node_locked.role == NodeRole::Master {
                                 local_node_locked.replica_nodes.push(parsed_port);
+                            } else {
+                                local_node_locked.master_node = Some(parsed_port);
+                                let message =
+                                    format!("sync_request {}\n", local_node_locked.port);
+                                let encrypted_message =
+                                    encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
+                                let _ = peer_node_to_update
+                                    .stream
+                                    .write_all(&encrypted_message);
                             }
+                        } else {
+                            local_node_locked.replica_nodes.push(parsed_port);
                         }
                     }
                 }
@@ -577,12 +574,9 @@ fn handle_replica_sync(
     shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
     shared_documents: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> std::io::Result<()> {
-    let replica_addr = format!("127.0.0.1:{}", replica_port);
-    let cloned_sets;
-    let cloned_shared_documents;
-
+    let replica_addr = format!("127.0.0.1:{}", replica_port);    
     // Clonar conjuntos
-    cloned_sets = match shared_sets.lock() {
+    let cloned_sets = match shared_sets.lock() {
         Ok(locked_sets) => locked_sets.clone(),
         Err(_) => {
             return Err(std::io::Error::new(
@@ -593,7 +587,7 @@ fn handle_replica_sync(
     };
 
     // Clonar documentos
-    cloned_shared_documents = match shared_documents.lock() {
+    let cloned_shared_documents = match shared_documents.lock() {
         Ok(locked_docs) => locked_docs.clone(),
         Err(_) => {
             return Err(std::io::Error::new(

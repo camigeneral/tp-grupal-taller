@@ -380,7 +380,7 @@ impl SimpleComponent for AppModel {
                 sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::AddContent(file_id, text, line_number) => {
-                let clean_text= if text.trim_end_matches('\n').len() == 0 {
+                let clean_text= if text.trim_end_matches('\n').is_empty() {
                     "<delete>".to_string()
                 } else {
                     text

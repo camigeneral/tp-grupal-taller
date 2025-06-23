@@ -157,9 +157,7 @@ pub fn handle_lset(
             );
         }
     };
-
-    let mut docs_lock = docs.lock().unwrap();
-    let doc_entry = docs_lock.entry(doc.clone()).or_default();
+    
     let mut docs_lock = match docs.lock() {
         Ok(lock) => lock,
         Err(e) => {
@@ -172,9 +170,7 @@ pub fn handle_lset(
             );
         }
     };
-
-    let list = docs_lock.entry(doc.clone()).or_insert_with(|| Documento::Texto(Vec::new()));
-
+    let doc_entry = docs_lock.entry(doc.clone()).or_default();
     match doc_entry {
         Documento::Calculo(vec) | Documento::Texto(vec) => {
             let index_usize = if index_i64 < 0 {
