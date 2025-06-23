@@ -239,10 +239,24 @@ fn listen_to_redis_response(
                 }
             }
 
-            s if s.starts_with("UPDATE-FILES-CLIENT") => {
+            s if s.starts_with("UPDATE-CLIENT") => {
+                
                 if let Some(sender) = &ui_sender {
-                    println!("Recargar");
-                    let _ = sender.send(AppMsg::RefreshData);
+                    let parts: Vec<&str> = if response.len() > 1 {
+                        line.trim_end_matches('\n').split('|').collect()
+                    } else {
+                        response[0]
+                        .trim_end_matches('\n')
+                        .split('|')
+                        .map(|s| s.trim_end_matches('\r'))
+                        .collect()
+                    };
+                    
+                    let file = parts[1].to_string();
+                    let index = parts[2].to_string();
+                    let text = parts[3].to_string();
+                    println!("Recargar archivo {}, en {} con {}", file, index, text);
+                    let _ = sender.send(AppMsg::RefreshData(file, index, text));
                 }
             }
             _ => {
