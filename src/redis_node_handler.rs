@@ -1,7 +1,6 @@
 use crate::commands::redis_parser::{parse_replica_command, write_response, CommandResponse};
 use crate::documento::Documento;
 use commands::redis;
-use encryption::{decrypt_xor, encrypt_xor, ENCRYPTION_KEY};
 use local_node::{LocalNode, NodeRole, NodeState};
 use peer_node;
 use std::collections::HashMap;
