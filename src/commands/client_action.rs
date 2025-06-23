@@ -3,6 +3,7 @@ use super::redis_response::RedisResponse;
 use crate::client_info;
 use crate::commands::list::{handle_llen, handle_lset, handle_rpush};
 use crate::commands::set::handle_scard;
+use crate::commands::string::handle_get;
 use commands::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use documento::Documento;
 #[allow(unused_imports)]
@@ -14,6 +15,7 @@ pub fn handle_welcome(
     request: &CommandRequest,
     _active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
     shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
     let client_addr_str = redis::extract_string_arguments(&request.arguments);
 
@@ -29,22 +31,69 @@ pub fn handle_welcome(
         }
     };
 
-    let request = CommandRequest {
+    // Obtener cantidad de suscriptores
+    let scard_request = CommandRequest {
         command: "scard".to_string(),
         key: Some(doc.clone()),
         arguments: vec![],
-        unparsed_command: format!("scard {}", doc.clone()),
+        unparsed_command: "".to_string(),
     };
+    let response = handle_scard(&scard_request, shared_sets);
 
-    let response = handle_scard(&request, shared_sets);
+    // Obtener contenido del documento
+    let get_request = CommandRequest {
+        command: "get".to_string(),
+        key: Some(doc.clone()),
+        arguments: vec![],
+        unparsed_command: "".to_string(),
+    };
+    let get_response = handle_get(&get_request, docs);
 
-    let mut notification = " ".to_string();
+    let mut notification = String::new();
 
     if let CommandResponse::String(ref s) = response.response {
         if let Some(qty_subs) = s.split_whitespace().last() {
-            notification = format!("status {}|{:?}", client_addr_str, qty_subs);
-        };
+            match &get_response.response {
+                CommandResponse::String(content) => {
+                    let lines: Vec<&str> = content.split('\n').collect();
+                    notification = format!("STATUS {}|{}|{}|", client_addr_str, qty_subs, doc);
+
+                    // Agregar las líneas hasta un máximo de 100 elementos
+                    for (i, line) in lines.iter().enumerate().take(100) {
+                        if i > 0 {
+                            notification.push(',');
+                        }
+                        notification.push_str(line);
+                    }
+
+                    // Completar con elementos vacíos si hay menos de 100 líneas
+                    for i in lines.len()..100 {
+                        if i > 0 {
+                            notification.push(',');
+                        }
+                        // Agrega elemento vacío (no necesitas push_str aquí)
+                    }
+                }
+                CommandResponse::Null => {
+                    notification = format!("STATUS {}|{}|<vacio>|{}", client_addr_str, qty_subs, doc);
+                    // Agregar 99 comas para elementos vacíos
+                    for _ in 0..99 {
+                        notification.push(',');
+                    }
+                }
+                _ => {
+                    notification = format!("STATUS {}|{}|<error>|{}", client_addr_str, qty_subs, doc);
+                    // Agregar 99 comas para elementos vacíos
+                    for _ in 0..99 {
+                        notification.push(',');
+                    }
+                }
+            }
+        }
     }
+
+
+    println!("Llegue aca {}", notification.clone());
     RedisResponse::new(
         CommandResponse::String(notification.clone()),
         true,
@@ -255,6 +304,7 @@ fn error_response(msg: &str, doc: &str) -> RedisResponse {
         doc.to_string(),
     )
 }
+
 
 #[cfg(test)]
 mod tests {

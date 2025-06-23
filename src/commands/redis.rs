@@ -43,7 +43,7 @@ pub fn execute_command(
         "linsert" => list::handle_linsert(&request, docs),
         "auth" => auth::handle_auth(&request, logged_clients, active_clients, client_addr),
         "add_content" => client_action::set_content_file(&request, docs),
-        "welcome" => client_action::handle_welcome(&request, active_clients, shared_sets),
+        "welcome" => client_action::handle_welcome(&request, active_clients, shared_sets, docs),
         "list_files" => string::handle_list_files(),
         _ => RedisResponse::new(
             CommandResponse::Error("Unknown".to_string()),
