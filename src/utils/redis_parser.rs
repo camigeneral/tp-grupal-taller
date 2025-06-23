@@ -41,6 +41,7 @@ pub enum ValueType {
 /// - key: Some("mykey")
 /// - arguments: ["myvalue"]
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct CommandRequest {
     pub command: String,
     pub key: Option<String>,

@@ -12,7 +12,8 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
-use utils;
+use crate::commands::redis_parser::{CommandRequest, CommandResponse, parse_replica_command, write_response};
+
 
 #[derive(Debug)]
 pub enum RedisMessage {
@@ -355,17 +356,17 @@ fn handle_node(
                 saving_command = false;
                 let cursor = Cursor::new(command_string.clone());
                 let mut reader_for_command = BufReader::new(cursor);
-                let command_request: utils::redis_parser::CommandRequest =
-                    match utils::redis_parser::parse_replica_command(&mut reader_for_command) {
+                let command_request: CommandRequest =
+                    match parse_replica_command(&mut reader_for_command) {
                         Ok(req) => req,
                         Err(e) => {
                             if e.kind() == std::io::ErrorKind::UnexpectedEof {
                                 break;
                             }
                             println!("Error al parsear comando: {}", e);
-                            utils::redis_parser::write_response(
+                            write_response(
                                 stream,
-                                &utils::redis_parser::CommandResponse::Error(
+                                &CommandResponse::Error(
                                     "Comando inválido".to_string(),
                                 ),
                             )?;

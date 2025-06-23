@@ -14,7 +14,6 @@ use std::thread;
 use crate::hashing::get_hash_slots;
 use crate::local_node::NodeRole;
 use crate::local_node::NodeState;
-use crate::utils::redis_parser::CommandResponse;
 mod client_info;
 mod commands;
 mod documento;
@@ -23,8 +22,17 @@ mod local_node;
 mod peer_node;
 mod redis_node_handler;
 mod utils;
+mod server_context;
 use client_info::ClientType;
 use documento::Documento;
+use crate::server_context::ServerContext;
+#[path = "utils/logger.rs"]
+mod logger;
+use crate::commands::redis_parser::{CommandRequest, CommandResponse, parse_command, write_response};
+
+type SubscribersMap = Arc<Mutex<HashMap<String, Vec<String>>>>;
+type SetsMap = Arc<Mutex<HashMap<String, HashSet<String>>>>;
+
 
 /// Número de argumentos esperados para iniciar el servidor
 static REQUIRED_ARGS: usize = 2;
@@ -79,7 +87,7 @@ fn start_server(
     peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
 ) -> std::io::Result<()> {
     let config_path = "redis.conf";
-    let log_path = utils::logger::get_log_path_from_config(config_path);
+    let log_path = logger::get_log_path_from_config(config_path);
 
     if fs::metadata(&log_path)
         .map(|m| m.len() > 0)
@@ -118,7 +126,7 @@ fn start_server(
             Ok(docs) => docs,
             Err(_) => {
                 println!("Iniciando con base de datos vacía");
-                utils::logger::log_event(&log_path, "Iniciando con base de datos vacía");
+                logger::log_event(&log_path, "Iniciando con base de datos vacía");
                 HashMap::new()
             }
         };
@@ -146,26 +154,30 @@ fn start_server(
     let tcp_listener = TcpListener::bind(bind_address)?;
     println!("Server listening to clients on: {}", bind_address);
 
-    utils::logger::log_event(&log_path, &format!("Servidor iniciado en {}", bind_address));
+    logger::log_event(&log_path, &format!("Servidor iniciado en {}", bind_address));
+
+    let ctx = Arc::new(ServerContext {
+        active_clients: Arc::clone(&active_clients),
+        document_subscribers: Arc::clone(&document_subscribers),
+        shared_documents: Arc::clone(&shared_documents),
+        shared_sets: Arc::clone(&shared_sets),
+        local_node: Arc::clone(&local_node),
+        peer_nodes: Arc::clone(&peer_nodes),
+        logged_clients: Arc::clone(&logged_clients),
+        log_path: log_path.clone(),
+    });
 
     for incoming_connection in tcp_listener.incoming() {
         match incoming_connection {
             Ok(client_stream) => {
                 handle_new_client_connection(
                     client_stream,
-                    &active_clients,
-                    &document_subscribers,
-                    &shared_documents,
-                    &local_node,
-                    &peer_nodes,
-                    &shared_sets,
-                    &log_path,
-                    &logged_clients,
+                    Arc::clone(&ctx)
                 )?;
             }
             Err(e) => {
                 eprintln!("Error al aceptar conexión: {}", e);
-                utils::logger::log_event(&log_path, &format!("Error al aceptar conexión: {}", e));
+                logger::log_event(&log_path, &format!("Error al aceptar conexión: {}", e));
             }
         }
     }
@@ -187,8 +199,8 @@ fn start_server(
 fn initialize_datasets(
     documents: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> (
-    Arc<Mutex<HashMap<String, Vec<String>>>>,
-    Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    SubscribersMap,
+    SetsMap,
 ) {
     let document_keys: Vec<String>;
     {
@@ -211,24 +223,17 @@ fn initialize_datasets(
 
 fn handle_new_client_connection(
     mut client_stream: TcpStream,
-    active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
-    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
-    shared_documents: &Arc<Mutex<HashMap<String, Documento>>>,
-    local_node: &Arc<Mutex<local_node::LocalNode>>,
-    peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
-    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
-    log_path: &str,
-    logged_clients: &Arc<Mutex<HashMap<String, bool>>>,
+    ctx: Arc<ServerContext>,
 ) -> std::io::Result<()> {
     let client_addr = client_stream.peer_addr()?;
     let mut reader = BufReader::new(client_stream.try_clone()?);
-    let command_request = match utils::redis_parser::parse_command(&mut reader) {
+    let command_request = match parse_command(&mut reader) {
         Ok(req) => req,
         Err(e) => {
             println!("Error al parsear comando: {}", e);
-            utils::redis_parser::write_response(
+            write_response(
                 &client_stream,
-                &utils::redis_parser::CommandResponse::Error("Comando inválido".to_string()),
+                &CommandResponse::Error("Comando inválido".to_string()),
             )?;
             return Ok(()); // Salir anticipadamente
         }
@@ -237,8 +242,8 @@ fn handle_new_client_connection(
     let client_type = if command_request.command == "microservicio" {
         subscribe_microservice_to_all_docs(
             client_addr.to_string(),
-            Arc::clone(shared_documents),
-            Arc::clone(document_subscribers),
+            Arc::clone(&ctx.shared_documents),
+            Arc::clone(&ctx.document_subscribers),
         );
         println!("Microservicio conectado: {}", client_addr);
         ClientType::Microservicio
@@ -247,7 +252,7 @@ fn handle_new_client_connection(
         ClientType::Cliente
     };
 
-    utils::logger::log_event(log_path, &format!("Cliente conectado: {}", client_addr));
+    logger::log_event(&ctx.log_path, &format!("Cliente conectado: {}", client_addr));
 
     let client_stream_clone = client_stream.try_clone()?;
     {
@@ -257,39 +262,29 @@ fn handle_new_client_connection(
             client_type,
             username: "".to_string(),
         };
-        let mut lock_clients = active_clients.lock().unwrap();
+        let mut lock_clients = ctx.active_clients.lock().unwrap();
         lock_clients.insert(client_addr, client);
     }
 
-    let cloned_clients = Arc::clone(active_clients);
-    let cloned_clients_on_docs = Arc::clone(document_subscribers);
-    let cloned_docs = Arc::clone(shared_documents);
-    let cloned_sets = Arc::clone(shared_sets);
     let client_addr_str = client_addr.to_string();
-    let cloned_node = Arc::clone(local_node);
-    let cloned_peer_nodes = Arc::clone(peer_nodes);
-    let cloned_logged_clients = Arc::clone(logged_clients);
-    let log_path = log_path.to_string();
+    let log_path = ctx.log_path.clone();
 
-    utils::logger::log_event(&log_path, &format!("Cliente conectado: {}", client_addr));
+    // Ya NO necesitas crear un nuevo ctx aquí
 
+    logger::log_event(&log_path, &format!("Cliente conectado: {}", client_addr));
+
+
+    let ctx = Arc::clone(&ctx);
     thread::spawn(move || {
         match handle_client(
             &mut client_stream,
-            cloned_clients,
-            cloned_clients_on_docs,
-            cloned_docs,
-            cloned_sets,
+            ctx,
             client_addr_str,
-            cloned_node,
-            cloned_peer_nodes,
-            &log_path,
-            cloned_logged_clients,
         ) {
             Ok(_) => {
                 println!("Client {} disconnected.", client_addr);
 
-                utils::logger::log_event(
+                logger::log_event(
                     &log_path,
                     &format!("Cliente desconectado: {}", client_addr),
                 );
@@ -297,7 +292,7 @@ fn handle_new_client_connection(
             Err(e) => {
                 eprintln!("Error in connection with {}: {}", client_addr, e);
 
-                utils::logger::log_event(
+                logger::log_event(
                     &log_path,
                     &format!("Error en conexión con: {}", client_addr),
                 );
@@ -318,30 +313,23 @@ fn handle_new_client_connection(
 ///
 fn handle_client(
     stream: &mut TcpStream,
-    active_clients: Arc<Mutex<HashMap<String, client_info::Client>>>,
-    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    shared_documents: Arc<Mutex<HashMap<String, Documento>>>,
-    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    ctx: Arc<ServerContext>,
     client_id: String,
-    local_node: Arc<Mutex<local_node::LocalNode>>,
-    peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
-    log_path: &str,
-    logged_clients: Arc<Mutex<HashMap<String, bool>>>,
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
 
     loop {
-        let command_request: utils::redis_parser::CommandRequest =
-            match utils::redis_parser::parse_command(&mut reader) {
+        let command_request: CommandRequest =
+            match parse_command(&mut reader) {
                 Ok(req) => req,
                 Err(e) => {
                     if e.kind() == std::io::ErrorKind::UnexpectedEof {
                         break;
                     }
                     println!("Error al parsear comando: {}", e);
-                    utils::redis_parser::write_response(
+                    write_response(
                         stream,
-                        &utils::redis_parser::CommandResponse::Error(
+                        &CommandResponse::Error(
                             "Comando inválido".to_string(),
                         ),
                     )?;
@@ -350,8 +338,8 @@ fn handle_client(
             };
 
         println!("Comando recibido: {:?}", command_request);
-        utils::logger::log_event(
-            log_path,
+        logger::log_event(
+            &ctx.log_path,
             &format!("Comando recibido de {}: {:?}", client_id, command_request),
         );
 
@@ -359,17 +347,17 @@ fn handle_client(
         // Entonces el estado de las variables no es el mismo en cada instancia
         /* if command_request.command != "auth" && command_request.command != "connect" {
             println!("client_id {}", client_id);
-            println!("Usuarios logueados, {:#?}", logged_clients);
+            println!("Usuarios logueados, {:#?}", ctx.logged_clients);
             println!("Verificando autorización para client_id: {}", client_id);
-            let logged_clients_clone = logged_clients.clone();
-            if !is_authorized_client(logged_clients_clone, client_id.clone()) {
+            let logged_clients_clone = ctx.logged_clients.clone();
+            if !is_authorized_client(ctx.logged_clients_clone, client_id.clone()) {
                 println!("Cliente no autorizado: {}", client_id);
-                utils::redis_parser::write_response(
+                utils::write_response(
                     stream,
-                    &utils::redis_parser::CommandResponse::Error("Cliente sin autorizacion".to_string()),
+                    &utils::CommandResponse::Error("Cliente sin autorizacion".to_string()),
                 )?;
-                utils::logger::log_event(
-                    log_path,
+                logger::log_event(
+                    ctx.log_path,
                     &format!("Cliente {} sin autorizacion ", client_id),
                 );
                 continue;
@@ -380,12 +368,12 @@ fn handle_client(
             Some(k) => k.clone(),
             None => {
                 println!("No key found");
-                utils::redis_parser::write_response(
+                write_response(
                     stream,
-                    &utils::redis_parser::CommandResponse::Error("Comando inválido".to_string()),
+                    &CommandResponse::Error("Comando inválido".to_string()),
                 )?;
-                utils::logger::log_event(
-                    log_path,
+                logger::log_event(
+                    &ctx.log_path,
                     &format!(
                         "Error al parsear comando de {}: No se encontro la key",
                         client_id
@@ -395,23 +383,23 @@ fn handle_client(
             }
         };
 
-        let response = match resolve_key_location(key, &local_node, &peer_nodes) {
+        let response = match resolve_key_location(key, &ctx.local_node, &ctx.peer_nodes) {
             Ok(()) => {
                 let unparsed_command = command_request.unparsed_command.clone();
                 let redis_response = redis::execute_command(
                     command_request,
-                    &shared_documents,
-                    &document_subscribers,
-                    &shared_sets,
+                    &ctx.shared_documents,
+                    &ctx.document_subscribers,
+                    &ctx.shared_sets,
                     client_id.clone(),
-                    &active_clients,
-                    &logged_clients,
+                    &ctx.active_clients,
+                    &ctx.logged_clients,
                 );
 
                 if redis_response.publish {
                     if let Err(e) = publish_update(
-                        &active_clients,
-                        &document_subscribers,
+                        &ctx.active_clients,
+                        &ctx.document_subscribers,
                         redis_response.message,
                         redis_response.doc,
                     ) {
@@ -420,8 +408,8 @@ fn handle_client(
                 }
 
                 let _ = redis_node_handler::broadcast_to_replicas(
-                    &local_node,
-                    &peer_nodes,
+                    &ctx.local_node,
+                    &ctx.peer_nodes,
                     unparsed_command,
                 );
 
@@ -430,26 +418,26 @@ fn handle_client(
             Err(response) => response,
         };
 
-        if let Err(e) = utils::redis_parser::write_response(stream, &response) {
+        if let Err(e) = write_response(stream, &response) {
             println!("Error al escribir respuesta: {}", e);
-            utils::logger::log_event(
-                log_path,
+            logger::log_event(
+                &ctx.log_path,
                 &format!("Error al escribir respuesta a {}: {}", client_id, e),
             );
             break;
         }
 
-        utils::logger::log_event(
-            log_path,
+        logger::log_event(
+            &ctx.log_path,
             &format!("Respuesta enviada a {}: {:?}", client_id, response),
         );
 
-        if let Err(e) = persist_documents(&shared_documents, &local_node) {
+        if let Err(e) = persist_documents(&ctx.shared_documents, &ctx.local_node) {
             eprintln!("Error al persistir documentos: {}", e);
         }
     }
 
-    cleanup_client_resources(&client_id, &active_clients, &document_subscribers);
+    cleanup_client_resources(&client_id, &ctx.active_clients, &ctx.document_subscribers);
     // to do: agregar comando para salir, esto nunca se ejecuta porque nunca termina el loop
 
     Ok(())

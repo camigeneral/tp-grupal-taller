@@ -4,14 +4,14 @@ use crate::client_info;
 use crate::commands::set::handle_scard;
 use crate::documento::Documento;
 #[allow(unused_imports)]
-use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
+use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use client_info::ClientType;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 pub fn handle_get(
-    request: &CommandRequest,
+    request: & CommandRequest,
     docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
     let key = match &request.key {
@@ -235,7 +235,7 @@ pub fn handle_welcome(
 pub fn handle_list_files(
 ) -> RedisResponse {
     
-    let notification = format!("NODEFILES");
+    let notification = "NODEFILES".to_string();
 
     RedisResponse::new(
         CommandResponse::String(notification.clone()),

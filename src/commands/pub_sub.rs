@@ -1,5 +1,5 @@
 use super::redis_response::RedisResponse;
-use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
+use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use commands::set::handle_sadd;
 use commands::set::handle_srem;
 use std::collections::HashMap;

@@ -1,6 +1,6 @@
 use super::redis_response::RedisResponse;
 use crate::documento::Documento;
-use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
+use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 

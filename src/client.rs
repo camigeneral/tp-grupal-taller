@@ -9,7 +9,9 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::{channel, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use utils::redis_parser::{format_resp_publish, format_resp_command};
+// use utils::redis_parser::{format_resp_publish, format_resp_command};
+#[path = "utils/redis_parser.rs"]
+mod redis_parser;
 
 pub fn client_run(
     port: u16,
@@ -29,7 +31,7 @@ pub fn client_run(
 
     println!("Enviando: {:?}", command);
     let parts: Vec<&str> = command.split_whitespace().collect();
-    let resp_command = format_resp_command(&parts);
+    let resp_command = redis_parser::format_resp_command(&parts);
 
     println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
 
@@ -68,7 +70,7 @@ pub fn client_run(
         if trimmed_command == "close"  {
             println!("Desconectando del servidor");
             let parts: Vec<&str> = trimmed_command.split_whitespace().collect();
-            let resp_command = format_resp_publish(parts[0], parts[1]);
+            let resp_command = redis_parser::format_resp_publish(parts[0], parts[1]);
 
             println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
 
@@ -81,9 +83,9 @@ pub fn client_run(
 
             let parts: Vec<&str> = command.split_whitespace().collect();
             let resp_command = if parts[0] == "AUTH" || parts[0] == "subscribe"  || parts[0] == "unsubscribe" {
-                                    format_resp_command(&parts)
+                                    redis_parser::format_resp_command(&parts)
                                 }else{
-                                    format_resp_publish(parts[1], &command)
+                                    redis_parser::format_resp_publish(parts[1], &command)
                                 };
 
             {
@@ -198,7 +200,7 @@ fn send_command_to_nodes(
     } else {
         println!("Creando nueva conexión al nodo {}", new_node_address);
         let parts: Vec<&str> = "connect".split_whitespace().collect();
-        let resp_command = format_resp_command(&parts);
+        let resp_command = redis_parser::format_resp_command(&parts);
         let mut final_stream = TcpStream::connect(new_node_address.clone())?;
         final_stream.write_all(resp_command.as_bytes())?;
 
