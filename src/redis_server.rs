@@ -599,6 +599,7 @@ pub fn persist_documents(
             locked_node.hash_range.0, locked_node.hash_range.1
         );
     }
+
     let mut persistence_file = OpenOptions::new()
         .create(true)
         .truncate(true)
@@ -614,21 +615,18 @@ pub fn persist_documents(
                 Documento::Texto(lineas) => {
                     let mut document_data = format!("{}/++/", document_id);
                     for linea in lineas {
-                        if linea == "\n" {
-                            document_data.push_str("/--/");
-                        } else {
-                            document_data.push_str(linea);
-                        }
+                        document_data.push_str(linea);
+                        document_data.push_str("/--/");
                     }
                     writeln!(persistence_file, "{}", document_data)?;
                 }
                 Documento::Calculo(filas) => {
                     let mut document_data = format!("{}/++/", document_id);
-                    if !filas.is_empty() {
-                        for fila in filas {
-                            document_data.push_str(fila);
-                            document_data.push_str("/--/");
-                        }
+                    for i in 0..100 {
+                        let empty = String::new();
+                        let value = filas.get(i).unwrap_or(&empty);
+                        document_data.push_str(value);
+                        document_data.push_str("/--/");
                     }
                     writeln!(persistence_file, "{}", document_data)?;
                 }
@@ -638,6 +636,7 @@ pub fn persist_documents(
 
     Ok(())
 }
+
 
 /// Carga los documentos persistidos desde el archivo.
 ///
@@ -660,24 +659,30 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Documen
         let messages_data = parts[1];
 
         if document_id.ends_with(".txt") {
-            let joined: String = messages_data
-                .split("/--/")
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>()
-                .join("");
-            let chars: Vec<String> = joined.chars().map(|c| c.to_string()).collect();
-            documents.insert(document_id, Documento::Texto(chars.clone()));    
-        } else {
-            let filas: Vec<String> = messages_data
+            let messages: Vec<String> = messages_data
                 .split("/--/")
                 .filter(|s| !s.is_empty())
                 .map(|s| s.to_string())
                 .collect();
-            documents.insert(document_id, Documento::Calculo(filas));
+            documents.insert(document_id, Documento::Texto(messages));
+        } else {
+            let mut rows: Vec<String> = messages_data
+                .split("/--/")
+                .map(|s| s.to_string())
+                .collect();
+
+            while rows.len() < 100 {
+                rows.push(String::new());
+            }
+
+            documents.insert(document_id, Documento::Calculo(rows));
+            println!("documents; {:#?}", documents);
         }
     }
+
     Ok(documents)
 }
+
 
 pub fn subscribe_microservice_to_all_docs(
     addr: String,
@@ -700,21 +705,6 @@ pub fn subscribe_microservice_to_all_docs(
                 "Microservicio {} suscripto automáticamente a {}",
                 addr, doc_name
             );
-
-            // let notification = format!("Client {} subscribed to {}", client_addr, doc_name);
-
-            // RedisResponse::new(CommandResponse::Null, true, notification, doc_name.to_string())
-        }
-        // let subscribers = clients_on_docs_lock
-        //     .entry(doc_name.clone())
-        //     .or_insert_with(Vec::new);
-
-        // if !subscribers.contains(&addr) {
-        //     subscribers.push(addr.clone());
-        //     println!(
-        //         "Microservicio {} suscripto automáticamente a {}",
-        //         addr, doc_name
-        //     );
-        // }
+        }      
     }
 }
