@@ -182,7 +182,6 @@ fn listen_to_redis_response(
 
         let first = response[0].to_uppercase();
         let first_response = first.as_str();
-        let local_addr: std::net::SocketAddr = client_socket_cloned.local_addr()?;
 
         match first_response {
             s if s.starts_with("-ERR") => {
