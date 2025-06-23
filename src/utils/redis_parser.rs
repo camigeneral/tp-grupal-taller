@@ -76,6 +76,7 @@ pub enum CommandResponse {
 ///
 /// # Errores
 /// Retorna `std::io::Error` si el formato RESP es inválido o si el comando está vacío
+#[allow(dead_code)]
 pub fn parse_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<CommandRequest> {
     let (command_parts, unparsed_command) = parse_resp_command(reader)?;
 
@@ -85,7 +86,7 @@ pub fn parse_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<Comma
             "Empty command",
         ));
     }
-
+    println!("command_parts: {:#?}", command_parts);
     let command = command_parts[0].to_lowercase();
 
     let mut request = CommandRequest {
@@ -113,6 +114,7 @@ pub fn parse_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<Comma
 ///
 /// # Errores
 /// Retorna `std::io::Error` si hay fallas al escribir en el stream.
+#[allow(dead_code)]
 pub fn write_response(stream: &TcpStream, response: &CommandResponse) -> std::io::Result<()> {
     match response {
         CommandResponse::Ok => write_resp_string(stream, "OK"),
@@ -284,6 +286,7 @@ pub fn write_resp_error(mut stream: &TcpStream, msg: &str) -> std::io::Result<()
     stream.write_all(format!("-ERR {}\r\n", msg).as_bytes())
 }
 
+#[allow(dead_code)]
 pub fn parse_replica_command(
     reader: &mut BufReader<std::io::Cursor<String>>,
 ) -> std::io::Result<CommandRequest> {

@@ -10,6 +10,7 @@ use documento::Documento;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
+use std::fs;
 
 pub fn handle_welcome(
     request: &CommandRequest,
@@ -58,7 +59,6 @@ pub fn handle_welcome(
                     let lines: Vec<&str> = content.split('\n').collect();
                     notification = format!("STATUS {}|{}|{}|", client_addr_str, qty_subs, doc);
 
-                    // Agregar las líneas hasta un máximo de 100 elementos
                     for (i, line) in lines.iter().enumerate().take(100) {
                         if i > 0 {
                             notification.push(',');
@@ -66,24 +66,20 @@ pub fn handle_welcome(
                         notification.push_str(line);
                     }
 
-                    // Completar con elementos vacíos si hay menos de 100 líneas
                     for i in lines.len()..100 {
                         if i > 0 {
                             notification.push(',');
                         }
-                        // Agrega elemento vacío (no necesitas push_str aquí)
                     }
                 }
                 CommandResponse::Null => {
                     notification = format!("STATUS {}|{}|<vacio>|{}", client_addr_str, qty_subs, doc);
-                    // Agregar 99 comas para elementos vacíos
                     for _ in 0..99 {
                         notification.push(',');
                     }
                 }
                 _ => {
                     notification = format!("STATUS {}|{}|<error>|{}", client_addr_str, qty_subs, doc);
-                    // Agregar 99 comas para elementos vacíos
                     for _ in 0..99 {
                         notification.push(',');
                     }
@@ -311,6 +307,43 @@ fn error_response(msg: &str, doc: &str) -> RedisResponse {
     )
 }
 
+pub fn get_files(
+    _docs: &Arc<Mutex<HashMap<String, Documento>>>,
+) -> RedisResponse {
+    let mut doc_names = HashSet::new();
+
+    if let Ok(entries) = fs::read_dir(".") {
+        println!("entries {:#?}", entries);
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let fname = path.file_name().and_then(|f| f.to_str()).unwrap_or("").to_string();
+            if fname.starts_with("redis_node_") && fname.ends_with(".rdb") {
+                if let Ok(file) = fs::File::open(&path) {
+                    use std::io::{BufRead, BufReader};
+                    let reader = BufReader::new(file);
+                    for line in reader.lines().flatten() {
+                        if let Some((doc_name, _)) = line.split_once("/++/") {
+                            if !doc_name.trim().is_empty() {
+                                doc_names.insert(doc_name.trim().to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut doc_names_vec: Vec<String> = doc_names.into_iter().collect();
+    doc_names_vec.sort();
+
+    let msg = format!("FILES|{}", doc_names_vec.join(","));
+    RedisResponse::new(
+        CommandResponse::String(msg.clone()),
+        true,
+        msg,
+        "".to_string(),
+    )
+}
 
 #[cfg(test)]
 mod tests {
