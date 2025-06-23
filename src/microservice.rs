@@ -163,7 +163,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            thread::sleep(Duration::from_secs(60));
+            thread::sleep(Duration::from_secs(61812100));
         });
     }
     loop {
@@ -250,18 +250,25 @@ fn listen_to_redis_response(
                 }
             }
             s if s.starts_with("UPDATE-FILES") => {
-                if response.len() >= 2 {
-                    let doc_name = response[1];
-                    let command_parts = vec!["PUBLISH", doc_name, "UPDATE-FILES-CLIENT"];
-                    let resp_command = format_resp_command(&command_parts);
-                    if let Err(e) = microservice_socket.write_all(resp_command.as_bytes()) {
-                        eprintln!("Error al enviar mensaje de actualizacion de archivo: {}", e);
-                        logger::log_event(
-                            log_path,
-                            &format!("Error al enviar mensaje de actualizacion de archivo: {}", e),
-                        );
-                    }
+                println!("response: {:?}", response);
+
+                let parts: Vec<&str> =   line.trim_end_matches('\n').split('|').collect();
+            
+                println!("parts: {:?}", parts);
+                let doc_name = parts[1];
+                let index = parts[2];
+                let text: &str = parts[3];
+                let notification = format!("UPDATE-CLIENT|{}|{}|{}", doc_name, index, text); 
+                let command_parts = vec!["PUBLISH", doc_name, &notification];
+                let resp_command = format_resp_command(&command_parts);
+                if let Err(e) = microservice_socket.write_all(resp_command.as_bytes()) {
+                    eprintln!("Error al enviar mensaje de actualizacion de archivo: {}", e);
+                    logger::log_event(
+                        log_path,
+                        &format!("Error al enviar mensaje de actualizacion de archivo: {}", e),
+                    );
                 }
+                
             }
 
             s if s.contains("WRITE|") => {
