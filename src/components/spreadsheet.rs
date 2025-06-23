@@ -33,12 +33,12 @@ pub struct SpreadsheetModel {
 pub enum SpreadsheetMsg {
     CellChanged(usize, usize, String),
     RecalculateAll,
-    UpdateSheet(String, Vec<Vec<String>>),
+    UpdateSheet(String, Vec<String>),
 }
 
 #[derive(Debug)]
 pub enum SpreadsheetOutput {
-    ContentChanged(String, String),
+    ContentChanged(String, String, String),
     GoBack,
 }
 
@@ -58,7 +58,6 @@ impl SpreadsheetModel {
 
         let col = (col_char.to_ascii_uppercase() as u8 - b'A') as usize;
         let row = row_str.parse::<usize>().ok()?.saturating_sub(1);
-
         if row < 10 && col < 10 {
             Some((row, col))
         } else {
@@ -275,10 +274,11 @@ impl SimpleComponent for SpreadsheetModel {
                 self.update_cell(row, col, content);
                 self.recalculate_all();
                 self.update_display();
-                let cell_name = format!("{}{}", (b'A' + col as u8) as char, row + 1);
+
                 sender
                     .output(SpreadsheetOutput::ContentChanged(
-                        cell_name,
+                        row.to_string(),
+                        col.to_string(),
                         self.cells[row][col].display_text.clone(),
                     ))
                     .unwrap();
@@ -287,15 +287,11 @@ impl SimpleComponent for SpreadsheetModel {
                 self.recalculate_all();
                 self.update_display();
             }
-            SpreadsheetMsg::UpdateSheet(_file_name, filas) => {
-                // Actualiza las celdas con los datos recibidos
+            SpreadsheetMsg::UpdateSheet(_file_name, filas_data) => {
                 for i in 0..10 {
                     for j in 0..10 {
-                        let value = filas
-                            .get(i)
-                            .and_then(|row| row.get(j))
-                            .cloned()
-                            .unwrap_or_default();
+                        let index = i * 10 + j;
+                        let value = filas_data.get(index).cloned().unwrap_or_default();
                         self.cells[i][j] = Cell::new();
                         self.update_cell(i, j, value);
                     }

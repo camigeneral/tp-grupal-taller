@@ -1,7 +1,7 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Documento {
     Texto(Vec<String>),
-    Calculo(Vec<Vec<String>>), // Matriz para hoja de cálculo
+    Calculo(Vec<String>),
 }
 
 impl Default for Documento {

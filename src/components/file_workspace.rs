@@ -33,6 +33,8 @@ pub struct FileWorkspace {
     /// Nombre del archivo actual.
     current_file: String,
 
+    current_file_type: FileType,
+
     files: HashMap<(String, FileType), Documento>,
 }
 
@@ -48,12 +50,16 @@ pub enum FileWorkspaceMsg {
     CloseEditor,
     SubscribeFile(String, String, i32),
     ReloadFiles,
+    ContentAdded(String, i32),
+    ContentAddedSpreadSheet(String, String, String),
 }
 
 #[derive(Debug)]
 pub enum FileWorkspaceOutputMessage {
     SubscribeFile(String),
     UnsubscribeFile(String),
+    ContentAdded(String, String, i32),
+    ContentAddedSpreadSheet(String, String, String, String),
 }
 
 #[relm4::component(pub)]
@@ -127,6 +133,12 @@ impl SimpleComponent for FileWorkspace {
                 sender.input_sender(),
                 |msg: FileEditorOutputMessage| match msg {
                     FileEditorOutputMessage::GoBack => FileWorkspaceMsg::CloseEditor,
+                    FileEditorOutputMessage::ContentAdded(new_text, offset) => {
+                        FileWorkspaceMsg::ContentAdded(new_text, offset)
+                    }
+                    FileEditorOutputMessage::ContentAddedSpreadSheet(row, col, text) => {
+                        FileWorkspaceMsg::ContentAddedSpreadSheet(row, col, text)
+                    }
                 },
             );
 
@@ -147,13 +159,13 @@ impl SimpleComponent for FileWorkspace {
             };
             files_map.insert((nombre, file_type), mensajes);
         }
-        println!("files_map: {:#?}", files_map);
         let model = FileWorkspace {
             file_list_ctrl: list_files_cont,
             file_editor_ctrl: editor_file_cont,
             editor_visible: false,
             current_file: "".to_string(),
             files: files_map,
+            current_file_type: FileType::Text,
         };
 
         let list_box_widget = model.file_list_ctrl.widget();
@@ -165,6 +177,22 @@ impl SimpleComponent for FileWorkspace {
 
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
+            FileWorkspaceMsg::ContentAddedSpreadSheet(row, col, text) => {
+                let _ = sender.output(FileWorkspaceOutputMessage::ContentAddedSpreadSheet(
+                    self.current_file.clone(),
+                    row,
+                    col,
+                    text,
+                ));
+            }
+            FileWorkspaceMsg::ContentAdded(text, offset) => {
+                let _ = sender.output(FileWorkspaceOutputMessage::ContentAdded(
+                    self.current_file.clone(),
+                    text,
+                    offset,
+                ));
+            }
+
             FileWorkspaceMsg::SubscribeFile(file, _content, _qty) => {
                 sender
                     .output(FileWorkspaceOutputMessage::SubscribeFile(file.clone()))
@@ -181,18 +209,12 @@ impl SimpleComponent for FileWorkspace {
 
             FileWorkspaceMsg::OpenFile(file, file_type) => {
                 self.current_file = file.clone();
+                self.current_file_type = file_type.clone();
 
                 if let Some(doc) = self.files.get(&(file.clone(), file_type.clone())) {
                     let (content, qty) = match doc {
                         Documento::Texto(lineas) => (lineas.join("\n"), lineas.len() as i32),
-                        Documento::Calculo(filas) => (
-                            filas
-                                .iter()
-                                .map(|fila| fila.join(","))
-                                .collect::<Vec<_>>()
-                                .join("\n"),
-                            filas.len() as i32,
-                        ),
+                        Documento::Calculo(filas) => (filas.join("\n"), filas.len() as i32),
                     };
 
                     self.file_editor_ctrl
@@ -201,8 +223,6 @@ impl SimpleComponent for FileWorkspace {
                         .unwrap();
 
                     self.editor_visible = true;
-                } else {
-                    println!("Archivo no encontrado: {} ({:?})", file, file_type.clone());
                 }
             }
             FileWorkspaceMsg::CloseEditor => {
@@ -231,46 +251,43 @@ impl SimpleComponent for FileWorkspace {
                     "redis_node_10921_16383.rdb",
                 ];
 
-                let new_files = get_all_files_list(&redis_nodes_files);
                 let mut files_map: HashMap<(String, FileType), Documento> = HashMap::new();
-                for (nombre, file_type, contenido, _qty) in &new_files {
-                    let doc = if *file_type == FileType::Text {
-                        Documento::Texto(if contenido.is_empty() {
-                            vec![]
-                        } else {
-                            contenido.lines().map(|s| s.to_string()).collect()
-                        })
+                let new_files: Vec<(String, FileType, String, i32)> =
+                    get_all_files_list(&redis_nodes_files);
+                let docs: HashMap<String, Documento> = get_all_files_content(&redis_nodes_files);
+                for (nombre, mensajes) in docs {
+                    let file_type = if nombre.ends_with(".xlsx") {
+                        FileType::Sheet
                     } else {
-                        Documento::Calculo(if contenido.is_empty() {
-                            vec![]
-                        } else {
-                            contenido
-                                .lines()
-                                .map(|l| l.split(',').map(|c| c.to_string()).collect())
-                                .collect()
-                        })
+                        FileType::Text
                     };
-                    files_map.insert((nombre.clone(), file_type.clone()), doc);
+                    files_map.insert((nombre, file_type), mensajes);
                 }
-                self.files = files_map;
 
+                self.files = files_map.clone();
                 glib::timeout_add_local(Duration::from_millis(100), move || {
                     file_list_sender
                         .send(FileFilterAction::UpdateFiles(new_files.clone()))
                         .unwrap();
 
-                    if let Some((file_name, file_type, new_content, qty)) = new_files
+                    if let Some((file_name, file_type, _, qty)) = new_files
                         .iter()
                         .find(|(name, _, _, _)| *name == current_file)
                     {
-                        file_editor_sender
-                            .send(FileEditorMessage::UpdateFile(
-                                file_name.clone(),
-                                *qty,
-                                new_content.clone(),
-                                file_type.clone(),
-                            ))
-                            .unwrap();
+                        if let Some(doc) = files_map.get(&(file_name.clone(), file_type.clone())) {
+                            let content = match doc {
+                                Documento::Texto(lineas) => lineas.join("\n"),
+                                Documento::Calculo(filas) => filas.join("\n"),
+                            };
+                            file_editor_sender
+                                .send(FileEditorMessage::UpdateFile(
+                                    file_name.clone(),
+                                    *qty,
+                                    content,
+                                    file_type.clone(),
+                                ))
+                                .unwrap();
+                        }
                     }
 
                     glib::ControlFlow::Break
@@ -295,11 +312,7 @@ fn get_files_list(
                 (nombre, FileType::Text, contenido, qty)
             }
             Documento::Calculo(filas) => {
-                let contenido = filas
-                    .iter()
-                    .map(|fila| fila.join(","))
-                    .collect::<Vec<_>>()
-                    .join("\n");
+                let contenido = filas.join("\n");
                 let qty = filas.len() as i32;
                 (nombre, FileType::Sheet, contenido, qty)
             }
@@ -328,19 +341,12 @@ pub fn get_file_content_workspace(
                 let data = parts[1];
 
                 if doc_name.ends_with(".txt") {
-                    let messages: Vec<String> = data
-                        .split("/--/")
-                        .filter(|s| !s.is_empty())
-                        .map(|s| s.to_string())
-                        .collect();
+                    let messages: Vec<String> = data.split("/--/").map(|s| s.to_string()).collect();
                     docs.insert(doc_name, Documento::Texto(messages));
                 } else if doc_name.ends_with(".xlsx") {
-                    let filas: Vec<Vec<String>> = data
-                        .split("/--/")
-                        .filter(|s| !s.is_empty())
-                        .map(|fila| fila.split(',').map(|c| c.to_string()).collect())
-                        .collect();
-                    docs.insert(doc_name, Documento::Calculo(filas));
+                    let calc_entries: Vec<String> =
+                        data.split("/--/").map(|s| s.to_string()).collect();
+                    docs.insert(doc_name, Documento::Calculo(calc_entries));
                 }
             }
             Err(_) => return Err("unable-to-read-file".to_string()),

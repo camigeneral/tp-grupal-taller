@@ -1,13 +1,11 @@
 use super::redis;
-use super::redis_response::RedisResponse;
-use crate::client_info;
-use crate::commands::set::handle_scard;
-use crate::documento::Documento;
 #[allow(unused_imports)]
 use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
+use super::redis_response::RedisResponse;
+use crate::client_info;
+use crate::documento::Documento;
 use client_info::ClientType;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 pub fn handle_get(
@@ -51,7 +49,9 @@ pub fn handle_get(
         Some(Documento::Calculo(_)) => {
             // Maneja el caso de cálculo si es necesario
             RedisResponse::new(
-                CommandResponse::Error("No se puede hacer GET de un documento de cálculo".to_string()),
+                CommandResponse::Error(
+                    "No se puede hacer GET de un documento de cálculo".to_string(),
+                ),
                 false,
                 "".to_string(),
                 "".to_string(),
@@ -60,7 +60,6 @@ pub fn handle_get(
         None => RedisResponse::new(CommandResponse::Null, false, "".to_string(), "".to_string()),
     }
 }
-
 
 /// Maneja el comando SET para sobrescribir el contenido de un documento.
 ///
@@ -135,13 +134,18 @@ pub fn handle_set(
         for (addr, client) in clients_lock.iter() {
             if client.client_type == ClientType::Microservicio && !subscribers.contains(addr) {
                 subscribers.push(addr.clone());
-                println!("Microservicio {} suscripto automáticamente a {}", addr, doc_name);
+                println!(
+                    "Microservicio {} suscripto automáticamente a {}",
+                    addr, doc_name
+                );
                 break;
             }
         }
     } else {
         return RedisResponse::new(
-            CommandResponse::Error("Internal error accessing client or subscription data".to_string()),
+            CommandResponse::Error(
+                "Internal error accessing client or subscription data".to_string(),
+            ),
             false,
             "".to_string(),
             "".to_string(),
@@ -149,12 +153,13 @@ pub fn handle_set(
     }
 
     let notification = format!("Document {} was replaced with: {}", doc_name, content);
-    println!("Publishing to subscribers of {}: {}", doc_name, notification);
+    println!(
+        "Publishing to subscribers of {}: {}",
+        doc_name, notification
+    );
 
     RedisResponse::new(CommandResponse::Ok, true, notification, doc_name)
 }
-
-
 
 /// Maneja el comando APPEND para agregar contenido a un documento línea por línea.
 ///
@@ -196,13 +201,11 @@ pub fn handle_append(
     }
 
     let content = redis::extract_string_arguments(&request.arguments);
-    let line_number;
-
-    match docs.lock() {
+    let line_number: usize = match docs.lock() {
         Ok(mut docs_lock) => {
             let entry = docs_lock.entry(doc.clone()).or_default();
             entry.push(content.clone());
-            line_number = entry.len();
+            entry.len()
         }
         Err(_) => {
             return RedisResponse::new(
@@ -212,7 +215,7 @@ pub fn handle_append(
                 "".to_string(),
             );
         }
-    }
+    };
 
     // let notification = format!("New content in {}: {} L{}", doc, content, line_number);
     let notification = format!("WRITTEN {}|{}|{} ", doc, line_number, content);
@@ -226,55 +229,7 @@ pub fn handle_append(
     )
 }
 
-
-pub fn handle_welcome(
-    request: &CommandRequest,
-    _active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
-    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
-) -> RedisResponse {
-    let client_addr_str = redis::extract_string_arguments(&request.arguments);
-
-    let doc = match &request.key {
-        Some(k) => k.clone(),
-        None => {
-            return RedisResponse::new(
-                CommandResponse::Error("Usage: WELCOME <client> <document>".to_string()),
-                false,
-                "".to_string(),
-                "".to_string(),
-            )
-        }
-    };
-
-    let request = CommandRequest {
-        command: "scard".to_string(),
-        key: Some(doc.clone()),
-        arguments: vec![],
-        unparsed_command: "".to_string(),
-    };
-
-    let response = handle_scard(&request, shared_sets);
-
-    let mut notification = " ".to_string();
-    println!("response del scard: {:#?}", response);
-
-    if let CommandResponse::String(ref s) = response.response {
-        if let Some(qty_subs) = s.split_whitespace().last() {
-            notification = format!("STATUS {}|{:?}", client_addr_str, qty_subs);
-        };
-    }
-    println!("Llegue aca {}", notification.clone());
-    RedisResponse::new(
-        CommandResponse::String(notification.clone()),
-        true,
-        notification,
-        doc,
-    )
-}
-
-pub fn handle_list_files(
-) -> RedisResponse {
-    
+pub fn handle_list_files() -> RedisResponse {
     let notification = "NODEFILES".to_string();
 
     RedisResponse::new(

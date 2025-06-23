@@ -42,7 +42,6 @@ pub struct AppModel {
     current_file: String,
     subscribed_files: HashMap<String, bool>,
     error_modal: Controller<ErrorModal>,
-    /// Popover que contiene las opciones para crear nuevos documentos.
     new_file_popover: Option<gtk::Popover>,
     file_name: String,
 }
@@ -65,6 +64,7 @@ pub enum AppMsg {
     ManageResponse(String),
     ManageSubscribeResponse(String),
     ManageUnsubscribeResponse(String),
+    SetContentFileCommand(String),
     Error(String),
     /// Mensaje para alternar la visibilidad del popover para nuevos archivos.
     ToggleNewFilePopover,
@@ -73,6 +73,8 @@ pub enum AppMsg {
     CreateTextDocument,
     /// Mensaje para crear un documento de tipo hoja de cálculo.
     CreateSpreadsheetDocument,
+    AddContent(String, String, i32),
+    AddContentSpreadSheet(String, String, String, String),
 }
 
 #[relm4::component(pub)]
@@ -130,13 +132,13 @@ impl SimpleComponent for AppModel {
 
                     gtk::Box {
                         set_halign: gtk::Align::Center,
-        
+
                         // logo - descomentar
                         // gtk::Image {
                         //     set_from_file: Some("src/components/images/logo.png"),
                         //     set_widget_name: "AppLogo",
                         //     set_valign: gtk::Align::Center,
-                        //     set_halign: gtk::Align::Center, 
+                        //     set_halign: gtk::Align::Center,
                         //     set_margin_bottom: 0,
                         //     set_margin_start: 100,
                         //     set_margin_top: 20,
@@ -239,6 +241,12 @@ impl SimpleComponent for AppModel {
             |command: FileWorkspaceOutputMessage| match command {
                 FileWorkspaceOutputMessage::SubscribeFile(file) => AppMsg::SubscribeFile(file),
                 FileWorkspaceOutputMessage::UnsubscribeFile(file) => AppMsg::UnsubscribeFile(file),
+                FileWorkspaceOutputMessage::ContentAdded(file, text, line_number) => {
+                    AppMsg::AddContent(file, text, line_number)
+                }
+                FileWorkspaceOutputMessage::ContentAddedSpreadSheet(file, col, row, text) => {
+                    AppMsg::AddContentSpreadSheet(file, col, row, text)
+                }
             },
         );
 
@@ -315,11 +323,6 @@ impl SimpleComponent for AppModel {
                     .send(NavbarMsg::SetLoggedInUser(username))
                     .unwrap();
 
-                let files_manager_cont_sender = self.files_manager_cont.sender().clone();
-
-                files_manager_cont_sender
-                    .send(FileWorkspaceMsg::ReloadFiles)
-                    .unwrap();
                 self.header_cont
                     .sender()
                     .send(NavbarMsg::SetConnectionStatus(true))
@@ -350,12 +353,13 @@ impl SimpleComponent for AppModel {
 
             AppMsg::ManageResponse(resp) => {
                 if resp != "OK" {
-                    self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
                     return;
                 }
                 if self.command.contains("AUTH") {
                     sender.input(AppMsg::LoginSuccess(self.username.clone()));
                 }
+                self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
+                self.command.clear();
             }
             AppMsg::ManageSubscribeResponse(qty_subs) => {
                 let qty_subs_int = match qty_subs.parse::<i32>() {
@@ -369,7 +373,6 @@ impl SimpleComponent for AppModel {
 
                 self.subscribed_files
                     .insert(self.current_file.clone(), true);
-                println!("Archivos suscriptos : {:#?}", self.subscribed_files);
                 self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(
                     self.current_file.clone(),
                     crate::components::types::FileType::Text,
@@ -379,7 +382,48 @@ impl SimpleComponent for AppModel {
             AppMsg::CreateFile(file_id, content) => {
                 self.command = format!("SET {} \"{}\"", file_id, content);
                 sender.input(AppMsg::ExecuteCommand);
-                // self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
+            }
+            AppMsg::AddContent(file_id, text, line_number) => {
+                let clean_text = if text.trim_end_matches('\n').is_empty() {
+                    "<delete>".to_string()
+                } else {
+                    text
+                };
+                self.command = format!("WRITE|{}|{}|{}", line_number, clean_text, file_id);
+                sender.input(AppMsg::ExecuteCommand);
+            }
+            AppMsg::AddContentSpreadSheet(file_id, col, row, text) => {
+                let clean_text = if text.is_empty() {
+                    "<delete>".to_string()
+                } else {
+                    text
+                };
+
+                let col_index = match col.parse::<usize>() {
+                    Ok(val) => val,
+                    Err(_) => {
+                        println!("Error: col no es un número válido: {}", col);
+                        return;
+                    }
+                };
+
+                let row_index = match row.parse::<usize>() {
+                    Ok(val) => val,
+                    Err(_) => {
+                        println!("Error: row no es un número válido: {}", row);
+                        return;
+                    }
+                };
+
+                let cell_name = format!("{}{}", (b'A' + row_index as u8) as char, col_index + 1);
+                self.command = format!("WRITE|{}|{}|{}", cell_name, clean_text, file_id);
+                println!("comando: {}", self.command);
+                sender.input(AppMsg::ExecuteCommand);
+            }
+
+            AppMsg::SetContentFileCommand(command) => {
+                self.command = command;
+                sender.input(AppMsg::ExecuteCommand);
             }
 
             AppMsg::SubscribeFile(file) => {
@@ -398,9 +442,7 @@ impl SimpleComponent for AppModel {
 
             AppMsg::ManageUnsubscribeResponse(response) => {
                 if response == "OK" {
-                    // Remover el archivo de los suscritos
                     self.subscribed_files.remove(&self.current_file);
-                    println!("Desuscrito del archivo: {}", self.current_file);
                 } else {
                     println!("Error al desuscribirse: {}", response);
                 }
@@ -410,7 +452,6 @@ impl SimpleComponent for AppModel {
             }
 
             AppMsg::ExecuteCommand => {
-                println!("Se ejecuto el siguiente comando: {:#?}", self.command);
                 if let Some(channel_sender) = &self.command_sender {
                     if let Err(e) = channel_sender.send(self.command.to_string()) {
                         println!("Error enviando comando: {}", e);
@@ -425,7 +466,6 @@ impl SimpleComponent for AppModel {
 
             AppMsg::CloseApplication => {
                 if let Some(channel_sender) = &self.command_sender {
-                    println!("Enviando comando de cierre al servidor");
                     if let Err(e) = channel_sender.send("close".to_string()) {
                         eprintln!("Error al enviar comando de cierre: {:?}", e);
                     }
@@ -453,7 +493,7 @@ impl SimpleComponent for AppModel {
                 let file_id = format!("{}.txt", self.file_name.trim());
                 sender.input(AppMsg::CreateFile(file_id, "".to_string()));
             }
-            
+
             AppMsg::CreateSpreadsheetDocument => {
                 if let Some(popover) = &self.new_file_popover {
                     popover.popdown();

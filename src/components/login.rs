@@ -48,7 +48,7 @@ impl SimpleComponent for LoginForm {
 
                 gtk::Image {
                     set_from_file: Some("src/components/images/logo.png"),
-                    set_widget_name: "LoginLogo", 
+                    set_widget_name: "LoginLogo",
                 }
             },
 
@@ -116,7 +116,7 @@ impl SimpleComponent for LoginForm {
             "#LoginLogo {
                 transform: scale(25);
                 transform-origin: center;
-            }"
+            }",
         );
 
         gtk::style_context_add_provider_for_display(

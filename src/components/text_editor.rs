@@ -3,12 +3,13 @@ extern crate relm4;
 use self::gtk4::prelude::{
     BoxExt, OrientableExt, TextBufferExt, TextBufferExtManual, TextViewExt, WidgetExt,
 };
-
 use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 /// Estructura que representa el modelo del editor de archivos. Contiene información sobre el archivo
 /// que se está editando, el contenido del archivo y el estado de cambios manuales en el contenido.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TextEditorModel {
     /// Nombre del archivo que se está editando.
     file_name: String,
@@ -20,13 +21,13 @@ pub struct TextEditorModel {
     buffer: gtk::TextBuffer,
     /// Indica si el contenido del archivo ha sido modificado manualmente en el editor.
     content_changed_manually: bool,
+    programmatic_update: Rc<RefCell<bool>>, // Shared reference
 }
 
 /// Enum que define los posibles mensajes que el editor de archivos puede recibir.
 #[derive(Debug)]
 pub enum TextEditorMessage {
     ContentAdded(String, i32),
-    ContentRemoved(i32, i32),
     UpdateFile(String, i32, String),
     ResetEditor,
 }
@@ -36,6 +37,7 @@ pub enum TextEditorMessage {
 pub enum TextEditorOutputMessage {
     /// Mensaje que indica que se debe volver a la vista anterior.
     GoBack,
+    ContentAdded(String, i32),
 }
 
 #[relm4::component(pub)]
@@ -72,12 +74,15 @@ impl SimpleComponent for TextEditorModel {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        println!("{:#?}, {:#?}", file_name, content);
+        let programmatic_update = Rc::new(RefCell::new(false));
+
         let mut model = TextEditorModel {
             file_name,
             num_contributors,
             content,
-            content_changed_manually: false,
+            content_changed_manually: true,
+            programmatic_update: programmatic_update.clone(),
+
             buffer: gtk::TextBuffer::new(None),
         };
 
@@ -85,50 +90,88 @@ impl SimpleComponent for TextEditorModel {
 
         let sender = sender.clone();
 
-        // Pensar como hacer para que al resetear no mande el mensaje a la api para borrar el contenido
-
         let sender_insert = sender.clone();
-        model
-            .buffer
-            .connect_insert_text(move |_buffer, iter, text| {
-                sender_insert.input(TextEditorMessage::ContentAdded(
-                    text.to_string(),
-                    iter.offset(),
-                ));
-            });
+        let programmatic_update_insert = programmatic_update.clone();
+        model.buffer.connect_insert_text(move |buffer, iter, text| {
+            if *programmatic_update_insert.borrow() {
+                return;
+            }
 
-        let sender_delete = sender.clone();
-        model
-            .buffer
-            .connect_delete_range(move |_buffer, start, end| {
-                sender_delete.input(TextEditorMessage::ContentRemoved(
-                    start.offset(),
-                    end.offset(),
-                ));
-            });
+            if text == "\n" {
+                let line_number = iter.line();
 
+                if let Some(line_start) = buffer.iter_at_line(line_number) {
+                    let mut line_end = line_start;
+                    line_end.forward_to_line_end();
+
+                    let full_line_content = buffer.text(&line_start, &line_end, false);
+
+                    let cursor_position_in_line = iter.line_offset();
+
+                    let before_cursor = &full_line_content[..cursor_position_in_line as usize];
+                    let after_cursor = &full_line_content[cursor_position_in_line as usize..];
+                    let final_string = if after_cursor.is_empty() {
+                        before_cursor.to_string()
+                    } else {
+                        format!("{}\n{}", before_cursor, after_cursor)
+                    };
+
+                    sender_insert.input(TextEditorMessage::ContentAdded(final_string, line_number));
+                }
+            }
+        });
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: TextEditorMessage, _sender: ComponentSender<Self>) {
+    fn update(&mut self, message: TextEditorMessage, sender: ComponentSender<Self>) {
         match message {
-            TextEditorMessage::ContentAdded(_new_text, _offset) => {
-                //Llamado a la api para insertar caracter
+            TextEditorMessage::ContentAdded(new_text, line) => {
+                if !self.content_changed_manually {
+                    return;
+                }
+
+                let _ = sender.output(TextEditorOutputMessage::ContentAdded(new_text, line));
             }
-            TextEditorMessage::ContentRemoved(_start_offset, _end_offset) => {}
+
             TextEditorMessage::UpdateFile(file_name, contributors, content) => {
+                *self.programmatic_update.borrow_mut() = true;
+                self.content_changed_manually = false;
+
                 self.file_name = file_name;
                 self.num_contributors = contributors;
                 self.content = content;
+
+                let insert_mark = self.buffer.get_insert();
+                let iter = self.buffer.iter_at_mark(&insert_mark);
+                let cursor_offset = iter.offset();
+
                 self.buffer.set_text(&self.content);
+
+                let new_content_length = self.buffer.char_count();
+
+                if new_content_length > 0 {
+                    let safe_offset = cursor_offset.min(new_content_length - 1);
+                    let new_iter = self.buffer.iter_at_offset(safe_offset);
+                    self.buffer.place_cursor(&new_iter);
+                } else {
+                    let start_iter = self.buffer.start_iter();
+                    self.buffer.place_cursor(&start_iter);
+                }
+
                 self.content_changed_manually = true;
+                *self.programmatic_update.borrow_mut() = false;
             }
             TextEditorMessage::ResetEditor => {
+                *self.programmatic_update.borrow_mut() = true;
+                self.content_changed_manually = false;
+
                 self.buffer.set_text("");
                 self.content.clear();
                 self.file_name.clear();
                 self.num_contributors = 0;
+
+                *self.programmatic_update.borrow_mut() = false;
             }
         }
     }

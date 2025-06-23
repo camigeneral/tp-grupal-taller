@@ -1,5 +1,3 @@
-extern crate relm4;
-// use self::relm4::Sender;
 use std::collections::HashMap;
 use std::io::Write;
 use std::io::{BufRead, BufReader};
@@ -44,7 +42,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-
     println!("Conectándome al server de redis en {:?}", main_address);
     let mut socket: TcpStream = TcpStream::connect(&main_address)?;
     logger::log_event(
@@ -84,7 +81,10 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         match node_streams.lock() {
             Ok(mut map) => {
-                map.insert(main_address.clone(), redis_socket_clone_for_hashmap.try_clone()?);
+                map.insert(
+                    main_address.clone(),
+                    redis_socket_clone_for_hashmap.try_clone()?,
+                );
             }
             Err(e) => {
                 eprintln!("Error obteniendo lock de node_streams: {}", e);
@@ -113,13 +113,15 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 match node_streams.lock() {
                     Ok(mut map) => {
-                        map.insert(main_address.clone(), redis_socket_clone_for_hashmap.try_clone()?);
+                        map.insert(
+                            main_address.clone(),
+                            redis_socket_clone_for_hashmap.try_clone()?,
+                        );
                     }
                     Err(e) => {
                         eprintln!("Error obteniendo lock de node_streams: {}", e);
                     }
                 }
-
 
                 connect_node_sender.send(extra_socket)?;
             }
@@ -128,7 +130,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-
     {
         let node_streams_clone = Arc::clone(&node_streams);
         let main_address_clone = main_address.clone();
@@ -164,7 +165,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             thread::sleep(Duration::from_secs(60));
         });
-
     }
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
@@ -215,29 +215,10 @@ fn listen_to_redis_response(
             break;
         }
 
-        println!("Respuesta de redis: {}", line);
-        logger::log_event(log_path, &format!("Respuesta de redis: {}", line));
-
-        // client-address qty_users
-        // if line.starts_with("Client ") && line.contains(" subscribed to ") {
-        //     let parts: Vec<&str> = line.trim().split_whitespace().collect();
-        //     if parts.len() >= 5 {
-        //         let client_addr = parts[1];
-
-        //         let doc_name = parts[4];
-
-        //         let bienvenida = format!("Welcome {} {}", doc_name, client_addr);
-
-        //         let parts: Vec<&str> = bienvenida.split_whitespace().collect();
-
-        //         let mensaje_final = format_resp_command(&parts);
-
-        //         if let Err(e) = microservice_socket.write_all(mensaje_final.as_bytes()) {
-        //             eprintln!("Error al enviar mensaje de bienvenida: {}", e);
-        //             logger::log_event(&log_path, &format!("Error al enviar mensaje de bienvenida: {}", e));
-        //         }
-        //     }
-        // }
+        logger::log_event(
+            log_path,
+            &format!("Respuesta de redis en el microservicio: {}", line),
+        );
 
         let response: Vec<&str> = line.split_whitespace().collect();
 
@@ -245,14 +226,7 @@ fn listen_to_redis_response(
         let first_response = first.as_str();
 
         match first_response {
-            s if s.starts_with("-ERR") => {
-                let _credenciales = &response[1];
-                let _invalidas = response[2].trim_end_matches(':');
-
-                // if let Some(sender) = &ui_sender {
-                //     let _ = sender.send(AppMsg::LoginFailure(format!("{} {}", credenciales, invalidas)));
-                // }
-            }
+            s if s.starts_with("-ERR") => {}
             "CLIENT" => {
                 // se va a procesar lo que otro agrego
                 let response_client: Vec<&str> = response[1].split('|').collect();
@@ -273,16 +247,43 @@ fn listen_to_redis_response(
                     );
                 }
             }
-            "WRITTEN" => {
-                // se va a procesasr lo que otro agrego
-                let response_written: Vec<&str> = response[1].split('|').collect();
-                let _doc = response_written[0];
-                let _line = response_written[1];
-                let _content = response_written[2];
+            s if s.starts_with("UPDATE-FILES") => {
+                if response.len() >= 2 {
+                    let doc_name = response[1];
+                    let command_parts = vec!["PUBLISH", doc_name, "UPDATE-FILES-CLIENT"];
+                    let resp_command = format_resp_command(&command_parts);
+                    if let Err(e) = microservice_socket.write_all(resp_command.as_bytes()) {
+                        eprintln!("Error al enviar mensaje de actualizacion de archivo: {}", e);
+                        logger::log_event(
+                            log_path,
+                            &format!("Error al enviar mensaje de actualizacion de archivo: {}", e),
+                        );
+                    }
+                }
+            }
 
-                // if let Some(sender) = &ui_sender {
-                //     let _ = sender.send(AppMsg::ManageSubscribeResponse(response_written[1].to_string()));
-                // }
+            s if s.contains("WRITE|") => {
+                let parts: Vec<&str> = if response.len() > 1 {
+                    line.trim_end_matches('\n').split('|').collect()
+                } else {
+                    response[0].trim_end_matches('\n').split('|').collect()
+                };
+
+                if parts.len() == 4 {
+                    let line_number: &str = parts[1];
+                    let text = parts[2];
+                    let file_name = parts[3];
+
+                    let command_parts = ["add_content", file_name, line_number, text];
+
+                    let resp_command = format_resp_command(&command_parts);
+                    {
+                        let mut last_command = last_command_sent.lock().unwrap();
+                        *last_command = resp_command.clone();
+                    }
+                    println!("RESP enviado: {}", resp_command);
+                    microservice_socket.write_all(resp_command.as_bytes())?;
+                }
             }
             "ASK" => {
                 if response.len() < 3 {
@@ -298,22 +299,23 @@ fn listen_to_redis_response(
             }
             "NODEFILES" => {
                 let paths = match std::fs::read_dir(".") {
-                    Ok(entries) => entries.filter_map(|entry| {
-                        let entry = entry.ok()?;
-                        let path = entry.path();
-                        let fname = path.file_name()?.to_str()?.to_string();
-                        if fname.starts_with("redis_node_") && fname.ends_with(".rdb") {
-                            Some(fname)
-                        } else {
-                            None
-                        }
-                    }).collect::<Vec<_>>(),
+                    Ok(entries) => entries
+                        .filter_map(|entry| {
+                            let entry = entry.ok()?;
+                            let path = entry.path();
+                            let fname = path.file_name()?.to_str()?.to_string();
+                            if fname.starts_with("redis_node_") && fname.ends_with(".rdb") {
+                                Some(fname)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>(),
                     Err(e) => {
                         eprintln!("Error leyendo directorio actual: {}", e);
                         vec![]
                     }
                 };
-
 
                 let response = paths.join(",");
                 redis_parser::write_response(
@@ -322,17 +324,14 @@ fn listen_to_redis_response(
                 )?;
                 continue;
             }
-            _ => { 
-                // if let Some(sender) = &ui_sender {
-                //     let _ = sender.send(AppMsg::ManageResponse(first));
-                // }
-            }
+            _ => {}
         }
 
-        let response: Vec<&str> = line.split_whitespace().collect();
+        /*         let response: Vec<&str> = line.split_whitespace().collect();
 
-        let first = response[0].to_uppercase();
-        let _first_response = first.as_str();
+               let first = response[0].to_uppercase();
+               let _first_response = first.as_str();
+        */
     }
     Ok(())
 }
