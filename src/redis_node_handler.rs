@@ -845,69 +845,74 @@ fn request_master_state_confirmation(
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
 ) {
     let master_port_option;
+    let master_port;
     let hash_range;
 
-    // Bloqueo local_node
-    match local_node.lock() {
-        Ok(locked_local_node) => {
-            if locked_local_node.role != NodeRole::Replica {
-                println!("Master node cannot initiate replica promotion");
+    {
+        // Bloqueo local_node
+        match local_node.lock() {
+            Ok(locked_local_node) => {
+                if locked_local_node.role != NodeRole::Replica {
+                    println!("Master node cannot initiate replica promotion");
+                    return;
+                }
+
+                master_port_option = locked_local_node.master_node;
+                hash_range = locked_local_node.hash_range;
+            }
+            Err(_) => {
+                eprintln!("Error al bloquear local_node");
                 return;
             }
+        }
 
-            master_port_option = locked_local_node.master_node;
-            hash_range = locked_local_node.hash_range;
-        }
-        Err(_) => {
-            eprintln!("Error al bloquear local_node");
-            return;
-        }
+        master_port = match master_port_option {
+            Some(p) => p,
+            None => {
+                println!("No master node");
+                return;
+            }
+        };
     }
-
-    let master_port = match master_port_option {
-        Some(p) => p,
-        None => {
-            println!("No master node");
-            return;
-        }
-    };
-
+    
     let mut contacted_replica = false;
 
-    // Bloqueo peer_nodes
-    let mut locked_peer_nodes = match peer_nodes.lock() {
-        Ok(n) => n,
-        Err(_) => {
-            eprintln!("Error al bloquear peer_nodes");
-            return;
-        }
-    };
+    {
+        // Bloqueo peer_nodes
+        let mut locked_peer_nodes = match peer_nodes.lock() {
+            Ok(n) => n,
+            Err(_) => {
+                eprintln!("Error al bloquear peer_nodes");
+                return;
+            }
+        };
 
-    // Marcar master como inactivo
-    for peer in locked_peer_nodes.values_mut() {
-        if peer.port == master_port {
-            peer.state = NodeState::Inactive;
+        // Marcar master como inactivo
+        for peer in locked_peer_nodes.values_mut() {
+            if peer.port == master_port {
+                peer.state = NodeState::Inactive;
+            }
         }
-    }
 
-    // Intentar contactar a otra réplica
-    for (_, peer) in locked_peer_nodes.iter() {
-        if peer.role == NodeRole::Replica
-            && peer.hash_range == hash_range
-            && peer.port != master_port
-        {
-            let message = format!("confirm_master_down {}\n", master_port);
-            let encrypted_message = encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
-            match peer.stream.try_clone() {
-                Ok(mut peer_stream) => {
-                    if peer_stream.write_all(&encrypted_message).is_ok() {
-                        contacted_replica = true;
-                    } else {
-                        eprintln!("Error escribiendo a la réplica");
+        // Intentar contactar a otra réplica
+        for (_, peer) in locked_peer_nodes.iter() {
+            if peer.role == NodeRole::Replica
+                && peer.hash_range == hash_range
+                && peer.port != master_port
+            {
+                let message = format!("confirm_master_down {}\n", master_port);
+                let encrypted_message = encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
+                match peer.stream.try_clone() {
+                    Ok(mut peer_stream) => {
+                        if peer_stream.write_all(&encrypted_message).is_ok() {
+                            contacted_replica = true;
+                        } else {
+                            eprintln!("Error escribiendo a la réplica");
+                        }
                     }
-                }
-                Err(_) => {
-                    eprintln!("Error clonando stream para réplica");
+                    Err(_) => {
+                        eprintln!("Error clonando stream para réplica");
+                    }
                 }
             }
         }
