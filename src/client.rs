@@ -60,9 +60,8 @@ pub fn client_run(
             eprintln!("Error en la conexión con el nodo: {}", e);
         }
     });
-    let local_addr = redis_socket.try_clone()?.local_addr()?;
+
     let _ = connect_node_sender.send(redis_socket);
-    
 
     for command in rx {
         let trimmed_command = command.to_string().trim().to_lowercase();
@@ -85,9 +84,9 @@ pub fn client_run(
              if parts[0] == "AUTH" || parts[0] == "subscribe"  || parts[0] == "unsubscribe" {
                     format_resp_command(&parts)
                 }else{
-                    if parts[0].starts_with("WRITE|") {
-                        let message = format!("{}|{}", parts[0], local_addr.to_string());                        
-                        format_resp_publish(parts[1], &message)
+                    if parts[0].contains("WRITE") {
+                        let splited_command: Vec<&str> = command.split("|").collect();
+                        format_resp_publish(splited_command[3], &command)
                     } else {
                         format_resp_publish(parts[1], &command)
                     }
