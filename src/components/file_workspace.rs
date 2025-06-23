@@ -51,6 +51,8 @@ pub enum FileWorkspaceMsg {
     SubscribeFile(String, String, i32),
     ReloadFiles,
     ContentAdded(String, i32),
+
+    UpdateFile(String, String, String),
     ContentAddedSpreadSheet(String, String, String),
 }
 
@@ -238,6 +240,47 @@ impl SimpleComponent for FileWorkspace {
                     .unwrap();
                 self.editor_visible = false;
             }
+
+
+            FileWorkspaceMsg::UpdateFile(file, index, value) => {
+                let file_type = if file.ends_with(".xlsx") {
+                    FileType::Sheet
+                } else {
+                    FileType::Text
+                };
+                let val = value.trim_end_matches('\r').to_string();
+                let file_editor_sender = self.file_editor_ctrl.sender().clone();
+
+                if let Some(doc) = self.files.get_mut(&(file.clone(), file_type.clone())) {
+                    if let Ok(parsed_index) = index.parse::<usize>() {
+                        match doc {
+                            Documento::Calculo(data) => {
+                                if parsed_index < data.len() {
+                                    data[parsed_index] = val.clone();
+                                }
+                            }
+                            Documento::Texto(lines) => {
+                                if parsed_index < lines.len() {
+                                    lines[parsed_index] = val.clone();
+                                }
+                            }
+                        }
+                        println!("Se actualizo el archivo {} en {} con {}: {:#?} ", file, index, val, doc);
+                        file_editor_sender
+                        .send(FileEditorMessage::UpdateFileContent(
+                            file.clone(),
+                            parsed_index as i32,
+                            val,
+                            file_type.clone(),
+                        ))
+                        .unwrap();
+                    }
+
+                    
+                }
+            }
+
+
             FileWorkspaceMsg::ReloadFiles => {
                 let file_list_sender: relm4::Sender<FileFilterAction> =
                     self.file_list_ctrl.sender().clone();

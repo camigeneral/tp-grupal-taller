@@ -45,6 +45,7 @@ pub enum FileEditorMessage {
     ContentAdded(String, i32),
     ContentAddedSpreadSheet(String, String, String),
     UpdateFile(String, i32, String, FileType),
+    UpdateFileContent(String, i32, String, FileType),
     ResetEditor,
 }
 
@@ -180,6 +181,34 @@ impl SimpleComponent for FileEditorModel {
                         self.spreadsheet_ctrl
                             .sender()
                             .send(SpreadsheetMsg::UpdateSheet(file_name.clone(), filas))
+                            .unwrap();
+                    }
+                    _ => {
+                        self.text_editor_visible = true;
+                        self.spreadsheet_visible = false;
+                    }
+                }
+            }
+            FileEditorMessage::UpdateFileContent(file_name, index, content, file_type) => {
+                self.file_name = file_name.clone();
+                self.content = content.clone();
+
+                match file_type {
+                    FileType::Text => {
+                        self.text_editor_visible = true;
+                        self.spreadsheet_visible = false;
+                        self.text_editor_ctrl.emit(TextEditorMessage::UpdateFile(
+                            file_name.clone(),
+                            index,
+                            content.clone(),
+                        ));
+                    }
+                    FileType::Sheet => {
+                        self.text_editor_visible = false;
+                        self.spreadsheet_visible = true;                        
+                        self.spreadsheet_ctrl
+                            .sender()
+                            .send(SpreadsheetMsg::UpdateSheetContent(file_name.clone(), index, content))
                             .unwrap();
                     }
                     _ => {

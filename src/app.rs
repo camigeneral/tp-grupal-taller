@@ -56,7 +56,7 @@ pub enum AppMsg {
     CommandChanged(String),
     ExecuteCommand,
     CloseApplication,
-    RefreshData,
+    RefreshData(String, String, String),
     CreateFile(String, String),
     SubscribeFile(String),
     UnsubscribeFile(String),
@@ -434,8 +434,8 @@ impl SimpleComponent for AppModel {
                     println!("No hay un canal de comando disponible.");
                 }
             }
-            AppMsg::RefreshData => {
-                self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
+            AppMsg::RefreshData(file, index, value) => {
+                self.files_manager_cont.emit(FileWorkspaceMsg::UpdateFile(file, index, value));
             }
 
             AppMsg::CloseApplication => {
