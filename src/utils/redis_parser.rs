@@ -165,10 +165,7 @@ pub fn parse_resp_command(
     let mut unparsed_command = String::new();
 
     if let Err(e) = reader.read_line(&mut line) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Read error: {}", e),
-        ));
+        return Err(std::io::Error::other(format!("Read error: {}", e)));
     }
     unparsed_command.push_str(&line);
 
@@ -194,10 +191,7 @@ pub fn parse_resp_command(
     for _ in 0..num_elements {
         line.clear();
         if let Err(e) = reader.read_line(&mut line) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Read error: {}", e),
-            ));
+            return Err(std::io::Error::other(format!("Read error: {}", e)));
         }
         unparsed_command.push_str(&line);
 
@@ -220,10 +214,7 @@ pub fn parse_resp_command(
 
         let mut buffer = vec![0u8; length];
         if let Err(e) = reader.read_exact(&mut buffer) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Read buffer failed: {}", e),
-            ));
+            return Err(std::io::Error::other(format!("Read buffer failed: {}", e)));
         }
         match String::from_utf8(buffer.clone()) {
             Ok(s) => unparsed_command.push_str(&s),
@@ -237,10 +228,7 @@ pub fn parse_resp_command(
 
         let mut crlf = [0u8; 2];
         if let Err(e) = reader.read_exact(&mut crlf) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Read CRLF failed: {}", e),
-            ));
+            return Err(std::io::Error::other(format!("Read CRLF failed: {}", e)));
         }
         unparsed_command.push_str("\r\n");
 
@@ -323,10 +311,7 @@ pub fn parse_replica_resp(
     let mut unparsed_command = String::new();
 
     if let Err(e) = reader.read_line(&mut line) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Read line error: {}", e),
-        ));
+        return Err(std::io::Error::other(format!("Read line error: {}", e)));
     }
     unparsed_command.push_str(&line);
 
@@ -352,10 +337,7 @@ pub fn parse_replica_resp(
     for _ in 0..num_elements {
         line.clear();
         if let Err(e) = reader.read_line(&mut line) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Read line error: {}", e),
-            ));
+            return Err(std::io::Error::other(format!("Read line error: {}", e)));
         }
         unparsed_command.push_str(&line);
 
@@ -378,10 +360,7 @@ pub fn parse_replica_resp(
 
         let mut buffer = vec![0u8; length];
         if let Err(e) = reader.read_exact(&mut buffer) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Read buffer error: {}", e),
-            ));
+            return Err(std::io::Error::other(format!("Read buffer error: {}", e)));
         }
 
         match String::from_utf8(buffer.clone()) {
@@ -396,10 +375,7 @@ pub fn parse_replica_resp(
 
         let mut crlf = [0u8; 2];
         if let Err(e) = reader.read_exact(&mut crlf) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Read CRLF error: {}", e),
-            ));
+            return Err(std::io::Error::other(format!("Read CRLF error: {}", e)));
         }
         unparsed_command.push_str("\r\n");
 
