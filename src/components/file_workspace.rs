@@ -248,7 +248,7 @@ impl SimpleComponent for FileWorkspace {
                 } else {
                     FileType::Text
                 };
-                let val = value.trim_end_matches('\r').to_string();
+                let mut val = value.trim_end_matches('\r').to_string();
                 let file_editor_sender = self.file_editor_ctrl.sender().clone();
 
                 if let Some(doc) = self.files.get_mut(&(file.clone(), file_type.clone())) {
@@ -257,15 +257,21 @@ impl SimpleComponent for FileWorkspace {
                             Documento::Calculo(data) => {
                                 if parsed_index < data.len() {
                                     data[parsed_index] = val.clone();
+                            
                                 }
                             }
                             Documento::Texto(lines) => {
                                 if parsed_index < lines.len() {
                                     lines[parsed_index] = val.clone();
+                                    
+                                } else {
+                                    lines.push(val.clone());
                                 }
+                                val = lines.join("\n");
                             }
                         }
                         println!("Se actualizo el archivo {} en {} con {}: {:#?} ", file, index, val, doc);
+                        
                         file_editor_sender
                         .send(FileEditorMessage::UpdateFileContent(
                             file.clone(),
@@ -273,7 +279,7 @@ impl SimpleComponent for FileWorkspace {
                             val,
                             file_type.clone(),
                         ))
-                        .unwrap();
+                        .unwrap();                                            
                     }
 
                     
