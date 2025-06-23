@@ -34,6 +34,7 @@ pub enum SpreadsheetMsg {
     CellChanged(usize, usize, String),
     RecalculateAll,
     UpdateSheet(String, Vec<String>),
+    UpdateSheetContent(String, i32, String),
 }
 
 #[derive(Debug)]
@@ -296,6 +297,16 @@ impl SimpleComponent for SpreadsheetModel {
                         self.update_cell(i, j, value);
                     }
                 }
+                self.update_display();
+            }
+
+            SpreadsheetMsg::UpdateSheetContent(_file_name, index_set, content) => {
+                let row = index_set / 10;
+                let col = index_set % 10;
+                if row < 10 && col < 10 {
+                    self.update_cell(row as usize, col as usize, content);
+                }
+
                 self.update_display();
             }
         }

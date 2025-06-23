@@ -1,7 +1,6 @@
 use crate::commands::redis_parser::{parse_replica_command, write_response, CommandResponse};
 use crate::documento::Documento;
 use commands::redis;
-use encryption::{decrypt_xor, encrypt_xor, ENCRYPTION_KEY};
 use local_node::{LocalNode, NodeRole, NodeState};
 use peer_node;
 use std::collections::HashMap;
@@ -248,8 +247,6 @@ fn handle_node(
     let mut command_string = String::new();
     let mut serialized_hashmap = Vec::new();
     let mut serialized_vec = Vec::new();
-
-    println!("aca");
 
     for command in reader.lines().map_while(Result::ok) {
         let input: Vec<String> = command

@@ -14,10 +14,6 @@ struct FileListItem {
     name: String,
     /// Tipo de archivo (texto o hoja de cálculo).
     file_type: FileType,
-    /// Contenido del archivo.
-    content: String,
-    /// Cantidad de elementos relacionados con el archivo.
-    qty: i32,
 }
 
 /// Estructura que representa la vista de la lista de archivos. Contiene una lista de archivos
@@ -27,7 +23,7 @@ pub struct FileListView {
     /// Filtro seleccionado para los archivos (todos, texto o cálculo).
     selected_filter: FileType,
     /// Lista completa de archivos.
-    all_filles: Vec<(String, FileType, String, i32)>,
+    all_filles: Vec<(String, FileType)>,
     /// Lista filtrada de archivos.
     filtered_files: FactoryVecDeque<FileListItem>,
 }
@@ -42,14 +38,14 @@ pub enum FileFilterAction {
     /// Muestra solo los archivos de tipo hoja de cálculo.
     SpreadsheetFiles,
     /// Selecciona un archivo específico.
-    SelectFile(String, FileType, String, i32),
-    UpdateFiles(Vec<(String, FileType, String, i32)>),
+    SelectFile(String, FileType),
+    UpdateFiles(Vec<(String, FileType)>),
 }
 
 #[relm4::component(pub)]
 impl SimpleComponent for FileListView {
     type Output = FileFilterAction;
-    type Init = Vec<(String, FileType, String, i32)>;
+    type Init = ();
     type Input = FileFilterAction;
     view! {
         #[name="container_2"]
@@ -104,7 +100,7 @@ impl SimpleComponent for FileListView {
                 set_halign: gtk::Align::Center,
                 set_valign: gtk::Align::Center,
                 gtk::Label {
-                    set_label: "No hay archivos cargados. Crea uno nuevo!"
+                    set_label: "No hay archivos cargados."
                 },
 
                 #[watch]
@@ -114,21 +110,17 @@ impl SimpleComponent for FileListView {
     }
 
     fn init(
-        files_list: Self::Init,
+        _init: Self::Init,
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let mut model = FileListView {
+        let model = FileListView {
             selected_filter: FileType::Any,
             filtered_files: FactoryVecDeque::builder()
                 .launch_default()
                 .forward(sender.input_sender(), |msg| msg),
-            all_filles: files_list.clone(),
+            all_filles: Vec::new(),
         };
-
-        for file in files_list {
-            model.filtered_files.guard().push_back(file);
-        }
 
         let files_container = model.filtered_files.widget();
         let widgets = view_output!();
@@ -139,24 +131,19 @@ impl SimpleComponent for FileListView {
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
             FileFilterAction::ShowAll => {
-                println!("Filtro: Todos los archivos");
                 self.selected_filter = FileType::Any;
                 self.update_file_list_based_on_filter();
             }
             FileFilterAction::TextFiles => {
-                println!("Filtro: Archivos de texto");
                 self.selected_filter = FileType::Text;
                 self.update_file_list_based_on_filter();
             }
             FileFilterAction::SpreadsheetFiles => {
-                println!("Filtro: Hojas de cálculo");
                 self.selected_filter = FileType::Sheet;
                 self.update_file_list_based_on_filter();
             }
-            FileFilterAction::SelectFile(file_name, file_type, content, qty) => sender
-                .output(FileFilterAction::SelectFile(
-                    file_name, file_type, content, qty,
-                ))
+            FileFilterAction::SelectFile(file_name, file_type) => sender
+                .output(FileFilterAction::SelectFile(file_name, file_type))
                 .unwrap(),
 
             FileFilterAction::UpdateFiles(new_files) => {
@@ -170,14 +157,11 @@ impl SimpleComponent for FileListView {
 impl FileListView {
     fn update_file_list_based_on_filter(&mut self) {
         self.filtered_files.guard().clear();
-        for (name, file_type, content, qty) in &self.all_filles {
+        for (name, file_type) in &self.all_filles {
             if self.selected_filter == FileType::Any || *file_type == self.selected_filter {
-                self.filtered_files.guard().push_back((
-                    name.clone(),
-                    file_type.clone(),
-                    content.clone(),
-                    (*qty),
-                ));
+                self.filtered_files
+                    .guard()
+                    .push_back((name.clone(), file_type.clone()));
             }
         }
     }
@@ -185,7 +169,7 @@ impl FileListView {
 
 #[relm4::factory]
 impl FactoryComponent for FileListItem {
-    type Init = (String, FileType, String, i32);
+    type Init = (String, FileType);
     type Input = ();
     type Output = FileFilterAction;
     type CommandOutput = ();
@@ -198,8 +182,8 @@ impl FactoryComponent for FileListItem {
             add_css_class: "file_button",
             set_halign: gtk::Align::Fill,
             set_valign: gtk::Align::Center,
-            connect_clicked[sender, name = self.name.clone(), file_type = self.file_type.clone(), content = self.content.clone(), qty = self.qty.clone()] => move |_| {
-                sender.output(FileFilterAction::SelectFile(name.clone(), file_type.clone(), content.clone(), qty)).unwrap();
+            connect_clicked[sender, name = self.name.clone(), file_type = self.file_type.clone()] => move |_| {
+                sender.output(FileFilterAction::SelectFile(name.clone(), file_type.clone())).unwrap();
             },
             gtk::Box {
                 set_orientation: gtk::Orientation::Horizontal,
@@ -223,8 +207,6 @@ impl FactoryComponent for FileListItem {
         Self {
             name: value.0,
             file_type: value.1,
-            content: value.2,
-            qty: value.3,
         }
     }
 }

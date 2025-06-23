@@ -24,7 +24,6 @@ pub fn handle_auth(
     };
 
     if request.arguments.len() >= 2 || request.arguments.is_empty() {
-        println!("Cantidad de credenciales_: {:#?}", request.arguments.len());
         return RedisResponse::new(
             CommandResponse::Error(
                 "Cantidad de credenciales invalidas: AUTH <username> <password>".to_string(),

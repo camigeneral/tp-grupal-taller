@@ -110,15 +110,18 @@ pub fn client_run(
             println!("Enviando: {:?}", command);
 
             let parts: Vec<&str> = command.split_whitespace().collect();
-            let resp_command =
-                if parts[0] == "AUTH" || parts[0] == "subscribe" || parts[0] == "unsubscribe" {
-                    format_resp_command(&parts)
-                } else if parts[0].contains("WRITE") {
-                    let splited_command: Vec<&str> = command.split("|").collect();
-                    format_resp_publish(splited_command[3], &command)
-                } else {
-                    format_resp_publish(parts[1], &command)
-                };
+            let resp_command = if parts[0] == "AUTH"
+                || parts[0] == "subscribe"
+                || parts[0] == "unsubscribe"
+                || parts[0] == "get_files"
+            {
+                format_resp_command(&parts)
+            } else if parts[0].contains("WRITE") {
+                let splited_command: Vec<&str> = command.split("|").collect();
+                format_resp_publish(splited_command[3], &command)
+            } else {
+                format_resp_publish(parts[1], &command)
+            };
 
             {
                 let mut last_command = match last_command_sent.lock() {
@@ -173,6 +176,13 @@ fn listen_to_redis_response(
         if bytes_read == 0 {
             break;
         }
+        let local_addr = match client_socket_cloned.local_addr() {
+            Ok(addr) => addr,
+            Err(e) => {
+                eprintln!("Error al obtener la dirección local: {}", e);
+                return Err(e);
+            }
+        };
 
         println!("Respuesta de redis: {}", line);
 
@@ -211,13 +221,6 @@ fn listen_to_redis_response(
             "STATUS" => {
                 let response_status: Vec<&str> = response[1].split('|').collect();
                 let socket = response_status[0];
-                let local_addr = match client_socket_cloned.local_addr() {
-                    Ok(addr) => addr,
-                    Err(e) => {
-                        eprintln!("Error al obtener la dirección local: {}", e);
-                        return Err(e);
-                    }
-                };
 
                 if socket != local_addr.to_string() {
                     continue;
@@ -225,15 +228,42 @@ fn listen_to_redis_response(
 
                 if let Some(sender) = &ui_sender {
                     let _ = sender.send(AppMsg::ManageSubscribeResponse(
+                        response_status[2].to_string(),
                         response_status[1].to_string(),
+                        response_status[3].to_string(),
                     ));
                 }
             }
 
-            s if s.starts_with("UPDATE-FILES-CLIENT") => {
+            s if s.starts_with("UPDATE-CLIENT") => {
                 if let Some(sender) = &ui_sender {
-                    println!("Recargar");
-                    let _ = sender.send(AppMsg::RefreshData);
+                    let parts: Vec<&str> = if response.len() > 1 {
+                        line.trim_end_matches('\n').split('|').collect()
+                    } else {
+                        response[0]
+                            .trim_end_matches('\n')
+                            .split('|')
+                            .map(|s| s.trim_end_matches('\r'))
+                            .collect()
+                    };
+                    let file = parts[1].to_string();
+                    let index = parts[2].to_string();
+                    let text = parts[3].to_string();
+                    let _ = sender.send(AppMsg::RefreshData(file, index, text));
+                }
+            }
+            s if s.starts_with("FILES") => {
+                let parts: Vec<&str> = line.trim().split('|').collect();
+                let archivos = if parts.len() > 1 {
+                    parts[1]
+                        .split(',')
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>()
+                } else {
+                    vec![]
+                };
+                if let Some(sender) = &ui_sender {
+                    let _ = sender.send(AppMsg::UpdateFilesList(archivos));
                 }
             }
             _ => {

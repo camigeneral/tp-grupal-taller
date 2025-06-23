@@ -124,14 +124,12 @@ fn start_server(
         };
         (file_name, node_role)
     };
-    println!("file name: {}", file_name);
 
     let mut stored_documents = HashMap::new();
     if node_role == local_node::NodeRole::Master {
         stored_documents = match load_persisted_data(&file_name) {
             Ok(docs) => docs,
             Err(_) => {
-                println!("Iniciando con base de datos vacía");
                 logger::log_event(&log_path, "Iniciando con base de datos vacía");
                 HashMap::new()
             }
@@ -158,8 +156,6 @@ fn start_server(
 
     // Iniciar servidor TCP
     let tcp_listener = TcpListener::bind(bind_address)?;
-    println!("Server listening to clients on: {}", bind_address);
-
     logger::log_event(&log_path, &format!("Servidor iniciado en {}", bind_address));
 
     let ctx = Arc::new(ServerContext {
@@ -177,7 +173,6 @@ fn start_server(
         match incoming_connection {
             Ok(client_stream) => {
                 if let Err(e) = handle_new_client_connection(client_stream, Arc::clone(&ctx)) {
-                    eprintln!("Error al manejar nueva conexión: {}", e);
                     logger::log_event(
                         &log_path,
                         &format!("Error al manejar nueva conexión: {}", e),
@@ -185,7 +180,6 @@ fn start_server(
                 }
             }
             Err(e) => {
-                eprintln!("Error al aceptar conexión: {}", e);
                 logger::log_event(&log_path, &format!("Error al aceptar conexión: {}", e));
             }
         }
@@ -490,9 +484,6 @@ fn _is_authorized_client(
     logged_clients: Arc<Mutex<HashMap<String, bool>>>,
     client_id: String,
 ) -> bool {
-    println!("Verificando autorización para client_id: {}", client_id);
-    println!("Formato exacto del client_id: {:?}", client_id);
-
     let locked = match logged_clients.lock() {
         Ok(lock) => lock,
         Err(poisoned) => {
@@ -500,12 +491,6 @@ fn _is_authorized_client(
             poisoned.into_inner()
         }
     };
-
-    println!("Estado actual del HashMap: {:#?}", *locked);
-    println!(
-        "Claves en el HashMap: {:?}",
-        locked.keys().collect::<Vec<_>>()
-    );
 
     match locked.get(&client_id) {
         Some(&true) => {
@@ -770,7 +755,6 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Documen
             }
 
             documents.insert(document_id, Documento::Calculo(rows));
-            println!("documents; {:#?}", documents);
         }
     }
 

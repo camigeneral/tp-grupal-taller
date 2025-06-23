@@ -132,14 +132,14 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     {
         let node_streams_clone = Arc::clone(&node_streams);
-        let main_address_clone = main_address.clone();
-        let last_command_sent_clone = Arc::clone(&last_command_sent);
+        let _main_address_clone = main_address.clone();
+        let _last_command_sent_clone = Arc::clone(&last_command_sent);
 
         thread::spawn(move || loop {
             match node_streams_clone.lock() {
-                Ok(streams) => {
-                    if let Some(mut stream) = streams.get(&main_address_clone) {
-                        let command_parts = vec!["SET", "docprueba.txt", "hola"];
+                Ok(_streams) => {
+                    /* if let Some(mut stream) = streams.get(&main_address_clone) {
+                        let command_parts = vec!["SET", "docprueba.txt", ""];
                         let resp_command = format_resp_command(&command_parts);
 
                         match last_command_sent_clone.lock() {
@@ -156,14 +156,14 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                         } else {
                             println!("Comando automático enviado: SET docprueba hola");
                         }
-                    }
+                    } */
                 }
                 Err(e) => {
                     eprintln!("Error obteniendo lock de node_streams: {}", e);
                 }
             }
 
-            thread::sleep(Duration::from_secs(60));
+            thread::sleep(Duration::from_secs(61812100));
         });
     }
     loop {
@@ -219,7 +219,7 @@ fn listen_to_redis_response(
             log_path,
             &format!("Respuesta de redis en el microservicio: {}", line),
         );
-
+        let line_clone = line.clone();
         let response: Vec<&str> = line.split_whitespace().collect();
 
         let first = response[0].to_uppercase();
@@ -227,7 +227,7 @@ fn listen_to_redis_response(
 
         match first_response {
             s if s.starts_with("-ERR") => {}
-            "CLIENT" => {
+            s if s.starts_with("CLIENT") => {
                 // se va a procesar lo que otro agrego
                 let response_client: Vec<&str> = response[1].split('|').collect();
                 let client_address = response_client[0];
@@ -248,17 +248,21 @@ fn listen_to_redis_response(
                 }
             }
             s if s.starts_with("UPDATE-FILES") => {
-                if response.len() >= 2 {
-                    let doc_name = response[1];
-                    let command_parts = vec!["PUBLISH", doc_name, "UPDATE-FILES-CLIENT"];
-                    let resp_command = format_resp_command(&command_parts);
-                    if let Err(e) = microservice_socket.write_all(resp_command.as_bytes()) {
-                        eprintln!("Error al enviar mensaje de actualizacion de archivo: {}", e);
-                        logger::log_event(
-                            log_path,
-                            &format!("Error al enviar mensaje de actualizacion de archivo: {}", e),
-                        );
-                    }
+
+                let parts: Vec<&str> = line_clone.trim_end_matches('\n').split('|').collect();
+
+                let doc_name: &str = parts[1];
+                let index = parts[2];
+                let text: &str = parts[3];
+                let notification = format!("UPDATE-CLIENT|{}|{}|{}", doc_name, index, text);
+                let command_parts = vec!["PUBLISH", doc_name, &notification];
+                let resp_command = format_resp_command(&command_parts);
+                if let Err(e) = microservice_socket.write_all(resp_command.as_bytes()) {
+                    eprintln!("Error al enviar mensaje de actualizacion de archivo: {}", e);
+                    logger::log_event(
+                        log_path,
+                        &format!("Error al enviar mensaje de actualizacion de archivo: {}", e),
+                    );
                 }
             }
 
@@ -297,41 +301,13 @@ fn listen_to_redis_response(
                     );
                 }
             }
-            "NODEFILES" => {
-                let paths = match std::fs::read_dir(".") {
-                    Ok(entries) => entries
-                        .filter_map(|entry| {
-                            let entry = entry.ok()?;
-                            let path = entry.path();
-                            let fname = path.file_name()?.to_str()?.to_string();
-                            if fname.starts_with("redis_node_") && fname.ends_with(".rdb") {
-                                Some(fname)
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>(),
-                    Err(e) => {
-                        eprintln!("Error leyendo directorio actual: {}", e);
-                        vec![]
-                    }
-                };
-
-                let response = paths.join(",");
-                redis_parser::write_response(
-                    &microservice_socket,
-                    &redis_parser::CommandResponse::String(response),
-                )?;
-                continue;
-            }
             _ => {}
         }
 
-        /*         let response: Vec<&str> = line.split_whitespace().collect();
+        let response: Vec<&str> = line.split_whitespace().collect();
 
-               let first = response[0].to_uppercase();
-               let _first_response = first.as_str();
-        */
+        let first = response[0].to_uppercase();
+        let _first_response = first.as_str();
     }
     Ok(())
 }
