@@ -136,7 +136,6 @@ pub fn write_response(stream: &TcpStream, response: &CommandResponse) -> std::io
 /// String formateada según el protocolo RESP
 #[allow(dead_code)]
 pub fn format_resp_command(command_parts: &[&str]) -> String {
-
     let mut resp_message = format!("*{}\r\n", command_parts.len());
 
     for part in command_parts {
@@ -157,8 +156,6 @@ pub fn format_resp_publish(channel: &str, message: &str) -> String {
 
     resp_message
 }
-
-
 
 /// Parsea una línea en formato RESP que representa un array de cadenas (`Vec<String>`).
 ///

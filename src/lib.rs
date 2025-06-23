@@ -23,6 +23,12 @@ pub mod peer_node;
 /// usado por Redis.
 pub mod hashing;
 
+/// Módulo de encriptación de mensajes.
+///
+/// Implementa funciones para encriptar y desencriptar mensajes usando XOR
+/// con una clave arbitraria.
+pub mod encryption;
+
 /// Módulo principal de la aplicación.
 ///
 /// Define la estructura y lógica principal de la app, incluyendo los controladores

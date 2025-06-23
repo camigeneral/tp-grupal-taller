@@ -106,10 +106,9 @@ impl SimpleComponent for FileEditorModel {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let spreadsheet_cont = SpreadsheetModel::builder().launch(()).forward(
-            sender.input_sender(),
-            |_msg| FileEditorMessage::ResetEditor,
-        );
+        let spreadsheet_cont = SpreadsheetModel::builder()
+            .launch(())
+            .forward(sender.input_sender(), |_msg| FileEditorMessage::ResetEditor);
 
         let text_editor_cont = TextEditorModel::builder()
             .launch((file_name.clone(), num_contributors, content.clone()))

@@ -93,7 +93,7 @@ pub fn client_run(
 
     for command in rx {
         let trimmed_command = command.to_string().trim().to_lowercase();
-        if trimmed_command == "close"  {
+        if trimmed_command == "close" {
             println!("Desconectando del servidor");
             let parts: Vec<&str> = trimmed_command.split_whitespace().collect();
             let resp_command = redis_parser::format_resp_publish(parts[0], parts[1]);
@@ -184,7 +184,10 @@ fn listen_to_redis_response(
                     "Error desconocido".to_string()
                 };
                 if let Some(sender) = &ui_sender {
-                    let _ = sender.send(AppMsg::Error(format!("Hubo un problema: {}", error_message)));
+                    let _ = sender.send(AppMsg::Error(format!(
+                        "Hubo un problema: {}",
+                        error_message
+                    )));
                 }
             }
             "ASK" => {
