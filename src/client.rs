@@ -113,13 +113,11 @@ pub fn client_run(
             let resp_command =
              if parts[0] == "AUTH" || parts[0] == "subscribe"  || parts[0] == "unsubscribe" {
                     format_resp_command(&parts)
-                }else{
-                    if parts[0].contains("WRITE") {
-                        let splited_command: Vec<&str> = command.split("|").collect();
-                        format_resp_publish(splited_command[3], &command)
-                    } else {
-                        format_resp_publish(parts[1], &command)
-                    }
+                }else if parts[0].contains("WRITE") {
+                    let splited_command: Vec<&str> = command.split("|").collect();
+                    format_resp_publish(splited_command[3], &command)
+                } else {
+                    format_resp_publish(parts[1], &command)
                 };
 
             {
