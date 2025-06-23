@@ -314,7 +314,7 @@ pub fn get_files(_docs: &Arc<Mutex<HashMap<String, Documento>>>) -> RedisRespons
     let mut doc_names = HashSet::new();
 
     if let Ok(entries) = fs::read_dir(".") {
-        for entry in entries.flatten() {
+        for entry in entries.map_while(Result::ok) {
             let path = entry.path();
             let fname = path
                 .file_name()

@@ -342,7 +342,7 @@ impl SimpleComponent for AppModel {
                 }
             }
             AppMsg::GetFiles => {
-                self.command = format!("get_files redis");
+                self.command = "get_files redis".to_string();
                 sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::ManageSubscribeResponse(file, qty_subs, content) => {

@@ -104,7 +104,7 @@ impl SimpleComponent for TextEditorModel {
                         let cursor_iter = buffer.iter_at_mark(&insert_mark);
                         let line_number = cursor_iter.line();
                         if let Some(line_start) = buffer.iter_at_line(line_number) {
-                            let mut line_end = line_start.clone();
+                            let mut line_end = line_start;
                             line_end.forward_to_line_end();
                             let full_line_content =
                                 buffer.text(&line_start, &line_end, false).to_string();
