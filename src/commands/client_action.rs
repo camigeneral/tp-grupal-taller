@@ -90,7 +90,6 @@ pub fn handle_welcome(
         }
     }
 
-    println!("Llegue aca {}", notification.clone());
     RedisResponse::new(
         CommandResponse::String(notification.clone()),
         true,
@@ -315,7 +314,6 @@ pub fn get_files(_docs: &Arc<Mutex<HashMap<String, Documento>>>) -> RedisRespons
     let mut doc_names = HashSet::new();
 
     if let Ok(entries) = fs::read_dir(".") {
-        println!("entries {:#?}", entries);
         for entry in entries.flatten() {
             let path = entry.path();
             let fname = path

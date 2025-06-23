@@ -224,13 +224,11 @@ fn listen_to_redis_response(
 
         let first = response[0].to_uppercase();
         let first_response = first.as_str();
-        println!("respuesta: {:#?}", first_response);
 
         match first_response {
             s if s.starts_with("-ERR") => {}
             s if s.starts_with("CLIENT") => {
                 // se va a procesar lo que otro agrego
-                println!("buenas");
                 let response_client: Vec<&str> = response[1].split('|').collect();
                 let client_address = response_client[0];
                 let doc_name = response_client[1];
@@ -250,11 +248,9 @@ fn listen_to_redis_response(
                 }
             }
             s if s.starts_with("UPDATE-FILES") => {
-                println!("response: {:?}", response);
 
                 let parts: Vec<&str> = line_clone.trim_end_matches('\n').split('|').collect();
 
-                println!("parts: {:?}", parts);
                 let doc_name: &str = parts[1];
                 let index = parts[2];
                 let text: &str = parts[3];

@@ -131,17 +131,14 @@ impl SimpleComponent for FileListView {
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
             FileFilterAction::ShowAll => {
-                println!("Filtro: Todos los archivos");
                 self.selected_filter = FileType::Any;
                 self.update_file_list_based_on_filter();
             }
             FileFilterAction::TextFiles => {
-                println!("Filtro: Archivos de texto");
                 self.selected_filter = FileType::Text;
                 self.update_file_list_based_on_filter();
             }
             FileFilterAction::SpreadsheetFiles => {
-                println!("Filtro: Hojas de cálculo");
                 self.selected_filter = FileType::Sheet;
                 self.update_file_list_based_on_filter();
             }

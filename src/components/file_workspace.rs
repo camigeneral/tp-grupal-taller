@@ -257,10 +257,7 @@ impl SimpleComponent for FileWorkspace {
                                 val = lines.join("\n");
                             }
                         }
-                        println!(
-                            "Se actualizo el archivo {} en {} con {}: {:#?} ",
-                            file, index, val, doc
-                        );
+                
 
                         file_editor_sender
                             .send(FileEditorMessage::UpdateFileContent(

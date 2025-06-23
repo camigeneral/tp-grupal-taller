@@ -100,7 +100,6 @@ impl SimpleComponent for NavbarModel {
                     popover.popdown();
                 }
                 if self.file_name.trim().is_empty() {
-                    println!("El nombre del archivo es obligatorio.");
                     return;
                 }
                 let file_id = format!("{}.txt", self.file_name.trim());
@@ -114,7 +113,6 @@ impl SimpleComponent for NavbarModel {
                     popover.popdown();
                 }
                 if self.file_name.trim().is_empty() {
-                    println!("El nombre del archivo es obligatorio.");
                     return;
                 }
                 let file_id = format!("{}.xlsx", self.file_name.trim());

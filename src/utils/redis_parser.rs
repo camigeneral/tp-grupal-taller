@@ -86,7 +86,6 @@ pub fn parse_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<Comma
             "Empty command",
         ));
     }
-    println!("command_parts: {:#?}", command_parts);
     let command = command_parts[0].to_lowercase();
 
     let mut request = CommandRequest {
