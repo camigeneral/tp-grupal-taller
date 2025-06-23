@@ -1,7 +1,7 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::prelude::{
-    BoxExt, OrientableExt, TextBufferExt, TextBufferExtManual, TextViewExt, WidgetExt,
+    BoxExt, OrientableExt, TextBufferExt, TextViewExt, WidgetExt, EventControllerExt, Cast
 };
 use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
 use std::cell::RefCell;
@@ -63,7 +63,7 @@ impl SimpleComponent for TextEditorModel {
                     set_visible: true,
 
                     set_wrap_mode: gtk::WrapMode::Word,
-                    set_overwrite: true,
+                    set_overwrite: false,
                 },
             }
         }
@@ -91,36 +91,42 @@ impl SimpleComponent for TextEditorModel {
         let sender = sender.clone();
 
         let sender_insert = sender.clone();
-        let programmatic_update_insert = programmatic_update.clone();
-        model.buffer.connect_insert_text(move |buffer, iter, text| {
-            if *programmatic_update_insert.borrow() {
-                return;
-            }
+        let widgets = view_output!();
 
-            if text == "\n" {
-                let line_number = iter.line();
-
-                if let Some(line_start) = buffer.iter_at_line(line_number) {
-                    let mut line_end = line_start;
-                    line_end.forward_to_line_end();
-
-                    let full_line_content = buffer.text(&line_start, &line_end, false);
-
-                    let cursor_position_in_line = iter.line_offset();
-
-                    let before_cursor = &full_line_content[..cursor_position_in_line as usize];
-                    let after_cursor = &full_line_content[cursor_position_in_line as usize..];
-                    let final_string = if after_cursor.is_empty() {
-                        before_cursor.to_string()
-                    } else {
-                        format!("{}\n{}", before_cursor, after_cursor)
-                    };
-
-                    sender_insert.input(TextEditorMessage::ContentAdded(final_string, line_number));
+        let key_controller = gtk4::EventControllerKey::new();
+        
+        key_controller.connect_key_pressed(move |_controller, key, _keycode, _state| {            
+            if key == gtk4::gdk::Key::Return || key == gtk4::gdk::Key::KP_Enter {
+                if let Some(widget) = _controller.widget() {
+                    if let Ok(text_view) = widget.downcast::<gtk4::TextView>() {
+                        let buffer = text_view.buffer();
+                        let insert_mark = buffer.get_insert();
+                        let cursor_iter = buffer.iter_at_mark(&insert_mark);
+                        let line_number = cursor_iter.line();
+                        if let Some( line_start) = buffer.iter_at_line(line_number) {
+                            let mut line_end = line_start.clone();
+                            line_end.forward_to_line_end();
+                            let full_line_content = buffer.text(&line_start, &line_end, false).to_string();
+                            let cursor_position_in_line = cursor_iter.line_offset();
+                            let before_cursor = &full_line_content[..cursor_position_in_line as usize];
+                            let after_cursor = &full_line_content[cursor_position_in_line as usize..];
+                            let final_string = if after_cursor.is_empty() {
+                                before_cursor.to_string()
+                            } else {
+                                format!("{}\n{}", before_cursor, after_cursor)
+                            };
+                            sender_insert.input(TextEditorMessage::ContentAdded(final_string, line_number));
+                        }
+                    }
                 }
+                gtk4::glib::Propagation::Proceed 
+            } else {
+                gtk4::glib::Propagation::Proceed
             }
         });
-        let widgets = view_output!();
+
+        widgets.textview.add_controller(key_controller);
+        
         ComponentParts { model, widgets }
     }
 
@@ -141,23 +147,7 @@ impl SimpleComponent for TextEditorModel {
                 self.file_name = file_name;
                 self.num_contributors = contributors;
                 self.content = content;
-
-                let insert_mark = self.buffer.get_insert();
-                let iter = self.buffer.iter_at_mark(&insert_mark);
-                let cursor_offset = iter.offset();
-
-                self.buffer.set_text(&self.content);
-
-                let new_content_length = self.buffer.char_count();
-
-                if new_content_length > 0 {
-                    let safe_offset = cursor_offset.min(new_content_length - 1);
-                    let new_iter = self.buffer.iter_at_offset(safe_offset);
-                    self.buffer.place_cursor(&new_iter);
-                } else {
-                    let start_iter = self.buffer.start_iter();
-                    self.buffer.place_cursor(&start_iter);
-                }
+                self.buffer.set_text(&format!("{}\n", self.content));
 
                 self.content_changed_manually = true;
                 *self.programmatic_update.borrow_mut() = false;
