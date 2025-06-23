@@ -1,4 +1,4 @@
-pub const ENCRYPTION_KEY: &[u8] = b"clavesupersecreta";
+/* pub const ENCRYPTION_KEY: &[u8] = b"clavesupersecreta";
 
 /// Encripta un mensaje utilizando XOR con una clave dada,
 /// evitando los caracteres `\n` y `0xFF`.
@@ -112,3 +112,4 @@ mod tests {
         assert_eq!(original.as_bytes(), &decrypted[..]);
     }
 }
+ */
