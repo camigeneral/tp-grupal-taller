@@ -132,12 +132,12 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     {
         let node_streams_clone = Arc::clone(&node_streams);
-        let main_address_clone = main_address.clone();
-        let last_command_sent_clone = Arc::clone(&last_command_sent);
+        let _main_address_clone = main_address.clone();
+        let _last_command_sent_clone = Arc::clone(&last_command_sent);
 
         thread::spawn(move || loop {
             match node_streams_clone.lock() {
-                Ok(streams) => {
+                Ok(_streams) => {
                     /* if let Some(mut stream) = streams.get(&main_address_clone) {
                         let command_parts = vec!["SET", "docprueba.txt", ""];
                         let resp_command = format_resp_command(&command_parts);
