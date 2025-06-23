@@ -29,25 +29,36 @@ pub fn handle_subscribe(
                 false,
                 "".to_string(),
                 "".to_string(),
-            )
+            );
         }
     };
 
-    let mut map = document_subscribers.lock().unwrap();
+    let mut map = match document_subscribers.lock() {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("Error al bloquear document_subscribers: {}", e);
+            return RedisResponse::new(
+                CommandResponse::Error("Error interno".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            );
+        }
+    };
+
     if let Some(list) = map.get_mut(doc) {
         list.push(client_addr.clone());
 
-        // Actualiza el set de suscriptores si es necesario
         let request = CommandRequest {
             command: "sadd".to_string(),
             key: Some(doc.clone()),
             arguments: vec![ValueType::String(client_addr.clone())],
             unparsed_command: "".to_string(),
         };
+
         let _ = handle_sadd(&request, shared_sets);
 
         let notification = format!("CLIENT {}|{}", client_addr, doc);
-
         RedisResponse::new(
             CommandResponse::String(notification),
             false,
@@ -63,6 +74,7 @@ pub fn handle_subscribe(
         )
     }
 }
+
 
 /// Maneja el comando UNSUBSCRIBE que permite a un cliente cancelar su suscripción a un documento
 ///
@@ -87,11 +99,23 @@ pub fn handle_unsubscribe(
                 false,
                 "".to_string(),
                 "".to_string(),
-            )
+            );
         }
     };
 
-    let mut map = document_subscribers.lock().unwrap();
+    let mut map = match document_subscribers.lock() {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("Error al bloquear document_subscribers: {}", e);
+            return RedisResponse::new(
+                CommandResponse::Error("Error interno".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            );
+        }
+    };
+
     if let Some(list) = map.get_mut(doc) {
         list.retain(|x| x != &client_addr);
 
@@ -101,7 +125,6 @@ pub fn handle_unsubscribe(
             arguments: vec![ValueType::String(client_addr.clone())],
             unparsed_command: "".to_string(),
         };
-        // to do: unparsed command?
 
         let _ = handle_srem(&request, shared_sets);
 
@@ -120,6 +143,7 @@ pub fn handle_unsubscribe(
         )
     }
 }
+
 
 // #[cfg(test)]
 // mod tests {

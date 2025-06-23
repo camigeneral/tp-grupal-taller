@@ -11,7 +11,7 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 pub fn handle_get(
-    request: & CommandRequest,
+    request: &CommandRequest,
     docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
     let key = match &request.key {
@@ -22,21 +22,45 @@ pub fn handle_get(
                 false,
                 "".to_string(),
                 "".to_string(),
-            )
+            );
         }
     };
 
-    let docs = docs.lock().unwrap();
-    match docs.get(key) {
-        Some(value) => RedisResponse::new(
-            CommandResponse::String(value.join("\n").unwrap_or_default()),
-            false,
-            "".to_string(),
-            "".to_string(),
-        ),
+    let docs_lock = match docs.lock() {
+        Ok(d) => d,
+        Err(_) => {
+            return RedisResponse::new(
+                CommandResponse::Error("Internal server error".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            );
+        }
+    };
+
+    match docs_lock.get(key) {
+        Some(Documento::Texto(lines)) => {
+            let content = lines.join("\n");
+            RedisResponse::new(
+                CommandResponse::String(content),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
+        Some(Documento::Calculo(_)) => {
+            // Maneja el caso de cálculo si es necesario
+            RedisResponse::new(
+                CommandResponse::Error("No se puede hacer GET de un documento de cálculo".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
         None => RedisResponse::new(CommandResponse::Null, false, "".to_string(), "".to_string()),
     }
 }
+
 
 /// Maneja el comando SET para sobrescribir el contenido de un documento.
 ///
@@ -67,7 +91,7 @@ pub fn handle_set(
                 false,
                 "".to_string(),
                 "".to_string(),
-            )
+            );
         }
     };
 
@@ -82,49 +106,55 @@ pub fn handle_set(
 
     let content = redis::extract_string_arguments(&request.arguments);
 
-    {
-        let mut docs_lock = docs.lock().unwrap();
+    // Bloqueo y escritura de documento
+    let docs_result = docs.lock();
+    if let Ok(mut docs_lock) = docs_result {
         if doc_name.ends_with(".xlsx") {
-            // Si es hoja de cálculo, crea Documento::Calculo vacío
             docs_lock.insert(doc_name.clone(), Documento::Calculo(vec![]));
+        } else if content.trim().is_empty() {
+            docs_lock.insert(doc_name.clone(), Documento::Texto(vec![]));
         } else {
-            // Si es texto, crea Documento::Texto vacío o con contenido
-            if content.trim().is_empty() {
-                docs_lock.insert(doc_name.clone(), Documento::Texto(vec![]));
-            } else {
-                docs_lock.insert(doc_name.clone(), Documento::Texto(vec![content.clone()]));
-            }
+            docs_lock.insert(doc_name.clone(), Documento::Texto(vec![content.clone()]));
         }
+    } else {
+        return RedisResponse::new(
+            CommandResponse::Error("Internal server error: could not access docs".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        );
     }
 
-    {
-        let mut document_subscribers_lock = document_subscribers.lock().unwrap();
-        let active_clients_lock = active_clients.lock().unwrap();
+    // Intentar bloquear ambos mapas
+    let subs_result = document_subscribers.lock();
+    let clients_result = active_clients.lock();
 
-        let subscribers = document_subscribers_lock
-            .entry(doc_name.clone())
-            .or_default();
+    if let (Ok(mut subs_lock), Ok(clients_lock)) = (subs_result, clients_result) {
+        let subscribers = subs_lock.entry(doc_name.clone()).or_default();
 
-        for (addr, client) in active_clients_lock.iter() {
+        for (addr, client) in clients_lock.iter() {
             if client.client_type == ClientType::Microservicio && !subscribers.contains(addr) {
                 subscribers.push(addr.clone());
-                println!(
-                    "Microservicio {} suscripto automáticamente a {}",
-                    addr, doc_name
-                );
+                println!("Microservicio {} suscripto automáticamente a {}", addr, doc_name);
                 break;
             }
         }
+    } else {
+        return RedisResponse::new(
+            CommandResponse::Error("Internal error accessing client or subscription data".to_string()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        );
     }
 
     let notification = format!("Document {} was replaced with: {}", doc_name, content);
-    println!(
-        "Publishing to subscribers of {}: {}",
-        doc_name, notification
-    );
+    println!("Publishing to subscribers of {}: {}", doc_name, notification);
 
     RedisResponse::new(CommandResponse::Ok, true, notification, doc_name)
 }
+
+
 
 /// Maneja el comando APPEND para agregar contenido a un documento línea por línea.
 ///
@@ -152,7 +182,7 @@ pub fn handle_append(
                 false,
                 "".to_string(),
                 "".to_string(),
-            )
+            );
         }
     };
 
@@ -168,15 +198,23 @@ pub fn handle_append(
     let content = redis::extract_string_arguments(&request.arguments);
     let line_number;
 
-    {
-        let mut docs_lock = docs.lock().unwrap();
-        let entry = docs_lock.entry(doc.clone()).or_default();
-        entry.push(content.clone());
-        line_number = entry.len();
+    match docs.lock() {
+        Ok(mut docs_lock) => {
+            let entry = docs_lock.entry(doc.clone()).or_default();
+            entry.push(content.clone());
+            line_number = entry.len();
+        }
+        Err(_) => {
+            return RedisResponse::new(
+                CommandResponse::Error("Error interno al modificar documento".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            );
+        }
     }
 
-    // let notification = format!("New content in {}: {} L{}", doc, content, line_number);
-    let notification = format!("WRITTEN {}|{}|{} ",doc, line_number, content);
+    let notification = format!("WRITTEN {}|{}|{}", doc, line_number, content);
     println!("Publishing to subscribers of {}: {}", doc, notification);
 
     RedisResponse::new(
@@ -186,6 +224,7 @@ pub fn handle_append(
         doc,
     )
 }
+
 
 pub fn handle_welcome(
     request: &CommandRequest,

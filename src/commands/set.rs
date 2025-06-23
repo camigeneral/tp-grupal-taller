@@ -87,7 +87,19 @@ pub fn handle_smembers(
         }
     };
 
-    let sets = shared_sets.lock().unwrap();
+    let sets = match shared_sets.lock() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error al bloquear shared_sets: {}", e);
+            return RedisResponse::new(
+                CommandResponse::Error("Error interno al acceder a conjuntos".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            );
+        }
+    };
+
     match sets.get(key) {
         Some(set) => {
             let members = set.iter().cloned().collect::<Vec<String>>().join(", ");
@@ -106,6 +118,7 @@ pub fn handle_smembers(
         ),
     }
 }
+
 
 /// Maneja el comando SREM que elimina uno o más elementos de un conjunto.
 ///
@@ -131,7 +144,19 @@ pub fn handle_srem(
         }
     };
 
-    let mut sets = shared_sets.lock().unwrap();
+    let mut sets = match shared_sets.lock() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error al bloquear shared_sets: {}", e);
+            return RedisResponse::new(
+                CommandResponse::Error("Error interno al acceder a conjuntos".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            );
+        }
+    };
+
     match sets.get_mut(key) {
         Some(set) => {
             let mut removed = 0;
@@ -159,6 +184,7 @@ pub fn handle_srem(
     }
 }
 
+
 /// Maneja el comando SADD que agrega uno o más elementos a un conjunto.
 ///
 /// # Argumentos
@@ -183,8 +209,20 @@ pub fn handle_sadd(
         }
     };
 
-    let mut sets = shared_sets.lock().unwrap();
-    let set = sets.entry(key.clone()).or_default();
+    let mut sets = match shared_sets.lock() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error al bloquear shared_sets: {}", e);
+            return RedisResponse::new(
+                CommandResponse::Error("Error interno al acceder a conjuntos".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            );
+        }
+    };
+
+    let set = sets.entry(key.clone()).or_insert_with(HashSet::new);
 
     let mut added = 0;
     for arg in &request.arguments {
@@ -202,6 +240,7 @@ pub fn handle_sadd(
         "".to_string(),
     )
 }
+
 
 fn extract_string(value: &ValueType) -> Option<String> {
     match value {

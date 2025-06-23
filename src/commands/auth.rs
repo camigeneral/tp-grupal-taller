@@ -19,23 +19,21 @@ pub fn handle_auth(
                 false,
                 "".to_string(),
                 "".to_string(),
-            )
+            );
         }
     };
 
-    if request.arguments.len() >= 2 || request.arguments.is_empty() {
-        println!("Cantidad de credenciales_: {:#?}", request.arguments.len());
+    if request.arguments.len() != 2 {
+        println!("Cantidad de credenciales: {:#?}", request.arguments.len());
         return RedisResponse::new(
-            CommandResponse::Error(
-                "Cantidad de credenciales invalidas: AUTH <username> <password>".to_string(),
-            ),
+            CommandResponse::Error("Cantidad de credenciales invalidas: AUTH <username> <password>".to_string()),
             false,
             "".to_string(),
             "".to_string(),
         );
     }
 
-    let password = match request.arguments[0].clone() {
+    let password = match &request.arguments[1] {
         ValueType::String(p) => p.clone(),
         _ => {
             return RedisResponse::new(
@@ -43,7 +41,7 @@ pub fn handle_auth(
                 false,
                 "".to_string(),
                 "".to_string(),
-            )
+            );
         }
     };
 
@@ -55,25 +53,47 @@ pub fn handle_auth(
             "".to_string(),
         );
     }
-    let mut lock_clients = active_clients.lock().unwrap();
-    match lock_clients.get_mut(&client_addr) {
-        Some(client) => client.username = username.clone(),
-        _ => {
+
+    let mut lock_clients = match active_clients.lock() {
+        Ok(guard) => guard,
+        Err(_) => {
             return RedisResponse::new(
-                CommandResponse::Error(
-                    "Hubo probelmas al actualizar la informacion del cliente".to_string(),
-                ),
+                CommandResponse::Error("Error al acceder a active_clients".to_string()),
                 false,
                 "".to_string(),
                 "".to_string(),
-            )
+            );
+        }
+    };
+
+    match lock_clients.get_mut(&client_addr) {
+        Some(client) => client.username = username.clone(),
+        None => {
+            return RedisResponse::new(
+                CommandResponse::Error("Hubo problemas al actualizar la informacion del cliente".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            );
         }
     }
 
-    let mut logged_clients_lock = logged_clients.lock().unwrap();
+    let mut logged_clients_lock = match logged_clients.lock() {
+        Ok(guard) => guard,
+        Err(_) => {
+            return RedisResponse::new(
+                CommandResponse::Error("Error al acceder a logged_clients".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            );
+        }
+    };
     logged_clients_lock.insert(client_addr.clone(), true);
+
     RedisResponse::new(CommandResponse::Ok, false, "".to_string(), "".to_string())
 }
+
 
 fn valid_credentials(username: String, password: String) -> bool {
     let defualt_pass = get_hash_slots("123".to_string());

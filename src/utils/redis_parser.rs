@@ -172,7 +172,9 @@ pub fn parse_resp_command(
     let mut line = String::new();
     let mut unparsed_command = String::new();
 
-    reader.read_line(&mut line)?;
+    if let Err(e) = reader.read_line(&mut line) {
+        return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Read error: {}", e)));
+    }
     unparsed_command.push_str(&line);
 
     if !line.starts_with('*') {
@@ -182,12 +184,23 @@ pub fn parse_resp_command(
         ));
     }
 
-    let num_elements: usize = line[1..].trim().parse().unwrap_or(0);
+    let num_elements: usize = match line[1..].trim().parse() {
+        Ok(n) => n,
+        Err(_) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Invalid number of elements",
+            ));
+        }
+    };
+
     let mut result = Vec::with_capacity(num_elements);
 
     for _ in 0..num_elements {
         line.clear();
-        reader.read_line(&mut line)?;
+        if let Err(e) = reader.read_line(&mut line) {
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Read error: {}", e)));
+        }
         unparsed_command.push_str(&line);
 
         if !line.starts_with('$') {
@@ -203,16 +216,28 @@ pub fn parse_resp_command(
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     "Invalid length",
-                ))
+                ));
             }
         };
 
         let mut buffer = vec![0u8; length];
-        reader.read_exact(&mut buffer)?;
-        unparsed_command.push_str(&String::from_utf8_lossy(&buffer));
+        if let Err(e) = reader.read_exact(&mut buffer) {
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Read buffer failed: {}", e)));
+        }
+        match String::from_utf8(buffer.clone()) {
+            Ok(s) => unparsed_command.push_str(&s),
+            Err(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Invalid UTF-8 in buffer",
+                ));
+            }
+        }
 
         let mut crlf = [0u8; 2];
-        reader.read_exact(&mut crlf)?;
+        if let Err(e) = reader.read_exact(&mut crlf) {
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Read CRLF failed: {}", e)));
+        }
         unparsed_command.push_str("\r\n");
 
         result.push(String::from_utf8_lossy(&buffer).to_string());
@@ -220,6 +245,7 @@ pub fn parse_resp_command(
 
     Ok((result, unparsed_command))
 }
+
 
 /// Escribe una cadena como bulk string en formato RESP (`$<len>\r\n<value>\r\n`).
 ///
@@ -287,13 +313,16 @@ pub fn parse_replica_command(
     Ok(request)
 }
 
+
 pub fn parse_replica_resp(
     reader: &mut BufReader<std::io::Cursor<String>>,
 ) -> std::io::Result<(Vec<String>, String)> {
     let mut line = String::new();
     let mut unparsed_command = String::new();
 
-    reader.read_line(&mut line)?;
+    if let Err(e) = reader.read_line(&mut line) {
+        return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Read line error: {}", e)));
+    }
     unparsed_command.push_str(&line);
 
     if !line.starts_with('*') {
@@ -303,12 +332,23 @@ pub fn parse_replica_resp(
         ));
     }
 
-    let num_elements: usize = line[1..].trim().parse().unwrap_or(0);
+    let num_elements: usize = match line[1..].trim().parse() {
+        Ok(n) => n,
+        Err(_) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Invalid number of elements",
+            ));
+        }
+    };
+
     let mut result = Vec::with_capacity(num_elements);
 
     for _ in 0..num_elements {
         line.clear();
-        reader.read_line(&mut line)?;
+        if let Err(e) = reader.read_line(&mut line) {
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Read line error: {}", e)));
+        }
         unparsed_command.push_str(&line);
 
         if !line.starts_with('$') {
@@ -323,17 +363,30 @@ pub fn parse_replica_resp(
             Err(_) => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
-                    "Invalid length",
-                ))
+                    "Invalid bulk string length",
+                ));
             }
         };
 
         let mut buffer = vec![0u8; length];
-        reader.read_exact(&mut buffer)?;
-        unparsed_command.push_str(&String::from_utf8_lossy(&buffer));
+        if let Err(e) = reader.read_exact(&mut buffer) {
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Read buffer error: {}", e)));
+        }
+
+        match String::from_utf8(buffer.clone()) {
+            Ok(s) => unparsed_command.push_str(&s),
+            Err(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Invalid UTF-8 content",
+                ));
+            }
+        }
 
         let mut crlf = [0u8; 2];
-        reader.read_exact(&mut crlf)?;
+        if let Err(e) = reader.read_exact(&mut crlf) {
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Read CRLF error: {}", e)));
+        }
         unparsed_command.push_str("\r\n");
 
         result.push(String::from_utf8_lossy(&buffer).to_string());
@@ -341,6 +394,7 @@ pub fn parse_replica_resp(
 
     Ok((result, unparsed_command))
 }
+
 
 #[cfg(test)]
 mod tests {
