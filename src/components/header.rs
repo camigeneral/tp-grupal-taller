@@ -1,6 +1,6 @@
 extern crate gtk4;
 extern crate relm4;
-use self::gtk4::prelude::{BoxExt, ButtonExt, EditableExt, OrientableExt, PopoverExt, WidgetExt};
+use self::gtk4::prelude::{ButtonExt, PopoverExt, WidgetExt};
 use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
 
 /// Modelo que representa la barra de navegación (navbar). Gestiona el estado de la conexión y
@@ -63,42 +63,6 @@ impl SimpleComponent for NavbarModel {
             },
             #[wrap(Some)]
             set_title_widget = &gtk::Box {
-                // este boton se movió - borrar
-                // #[name="new_file_button"]
-                // gtk::Button {
-                //     add_css_class: "new-file",
-                //     add_css_class: "button",
-                //     set_label: "Nuevo Archivo",
-                //     connect_clicked => NavbarMsg::ToggleNewFilePopover,
-                // },
-                // #[name="new_file_popover"]
-                // gtk::Popover {
-                //     set_has_arrow: true,
-                //     set_autohide: true,
-                //     set_position: gtk::PositionType::Bottom,
-                //     #[name="popover_content"]
-                //     gtk::Box {
-                //         set_orientation: gtk::Orientation::Vertical,
-                //         set_spacing: 5,
-                //         gtk::Label {
-                //             set_label: "Nombre del archivo:",
-                //         },
-                //         #[name = "file_name"]
-                //         gtk::Entry {
-                //             connect_changed[sender] => move |entry| {
-                //                 sender.input(NavbarMsg::SetFileName(entry.text().to_string()));
-                //             }
-                //         },
-                //         gtk::Button {
-                //             set_label: "Hoja de texto",
-                //             connect_clicked => NavbarMsg::CreateTextDocument,
-                //         },
-                //         gtk::Button {
-                //             set_label: "Hoja de cálculo",
-                //             connect_clicked => NavbarMsg::CreateSpreadsheetDocument	,
-                //         }
-                //     },
-                // },
                 #[watch]
                 set_visible: model.is_connected,
             },
