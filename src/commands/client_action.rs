@@ -39,10 +39,10 @@ pub fn handle_welcome(
     let response = handle_scard(&request, shared_sets);
 
     let mut notification = " ".to_string();
-
+    println!("hola hola");
     if let CommandResponse::String(ref s) = response.response {
         if let Some(qty_subs) = s.split_whitespace().last() {
-            notification = format!("status {}|{:?}", client_addr_str, qty_subs);
+            notification = format!("STATUS {}|{:?}", client_addr_str, qty_subs);
         };
     }
     RedisResponse::new(
@@ -57,7 +57,6 @@ pub fn set_content_file(
     request: &CommandRequest,
     docs: &Arc<Mutex<HashMap<String, Documento>>>,
 ) -> RedisResponse {
-    println!("arguments {:#?}", request);
 
     let doc = match get_document_name(request) {
         Ok(doc) => doc,

@@ -59,6 +59,7 @@ pub fn execute_replica_command(
     docs: &Arc<Mutex<HashMap<String, Documento>>>,
     _document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
     shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    
 ) -> RedisResponse {
     match request.command.as_str() {
         "get" => string::handle_get(&request, docs),
