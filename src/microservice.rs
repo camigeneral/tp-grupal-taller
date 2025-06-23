@@ -138,7 +138,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         thread::spawn(move || loop {
             match node_streams_clone.lock() {
                 Ok(streams) => {
-                    if let Some(mut stream) = streams.get(&main_address_clone) {
+                    /* if let Some(mut stream) = streams.get(&main_address_clone) {
                         let command_parts = vec!["SET", "docprueba.txt", ""];
                         let resp_command = format_resp_command(&command_parts);
 
@@ -156,7 +156,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                         } else {
                             println!("Comando automático enviado: SET docprueba hola");
                         }
-                    }
+                    } */
                 }
                 Err(e) => {
                     eprintln!("Error obteniendo lock de node_streams: {}", e);
@@ -219,7 +219,7 @@ fn listen_to_redis_response(
             log_path,
             &format!("Respuesta de redis en el microservicio: {}", line),
         );
-
+        let line_clone = line.clone();
         let response: Vec<&str> = line.split_whitespace().collect();
 
         let first = response[0].to_uppercase();
@@ -252,12 +252,12 @@ fn listen_to_redis_response(
             s if s.starts_with("UPDATE-FILES") => {
                 println!("response: {:?}", response);
 
-                let parts: Vec<&str> =   line.trim_end_matches('\n').split('|').collect();
+                let parts: Vec<&str> =   line_clone.trim_end_matches('\n').split('|').collect();
             
                 println!("parts: {:?}", parts);
-                let doc_name = parts[1];
+                let doc_name: &str = parts[1];
                 let index = parts[2];
-                let text: &str = parts[3];
+                let text: &str = parts[3];            
                 let notification = format!("UPDATE-CLIENT|{}|{}|{}", doc_name, index, text); 
                 let command_parts = vec!["PUBLISH", doc_name, &notification];
                 let resp_command = format_resp_command(&command_parts);
@@ -276,7 +276,7 @@ fn listen_to_redis_response(
                     line.trim_end_matches('\n').split('|').collect()
                 } else {
                     response[0].trim_end_matches('\n').split('|').collect()
-                };
+                };                  
 
                 if parts.len() == 4 {
                     let line_number: &str = parts[1];
