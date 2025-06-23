@@ -57,12 +57,13 @@ pub fn execute_command(
 pub fn execute_replica_command(
     request: CommandRequest,
     docs: &Arc<Mutex<HashMap<String, Documento>>>,
-    _document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
     shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
 ) -> RedisResponse {
+    let shared_map: Arc<Mutex<HashMap<String, client_info::Client>>> = Arc::new(Mutex::new(HashMap::new()));
     match request.command.as_str() {
         "get" => string::handle_get(&request, docs),
-        // "set" => string::handle_set(&request, docs, document_subscribers), // to do: arreglar
+        "set" => string::handle_set(&request, docs, document_subscribers, &shared_map),
         "append" => string::handle_append(&request, docs),
         "sadd" => set::handle_sadd(&request, shared_sets),
         "srem" => set::handle_srem(&request, shared_sets),

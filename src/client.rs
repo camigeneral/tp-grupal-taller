@@ -66,10 +66,7 @@ pub fn client_run(
             Ok(locked) => locked,
             Err(e) => {
                 eprintln!("Error al bloquear el mutex de node_streams: {}", e);
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Mutex lock failed",
-                ));
+                return Err(std::io::Error::other("Mutex lock failed"));
             }
         };
         locked_node_streams.insert(cloned_address, redis_socket_clone_for_hashmap);
@@ -131,10 +128,7 @@ pub fn client_run(
                     Ok(locked) => locked,
                     Err(e) => {
                         eprintln!("Error al bloquear el mutex de last_command_sent: {}", e);
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            "Mutex lock failed",
-                        ));
+                        return Err(std::io::Error::other("Mutex lock failed"));
                     }
                 };
                 *last_command = resp_command.clone();
@@ -163,10 +157,7 @@ fn listen_to_redis_response(
         Ok(clone) => clone,
         Err(e) => {
             eprintln!("Error al clonar el socket del cliente: {}", e);
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Socket clone failed",
-            ));
+            return Err(std::io::Error::other("Socket clone failed"));
         }
     };
 
@@ -307,10 +298,7 @@ fn send_command_to_nodes(
         Ok(locked) => locked,
         Err(e) => {
             eprintln!("Error al bloquear el mutex de node_streams: {}", e);
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Mutex lock failed: {}", e),
-            )));
+            return Err(Box::new(std::io::Error::other(format!("Mutex lock failed: {}", e))));
         }
     };
 

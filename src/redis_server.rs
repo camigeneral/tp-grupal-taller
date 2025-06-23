@@ -522,7 +522,7 @@ pub fn resolve_key_location(
 ) -> Result<(), CommandResponse> {
     let hashed_key = get_hash_slots(key);
 
-    let (lower_hash_bound, upper_hash_bound, locked_peer_nodes) = {
+    let (lower_hash_bound, upper_hash_bound, locked_peer_nodes, node_role) = {
         let locked_node = match local_node.lock() {
             Ok(lock) => lock,
             Err(poisoned) => poisoned.into_inner(),
@@ -531,17 +531,23 @@ pub fn resolve_key_location(
             Ok(lock) => lock,
             Err(poisoned) => poisoned.into_inner(),
         };
+        let node_role = match locked_node.role {
+            NodeRole::Master => NodeRole::Master,
+            NodeRole::Replica => NodeRole::Replica,
+            NodeRole::Unknown => NodeRole::Unknown,
+        };
 
         (
             locked_node.hash_range.0,
             locked_node.hash_range.1,
             locked_peers,
+            node_role,
         )
     };
 
     println!("Hash: {}", hashed_key);
 
-    if hashed_key < lower_hash_bound || hashed_key >= upper_hash_bound {
+    if node_role != NodeRole::Master || hashed_key < lower_hash_bound || hashed_key >= upper_hash_bound {
         if let Some(peer_node) = locked_peer_nodes.values().find(|p| {
             p.role == NodeRole::Master
                 && p.state == NodeState::Active
