@@ -28,11 +28,8 @@ pub struct TextEditorModel {
 #[derive(Debug)]
 pub enum TextEditorMessage {
     ContentAdded(String, i32),
-    ContentRemoved(i32, i32),
     UpdateFile(String, i32, String),
     ResetEditor,
-    EnterPressed(i32),  
-    TabPressed(i32),    
 }
 
 /// Enum que define los posibles mensajes de salida del editor de archivos.
@@ -41,7 +38,6 @@ pub enum TextEditorOutputMessage {
     /// Mensaje que indica que se debe volver a la vista anterior.
     GoBack,
     ContentAdded(String, i32),
-    ContentRemoved(i32, i32),
 }
 
 #[relm4::component(pub)]
@@ -96,82 +92,52 @@ impl SimpleComponent for TextEditorModel {
         let sender = sender.clone();
 
         let sender_insert = sender.clone();
-        let programmatic_update_insert = programmatic_update.clone();
-
+        let programmatic_update_insert = programmatic_update.clone();        
         model
             .buffer
-            .connect_insert_text(move |_buffer, iter, text| {
+            .connect_insert_text(move |buffer, iter, text| {
                 if *programmatic_update_insert.borrow() {
                     return;
                 }
-
-                let offset = iter.offset();
-                
+        
                 if text == "\n" {
-                    sender_insert.input(TextEditorMessage::EnterPressed(offset));
-                } else if text == "\t" {
-                    sender_insert.input(TextEditorMessage::TabPressed(offset));
-                } else {
-                    sender_insert.input(TextEditorMessage::ContentAdded(
-                        text.to_string(),
-                        offset,
-                    ));
-                }
-            });
-
-        let sender_delete = sender.clone();
-        let programmatic_update_delete = programmatic_update.clone();
-
-        model
-            .buffer
-            .connect_delete_range(move |_buffer, start, end| {
-                if *programmatic_update_delete.borrow() {
-                    return; 
-                }
+                    let line_number = iter.line();
+                    
+                    if let Some(line_start) = buffer.iter_at_line(line_number) {
+                        let mut line_end = line_start;
+                        line_end.forward_to_line_end();
+                                            
+                        let full_line_content = buffer.text(&line_start, &line_end, false);
                 
-                sender_delete.input(TextEditorMessage::ContentRemoved(
-                    start.offset(),
-                    end.offset(),
-                ));
+                        let cursor_position_in_line = iter.line_offset();
+                        
+                        let before_cursor = &full_line_content[..cursor_position_in_line as usize];
+                        let after_cursor = &full_line_content[cursor_position_in_line as usize..];
+                        let final_string = if after_cursor.is_empty() {
+                            before_cursor.to_string()
+                        } else {
+                            format!("{}\n{}", before_cursor, after_cursor)
+                        };
+                                                               
+                         sender_insert.input(TextEditorMessage::ContentAdded(final_string, line_number));
+                        
+                    } 
+                }
             });
-
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }
 
     fn update(&mut self, message: TextEditorMessage, sender: ComponentSender<Self>) {    
         match message {
-            TextEditorMessage::EnterPressed(offset) => {
-                if !self.content_changed_manually {
-                    return;
-                }
-
-                let _ = sender.output(TextEditorOutputMessage::ContentAdded(
-                    "<enter>".to_string(), offset));                
-
-            }
-            TextEditorMessage::TabPressed(offset) => {
-                if !self.content_changed_manually {
-                    return;
-                }
-
-                let _ = sender.output(TextEditorOutputMessage::ContentAdded(
-                    "<tab>".to_string(), offset));  
-            }
-            TextEditorMessage::ContentAdded(mut new_text, offset) => {
+            TextEditorMessage::ContentAdded(new_text, line) => {
                 if !self.content_changed_manually  {
                     return;
                 }                
-                if new_text == " " {
-                    new_text = "<space>".to_string();
-                }
-                let _ = sender.output(TextEditorOutputMessage::ContentAdded(new_text, offset));                
+
+                let _ = sender.output(TextEditorOutputMessage::ContentAdded(new_text, line));                
             }
-            TextEditorMessage::ContentRemoved(start_offset, end_offset) => {
-                if !self.content_changed_manually  {
-                    return;
-                }
-            }
+
             TextEditorMessage::UpdateFile(file_name, contributors, content) => {
                 *self.programmatic_update.borrow_mut() = true;
                 self.content_changed_manually = false;

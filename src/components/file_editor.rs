@@ -7,6 +7,8 @@ use self::relm4::{
     gtk, Component, ComponentController, ComponentParts, ComponentSender, Controller,
     RelmWidgetExt, SimpleComponent,
 };
+use components::spreadsheet::SpreadsheetOutput;
+
 
 use components::spreadsheet::SpreadsheetModel;
 use components::spreadsheet::SpreadsheetMsg;
@@ -42,7 +44,7 @@ pub struct FileEditorModel {
 #[derive(Debug)]
 pub enum FileEditorMessage {
     ContentAdded(String, i32),
-    ContentRemoved(i32, i32),
+    ContentAddedSpreadSheet(String,String,String ),
     UpdateFile(String, i32, String, FileType),
     ResetEditor,
 }
@@ -51,8 +53,7 @@ pub enum FileEditorMessage {
 #[derive(Debug)]
 pub enum FileEditorOutputMessage {
     ContentAdded(String, i32),
-    ContentRemoved(i32, i32),
-
+    ContentAddedSpreadSheet(String, String, String),
     /// Mensaje que indica que se debe volver a la vista anterior.
     GoBack,
 }
@@ -112,15 +113,17 @@ impl SimpleComponent for FileEditorModel {
     ) -> ComponentParts<Self> {
         let spreadsheet_cont = SpreadsheetModel::builder().launch(()).forward(
             sender.input_sender(),
-            |_msg| FileEditorMessage::ResetEditor,
+            |msg| match msg {
+                SpreadsheetOutput::GoBack => FileEditorMessage::ResetEditor,
+                SpreadsheetOutput::ContentChanged(row, col, text) => FileEditorMessage::ContentAddedSpreadSheet(row, col, text),
+            },
         );
 
         let text_editor_cont = TextEditorModel::builder()
             .launch((file_name.clone(), num_contributors, content.clone()))
             .forward(sender.input_sender(),|msg| match msg {
                 TextEditorOutputMessage::GoBack => FileEditorMessage::ResetEditor,
-                TextEditorOutputMessage::ContentAdded(text, offset) => FileEditorMessage::ContentAdded(text, offset),
-                TextEditorOutputMessage::ContentRemoved(start_offset, stop_offset ) => FileEditorMessage::ResetEditor,
+                TextEditorOutputMessage::ContentAdded(text, line_number) => FileEditorMessage::ContentAdded(text, line_number),
             }, );
 
         let model = FileEditorModel {
@@ -141,10 +144,14 @@ impl SimpleComponent for FileEditorModel {
 
     fn update(&mut self, message: FileEditorMessage, sender: ComponentSender<Self>) {
         match message {
-            FileEditorMessage::ContentAdded(new_text, offset) => {
-                let _ = sender.output(FileEditorOutputMessage::ContentAdded(new_text, offset));
+
+            FileEditorMessage::ContentAddedSpreadSheet(row, col, text) => {
+                let _ = sender.output(FileEditorOutputMessage::ContentAddedSpreadSheet(row, col, text));
             }
-            FileEditorMessage::ContentRemoved(_start_offset, _end_offset) => {}
+
+            FileEditorMessage::ContentAdded(new_text, line_number) => {
+                let _ = sender.output(FileEditorOutputMessage::ContentAdded(new_text, line_number));
+            }
             FileEditorMessage::UpdateFile(file_name, contributors, content, file_type) => {
                 
                 self.file_name = file_name.clone();
@@ -164,25 +171,12 @@ impl SimpleComponent for FileEditorModel {
                     FileType::Sheet => {
                         self.text_editor_visible = false;
                         self.spreadsheet_visible = true;
-                        let filas: Vec<Vec<String>> = if content.trim().is_empty() {
-                            vec![vec![String::new(); 10]; 10] 
-                        } else {
-                            content
-                                .lines()
-                                .map(|line| {
-                                    let mut row: Vec<String> = line.split(',').map(|c| c.to_string()).collect();
-                                    row.resize(10, String::new());
-                                    row
-                                })
-                                .collect()
-                        };
-                        
-                        let mut final_filas = filas;
-                        final_filas.resize_with(10, || vec![String::new(); 10]);
-                        
+                        let filas: Vec<String> = content.split("\n").map(|s| s.to_string()).collect();
+
+
                         self.spreadsheet_ctrl
                             .sender()
-                            .send(SpreadsheetMsg::UpdateSheet(file_name.clone(), final_filas))
+                            .send(SpreadsheetMsg::UpdateSheet(file_name.clone(), filas))
                             .unwrap();
                     }
                     _ => {

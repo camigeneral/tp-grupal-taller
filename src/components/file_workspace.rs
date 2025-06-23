@@ -51,7 +51,7 @@ pub enum FileWorkspaceMsg {
     SubscribeFile(String, String, i32),
     ReloadFiles,
     ContentAdded(String, i32),
-    ContentRemoved(i32, i32),
+    ContentAddedSpreadSheet(String, String, String)
 }
 
 #[derive(Debug)]
@@ -59,7 +59,7 @@ pub enum FileWorkspaceOutputMessage {
     SubscribeFile(String),
     UnsubscribeFile(String),
     ContentAdded(String, String, i32),
-    ContentRemoved(String, i32, i32),
+    ContentAddedSpreadSheet(String, String, String, String)
 }
 
 #[relm4::component(pub)]
@@ -135,7 +135,7 @@ impl SimpleComponent for FileWorkspace {
                 |msg: FileEditorOutputMessage| match msg {
                     FileEditorOutputMessage::GoBack => FileWorkspaceMsg::CloseEditor,
                     FileEditorOutputMessage::ContentAdded(new_text, offset) => FileWorkspaceMsg::ContentAdded(new_text, offset),
-                    FileEditorOutputMessage::ContentRemoved(start_offset, stop_offset) => FileWorkspaceMsg::CloseEditor
+                    FileEditorOutputMessage::ContentAddedSpreadSheet(row, col, text ) =>  FileWorkspaceMsg::ContentAddedSpreadSheet(row, col, text ),
                 },
             );
 
@@ -174,6 +174,9 @@ impl SimpleComponent for FileWorkspace {
 
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
+            FileWorkspaceMsg::ContentAddedSpreadSheet(row, col, text) => {
+                let _ = sender.output(FileWorkspaceOutputMessage::ContentAddedSpreadSheet(self.current_file.clone(), row, col, text));
+            }
             FileWorkspaceMsg::ContentAdded(text, offset) => {
                 let _ = sender.output(FileWorkspaceOutputMessage::ContentAdded(self.current_file.clone(), text, offset));
             }
@@ -251,7 +254,6 @@ impl SimpleComponent for FileWorkspace {
                 }
             
                 self.files = files_map.clone();
-                println!("actualizado: {:#?}", self.files);
                 glib::timeout_add_local(Duration::from_millis(100), move || {
                     file_list_sender
                         .send(FileFilterAction::UpdateFiles(new_files.clone()))
@@ -263,14 +265,9 @@ impl SimpleComponent for FileWorkspace {
                     {
                         if let Some(doc) = files_map.get(&(file_name.clone(), file_type.clone())) {
                             let content = match doc {
-                                Documento::Texto(lineas) => lineas
-                                .iter()
-                                .cloned()
-                                .collect::<Vec<String>>()
-                                .join("\n"),
+                                Documento::Texto(lineas) => lineas.join("\n"),
                                 Documento::Calculo(filas) => filas.join("\n"),
                             };
-                            println!("new content: {} del archivo: {}", content, current_file);
                             file_editor_sender
                                 .send(FileEditorMessage::UpdateFile(
                                     file_name.clone(),
@@ -292,45 +289,6 @@ impl SimpleComponent for FileWorkspace {
     }
 }
 
-fn parse_cell_reference(cell_ref: &str) -> Option<(usize, usize)> {
-    if cell_ref.len() < 2 {
-        return None;
-    }
-
-    let mut chars = cell_ref.chars();
-    let col_char = chars.next()?;
-    let row_str: String = chars.collect();
-
-    if !col_char.is_ascii_alphabetic() {
-        return None;
-    }
-
-    let col = (col_char.to_ascii_uppercase() as u8 - b'A') as usize;
-    let row = row_str.parse::<usize>().ok()?.saturating_sub(1);
-
-    if row < 10 && col < 10 {
-        Some((row, col))
-    } else {
-        None
-    }
-}
-
-fn convert_calc_data_to_matrix(calc_entries: &[String]) -> Vec<Vec<String>> {
-    let mut matrix: Vec<Vec<String>> = vec![vec![String::new(); 10]; 10];
-    
-    for entry in calc_entries {
-        if let Some(colon_pos) = entry.find(':') {
-            let cell_ref = &entry[..colon_pos];
-            let value = &entry[colon_pos + 1..];
-            if let Some((row, col)) = parse_cell_reference(cell_ref) {
-                matrix[row][col] = value.to_string();
-            }
-        }
-    }
-    
-    matrix
-}
-
 fn get_files_list(
     file_path: &String,
 ) -> Vec<(std::string::String, FileType, std::string::String, i32)> {
@@ -339,7 +297,7 @@ fn get_files_list(
         .into_iter()
         .map(|(nombre, doc)| match doc {
             Documento::Texto(lineas) => {
-                let contenido = lineas.join("");
+                let contenido = lineas.join("\n");
                 let qty = lineas.len() as i32;
                 (nombre, FileType::Text, contenido, qty)
             }
@@ -381,17 +339,9 @@ pub fn get_file_content_workspace(
                 } else if doc_name.ends_with(".xlsx") {
                     let calc_entries: Vec<String> = data
                         .split("/--/")
-                        .filter(|s| !s.is_empty())
                         .map(|s| s.to_string())
-                        .collect();
-                    
-                    let matrix = convert_calc_data_to_matrix(&calc_entries);
-                    let filas: Vec<String> = matrix
-                        .into_iter()
-                        .map(|row| row.join(","))
-                        .collect();
-                    
-                    docs.insert(doc_name, Documento::Calculo(filas));
+                        .collect();                    
+                    docs.insert(doc_name, Documento::Calculo(calc_entries));
                 }
             }
             Err(_) => return Err("unable-to-read-file".to_string()),

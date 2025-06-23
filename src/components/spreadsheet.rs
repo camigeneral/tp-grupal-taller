@@ -33,12 +33,12 @@ pub struct SpreadsheetModel {
 pub enum SpreadsheetMsg {
     CellChanged(usize, usize, String),
     RecalculateAll,
-    UpdateSheet(String, Vec<Vec<String>>),
+    UpdateSheet(String, Vec<String>),
 }
 
 #[derive(Debug)]
 pub enum SpreadsheetOutput {
-    ContentChanged(String, String),
+    ContentChanged(String, String, String),
     GoBack,
 }
 
@@ -275,10 +275,12 @@ impl SimpleComponent for SpreadsheetModel {
                 self.update_cell(row, col, content);
                 self.recalculate_all();
                 self.update_display();
-                let cell_name = format!("{}{}", (b'A' + col as u8) as char, row + 1);
+
+
                 sender
                     .output(SpreadsheetOutput::ContentChanged(
-                        cell_name,
+                        row.to_string(),
+                        col.to_string(),
                         self.cells[row][col].display_text.clone(),
                     ))
                     .unwrap();
@@ -288,12 +290,11 @@ impl SimpleComponent for SpreadsheetModel {
                 self.update_display();
             }
             SpreadsheetMsg::UpdateSheet(_file_name, filas_data) => {
-                 // filas_data ahora es Vec<Vec<String>> donde cada Vec<String> representa una fila
                 for i in 0..10 {
                     for j in 0..10 {
+                        let index = i * 10 + j;
                         let value = filas_data
-                            .get(i)
-                            .and_then(|row| row.get(j))
+                            .get(index)
                             .cloned()
                             .unwrap_or_default();
                         self.cells[i][j] = Cell::new();
@@ -302,6 +303,7 @@ impl SimpleComponent for SpreadsheetModel {
                 }
                 self.update_display();
             }
+
         }
     }
 }
