@@ -1,6 +1,6 @@
 extern crate gtk4;
 extern crate relm4;
-use self::gtk4::prelude::{BoxExt, ButtonExt, EditableExt, OrientableExt, PopoverExt, WidgetExt};
+use self::gtk4::prelude::{PopoverExt, WidgetExt};
 use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
 
 /// Modelo que representa la barra de navegación (navbar). Gestiona el estado de la conexión y
@@ -63,51 +63,6 @@ impl SimpleComponent for NavbarModel {
             },
             #[wrap(Some)]
             set_title_widget = &gtk::Box {
-                #[name="new_file_button"]
-                gtk::Button {
-                    add_css_class: "new-file",
-                    add_css_class: "button",
-                    set_label: "Nuevo Archivo",
-                    connect_clicked => NavbarMsg::ToggleNewFilePopover,
-                },
-                #[name="new_file_popover"]
-                gtk::Popover {
-                    set_has_arrow: true,
-                    set_autohide: true,
-                    set_position: gtk::PositionType::Bottom,
-                    #[name="popover_content"]
-                    gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_spacing: 5,
-                        gtk::Label {
-                            set_label: "Nombre del archivo:",
-                        },
-                        #[name = "file_name"]
-                        gtk::Entry {
-                            connect_changed[sender] => move |entry| {
-                                sender.input(NavbarMsg::SetFileName(entry.text().to_string()));
-                            }
-                        },
-                        gtk::Button {
-                            set_label: "Hoja de texto",
-                            connect_clicked => NavbarMsg::CreateTextDocument,
-                        },
-                        gtk::Button {
-                            set_label: "Hoja de cálculo",
-                            connect_clicked => NavbarMsg::CreateSpreadsheetDocument	,
-                        }
-                    },
-                },
-                #[watch]
-                set_visible: model.is_connected,
-            },
-
-            pack_end = &gtk::Button {
-                #[watch]
-                set_label: &(if model.is_connected { "Cerrar sesión" } else { "Conectarse" }),
-                connect_clicked[sender] => move |_| {
-                    sender.output(NavbarOutput::ToggleConnectionRequested).unwrap();
-                },
                 #[watch]
                 set_visible: model.is_connected,
             },
@@ -117,9 +72,9 @@ impl SimpleComponent for NavbarModel {
     fn init(
         _init: Self::Init,
         root: Self::Root,
-        sender: ComponentSender<Self>,
+        _sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let mut model = NavbarModel {
+        let model = NavbarModel {
             is_connected: false,
             new_file_popover: None,
             username: "".to_string(),
@@ -127,7 +82,6 @@ impl SimpleComponent for NavbarModel {
         };
 
         let widgets = view_output!();
-        model.new_file_popover = Some(widgets.new_file_popover.clone());
         ComponentParts { model, widgets }
     }
 
@@ -146,7 +100,6 @@ impl SimpleComponent for NavbarModel {
                     popover.popdown();
                 }
                 if self.file_name.trim().is_empty() {
-                    println!("El nombre del archivo es obligatorio.");
                     return;
                 }
                 let file_id = format!("{}.txt", self.file_name.trim());
@@ -160,7 +113,6 @@ impl SimpleComponent for NavbarModel {
                     popover.popdown();
                 }
                 if self.file_name.trim().is_empty() {
-                    println!("El nombre del archivo es obligatorio.");
                     return;
                 }
                 let file_id = format!("{}.xlsx", self.file_name.trim());

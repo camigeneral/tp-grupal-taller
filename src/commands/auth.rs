@@ -1,5 +1,5 @@
+use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use crate::commands::redis_response::RedisResponse;
-use crate::utils::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use client_info;
 use hashing::get_hash_slots;
 use std::collections::HashMap;
@@ -23,8 +23,7 @@ pub fn handle_auth(
         }
     };
 
-    if request.arguments.len() >= 2 || request.arguments.len() < 1 {
-        println!("Cantidad de credenciales_: {:#?}", request.arguments.len());
+    if request.arguments.len() >= 2 || request.arguments.is_empty() {
         return RedisResponse::new(
             CommandResponse::Error(
                 "Cantidad de credenciales invalidas: AUTH <username> <password>".to_string(),
@@ -55,13 +54,25 @@ pub fn handle_auth(
             "".to_string(),
         );
     }
-    let mut lock_clients = active_clients.lock().unwrap();
+    // Lock active_clients sin unwrap, con manejo
+    let mut lock_clients = match active_clients.lock() {
+        Ok(l) => l,
+        Err(_) => {
+            return RedisResponse::new(
+                CommandResponse::Error("Error locking active_clients".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
+    };
+
     match lock_clients.get_mut(&client_addr) {
         Some(client) => client.username = username.clone(),
-        _ => {
+        None => {
             return RedisResponse::new(
                 CommandResponse::Error(
-                    "Hubo probelmas al actualizar la informacion del cliente".to_string(),
+                    "Hubo problemas al actualizar la informacion del cliente".to_string(),
                 ),
                 false,
                 "".to_string(),
@@ -70,8 +81,21 @@ pub fn handle_auth(
         }
     }
 
-    let mut logged_clients_lock = logged_clients.lock().unwrap();
+    // Lock logged_clients sin unwrap, con manejo
+    let mut logged_clients_lock = match logged_clients.lock() {
+        Ok(l) => l,
+        Err(_) => {
+            return RedisResponse::new(
+                CommandResponse::Error("Error locking logged_clients".to_string()),
+                false,
+                "".to_string(),
+                "".to_string(),
+            )
+        }
+    };
+
     logged_clients_lock.insert(client_addr.clone(), true);
+
     RedisResponse::new(CommandResponse::Ok, false, "".to_string(), "".to_string())
 }
 
@@ -93,9 +117,7 @@ fn valid_credentials(username: String, password: String) -> bool {
     }
 
     match user_password {
-        Some(hashed_pass) => return *hashed_pass == hashed_password,
-        _ => {
-            return false;
-        }
+        Some(hashed_pass) => *hashed_pass == hashed_password,
+        _ => false,
     }
 }

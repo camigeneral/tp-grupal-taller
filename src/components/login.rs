@@ -39,46 +39,63 @@ impl SimpleComponent for LoginForm {
         #[name = "login_form"]
         gtk::Box {
             set_orientation: gtk::Orientation::Vertical,
-            set_spacing: 10,
+            set_valign: gtk::Align::Center,
+            set_halign: gtk::Align::Center,
 
-            gtk::Label {
-                set_label: "Nombre de usuario"
-            },
+            gtk::Box {
+                set_halign: gtk::Align::Center,
+                set_margin_bottom: 80,
 
-            #[name = "username_entry"]
-            gtk::Entry {
-                connect_changed[sender] => move |entry| {
-                    sender.input(LoginMsg::UsernameChanged(entry.text().to_string()));
+                gtk::Image {
+                    set_from_file: Some("src/components/images/logo.png"),
+                    set_widget_name: "LoginLogo",
                 }
             },
 
-            gtk::Label {
-                set_label: "Contraseña"
-            },
+            gtk::Box {
+                set_orientation: gtk::Orientation::Vertical,
+                set_spacing: 10,
+                set_halign: gtk::Align::Center,
 
-            #[name = "password_entry"]
-            gtk::Entry {
-                set_visibility: false,
-                connect_changed[sender] => move |entry| {
-                    sender.input(LoginMsg::PasswordChanged(entry.text().to_string()));
+                gtk::Label {
+                    set_label: "Nombre de usuario"
+                },
+
+                #[name = "username_entry"]
+                gtk::Entry {
+                    connect_changed[sender] => move |entry| {
+                        sender.input(LoginMsg::UsernameChanged(entry.text().to_string()));
+                    }
+                },
+
+                gtk::Label {
+                    set_label: "Contraseña"
+                },
+
+                #[name = "password_entry"]
+                gtk::Entry {
+                    set_visibility: false,
+                    connect_changed[sender] => move |entry| {
+                        sender.input(LoginMsg::PasswordChanged(entry.text().to_string()));
+                    }
+                },
+
+                gtk::Button {
+                    set_label: "Iniciar sesión",
+                    connect_clicked[sender] => move |_| {
+                        sender.input(LoginMsg::Submit);
+                    }
+                },
+
+                #[name = "error_form_label"]
+                gtk::Label {
+                    set_wrap: true,
+                    set_css_classes: &["error"],
+                    #[watch]
+                    set_visible: !model.error_message.is_empty(),
+                    #[watch]
+                    set_label: &(model.error_message)
                 }
-            },
-
-            gtk::Button {
-                set_label: "Iniciar sesión",
-                connect_clicked[sender] => move |_| {
-                    sender.input(LoginMsg::Submit);
-                }
-            },
-
-            #[name = "error_form_label"]
-            gtk::Label {
-                set_wrap: true,
-                set_css_classes: &["error"],
-                #[watch]
-                set_visible: !model.error_message.is_empty(),
-                #[watch]
-                set_label: &(model.error_message)
             }
         }
     }
@@ -93,6 +110,20 @@ impl SimpleComponent for LoginForm {
             password: String::new(),
             error_message: "".to_string(),
         };
+
+        let provider = gtk::CssProvider::new();
+        provider.load_from_data(
+            "#LoginLogo {
+                transform: scale(25);
+                transform-origin: center;
+            }",
+        );
+
+        gtk::style_context_add_provider_for_display(
+            &root.display(),
+            &provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
 
         let widgets = view_output!();
         ComponentParts { model, widgets }

@@ -21,7 +21,7 @@ use std::thread;
 /// - `Null`: representa un valor nulo (`$-1`)
 /// - `Error`: mensaje de error
 /// - `Array`: lista de valores anidados
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
 pub enum ValueType {
     Integer(i64),
@@ -41,6 +41,7 @@ pub enum ValueType {
 /// - key: Some("mykey")
 /// - arguments: ["myvalue"]
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct CommandRequest {
     pub command: String,
     pub key: Option<String>,
@@ -57,7 +58,7 @@ pub struct CommandRequest {
 /// - Null: "$-1\r\n"
 /// - Error: "-ERR ...\r\n"
 /// - Array: arreglo de respuestas (no completamente soportado)
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[allow(dead_code)]
 pub enum CommandResponse {
     Ok,
@@ -75,6 +76,7 @@ pub enum CommandResponse {
 ///
 /// # Errores
 /// Retorna `std::io::Error` si el formato RESP es inválido o si el comando está vacío
+#[allow(dead_code)]
 pub fn parse_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<CommandRequest> {
     let (command_parts, unparsed_command) = parse_resp_command(reader)?;
 
@@ -84,7 +86,6 @@ pub fn parse_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<Comma
             "Empty command",
         ));
     }
-
     let command = command_parts[0].to_lowercase();
 
     let mut request = CommandRequest {
@@ -112,6 +113,7 @@ pub fn parse_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<Comma
 ///
 /// # Errores
 /// Retorna `std::io::Error` si hay fallas al escribir en el stream.
+#[allow(dead_code)]
 pub fn write_response(stream: &TcpStream, response: &CommandResponse) -> std::io::Result<()> {
     match response {
         CommandResponse::Ok => write_resp_string(stream, "OK"),
@@ -135,7 +137,6 @@ pub fn write_response(stream: &TcpStream, response: &CommandResponse) -> std::io
 /// String formateada según el protocolo RESP
 #[allow(dead_code)]
 pub fn format_resp_command(command_parts: &[&str]) -> String {
-
     let mut resp_message = format!("*{}\r\n", command_parts.len());
 
     for part in command_parts {
@@ -147,17 +148,10 @@ pub fn format_resp_command(command_parts: &[&str]) -> String {
 
 #[allow(dead_code)]
 pub fn format_resp_publish(channel: &str, message: &str) -> String {
-    let command_parts = ["PUBLISH", channel, message];
-    let mut resp_message = format!("*{}\r\n", command_parts.len());
+    let command_parts = ["publish", channel, message];
 
-    for part in &command_parts {
-        resp_message.push_str(&format!("${}\r\n{}\r\n", part.len(), part));
-    }
-
-    resp_message
+    format_resp_command(&command_parts)
 }
-
-
 
 /// Parsea una línea en formato RESP que representa un array de cadenas (`Vec<String>`).
 ///
@@ -171,7 +165,9 @@ pub fn parse_resp_command(
     let mut line = String::new();
     let mut unparsed_command = String::new();
 
-    reader.read_line(&mut line)?;
+    if let Err(e) = reader.read_line(&mut line) {
+        return Err(std::io::Error::other(format!("Read error: {}", e)));
+    }
     unparsed_command.push_str(&line);
 
     if !line.starts_with('*') {
@@ -181,12 +177,23 @@ pub fn parse_resp_command(
         ));
     }
 
-    let num_elements: usize = line[1..].trim().parse().unwrap_or(0);
+    let num_elements: usize = match line[1..].trim().parse() {
+        Ok(n) => n,
+        Err(_) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Invalid number of elements",
+            ));
+        }
+    };
+
     let mut result = Vec::with_capacity(num_elements);
 
     for _ in 0..num_elements {
         line.clear();
-        reader.read_line(&mut line)?;
+        if let Err(e) = reader.read_line(&mut line) {
+            return Err(std::io::Error::other(format!("Read error: {}", e)));
+        }
         unparsed_command.push_str(&line);
 
         if !line.starts_with('$') {
@@ -202,16 +209,28 @@ pub fn parse_resp_command(
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     "Invalid length",
-                ))
+                ));
             }
         };
 
         let mut buffer = vec![0u8; length];
-        reader.read_exact(&mut buffer)?;
-        unparsed_command.push_str(&String::from_utf8_lossy(&buffer));
+        if let Err(e) = reader.read_exact(&mut buffer) {
+            return Err(std::io::Error::other(format!("Read buffer failed: {}", e)));
+        }
+        match String::from_utf8(buffer.clone()) {
+            Ok(s) => unparsed_command.push_str(&s),
+            Err(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Invalid UTF-8 in buffer",
+                ));
+            }
+        }
 
         let mut crlf = [0u8; 2];
-        reader.read_exact(&mut crlf)?;
+        if let Err(e) = reader.read_exact(&mut crlf) {
+            return Err(std::io::Error::other(format!("Read CRLF failed: {}", e)));
+        }
         unparsed_command.push_str("\r\n");
 
         result.push(String::from_utf8_lossy(&buffer).to_string());
@@ -254,6 +273,7 @@ pub fn write_resp_error(mut stream: &TcpStream, msg: &str) -> std::io::Result<()
     stream.write_all(format!("-ERR {}\r\n", msg).as_bytes())
 }
 
+#[allow(dead_code)]
 pub fn parse_replica_command(
     reader: &mut BufReader<std::io::Cursor<String>>,
 ) -> std::io::Result<CommandRequest> {
@@ -292,7 +312,9 @@ pub fn parse_replica_resp(
     let mut line = String::new();
     let mut unparsed_command = String::new();
 
-    reader.read_line(&mut line)?;
+    if let Err(e) = reader.read_line(&mut line) {
+        return Err(std::io::Error::other(format!("Read line error: {}", e)));
+    }
     unparsed_command.push_str(&line);
 
     if !line.starts_with('*') {
@@ -302,12 +324,23 @@ pub fn parse_replica_resp(
         ));
     }
 
-    let num_elements: usize = line[1..].trim().parse().unwrap_or(0);
+    let num_elements: usize = match line[1..].trim().parse() {
+        Ok(n) => n,
+        Err(_) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Invalid number of elements",
+            ));
+        }
+    };
+
     let mut result = Vec::with_capacity(num_elements);
 
     for _ in 0..num_elements {
         line.clear();
-        reader.read_line(&mut line)?;
+        if let Err(e) = reader.read_line(&mut line) {
+            return Err(std::io::Error::other(format!("Read line error: {}", e)));
+        }
         unparsed_command.push_str(&line);
 
         if !line.starts_with('$') {
@@ -322,17 +355,30 @@ pub fn parse_replica_resp(
             Err(_) => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
-                    "Invalid length",
-                ))
+                    "Invalid bulk string length",
+                ));
             }
         };
 
         let mut buffer = vec![0u8; length];
-        reader.read_exact(&mut buffer)?;
-        unparsed_command.push_str(&String::from_utf8_lossy(&buffer));
+        if let Err(e) = reader.read_exact(&mut buffer) {
+            return Err(std::io::Error::other(format!("Read buffer error: {}", e)));
+        }
+
+        match String::from_utf8(buffer.clone()) {
+            Ok(s) => unparsed_command.push_str(&s),
+            Err(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Invalid UTF-8 content",
+                ));
+            }
+        }
 
         let mut crlf = [0u8; 2];
-        reader.read_exact(&mut crlf)?;
+        if let Err(e) = reader.read_exact(&mut crlf) {
+            return Err(std::io::Error::other(format!("Read CRLF error: {}", e)));
+        }
         unparsed_command.push_str("\r\n");
 
         result.push(String::from_utf8_lossy(&buffer).to_string());

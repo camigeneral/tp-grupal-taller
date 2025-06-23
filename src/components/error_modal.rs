@@ -1,17 +1,8 @@
-
 extern crate gtk4;
 extern crate relm4;
-use self::gtk4::{
-    prelude::{BoxExt, ButtonExt, GtkWindowExt, OrientableExt, WidgetExt},
-    
-};
+use self::gtk4::prelude::{BoxExt, ButtonExt, GtkWindowExt, OrientableExt, WidgetExt};
 
-use self::relm4::{
-    gtk, ComponentParts, ComponentSender, 
-    RelmWidgetExt, SimpleComponent,
-};
-
-
+use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
 
 #[derive(Debug)]
 pub enum ErrorModalMsg {
@@ -42,27 +33,27 @@ impl SimpleComponent for ErrorModal {
             set_default_size: (400, 200),
             #[watch]
             set_visible: model.visible,
-            
+
             gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
                 set_margin_all: 20,
                 set_spacing: 15,
-                
+
                 gtk::Box {
                     set_orientation: gtk::Orientation::Horizontal,
                     set_spacing: 10,
-                    
+
                     gtk::Image {
                         set_icon_name: Some("dialog-error"),
                         set_pixel_size: 48,
-                    },                            
+                    },
                 },
-                
+
                 gtk::ScrolledWindow {
                     set_hexpand: true,
                     set_vexpand: true,
                     set_policy: (gtk::PolicyType::Automatic, gtk::PolicyType::Automatic),
-                    
+
                     gtk::Label {
                         #[watch]
                         set_text: &model.error_message,
@@ -72,11 +63,11 @@ impl SimpleComponent for ErrorModal {
                         set_selectable: true,
                     },
                 },
-                
+
                 gtk::Box {
                     set_orientation: gtk::Orientation::Horizontal,
                     set_halign: gtk::Align::End,
-                    
+
                     gtk::Button {
                         set_label: "Cerrar",
                         connect_clicked => ErrorModalMsg::Hide,

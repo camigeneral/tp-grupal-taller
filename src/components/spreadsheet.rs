@@ -33,12 +33,13 @@ pub struct SpreadsheetModel {
 pub enum SpreadsheetMsg {
     CellChanged(usize, usize, String),
     RecalculateAll,
-    UpdateSheet(String, Vec<Vec<String>>),
+    UpdateSheet(String, Vec<String>),
+    UpdateSheetContent(String, i32, String),
 }
 
 #[derive(Debug)]
 pub enum SpreadsheetOutput {
-    ContentChanged(String, String),
+    ContentChanged(String, String, String),
     GoBack,
 }
 
@@ -58,7 +59,6 @@ impl SpreadsheetModel {
 
         let col = (col_char.to_ascii_uppercase() as u8 - b'A') as usize;
         let row = row_str.parse::<usize>().ok()?.saturating_sub(1);
-
         if row < 10 && col < 10 {
             Some((row, col))
         } else {
@@ -92,34 +92,34 @@ impl SpreadsheetModel {
                 }
             }
         }
-        self.simple_calculator(&processed_expr)
+        Self::simple_calculator(&processed_expr)
     }
     // Evaluación recursiva con procedencia de operadores
-    fn simple_calculator(&self, expr: &str) -> Result<f64, String> {
+    fn simple_calculator(expr: &str) -> Result<f64, String> {
         let expr = expr.replace(" ", "");
         if let Some(pos) = expr.rfind('+') {
-            let left = self.simple_calculator(&expr[..pos])?;
-            let right = self.simple_calculator(&expr[pos + 1..])?;
+            let left = Self::simple_calculator(&expr[..pos])?;
+            let right = Self::simple_calculator(&expr[pos + 1..])?;
             return Ok(left + right);
         }
 
         if let Some(pos) = expr.rfind('-') {
             //TODO: arreglar manejo de negativos
             if pos > 0 {
-                let left = self.simple_calculator(&expr[..pos])?;
-                let right = self.simple_calculator(&expr[pos + 1..])?;
+                let left = Self::simple_calculator(&expr[..pos])?;
+                let right = Self::simple_calculator(&expr[pos + 1..])?;
                 return Ok(left - right);
             }
         }
         if let Some(pos) = expr.rfind('*') {
-            let left = self.simple_calculator(&expr[..pos])?;
-            let right = self.simple_calculator(&expr[pos + 1..])?;
+            let left = Self::simple_calculator(&expr[..pos])?;
+            let right = Self::simple_calculator(&expr[pos + 1..])?;
             return Ok(left * right);
         }
 
         if let Some(pos) = expr.rfind('/') {
-            let left = self.simple_calculator(&expr[..pos])?;
-            let right = self.simple_calculator(&expr[pos + 1..])?;
+            let left = Self::simple_calculator(&expr[..pos])?;
+            let right = Self::simple_calculator(&expr[pos + 1..])?;
             if right == 0.0 {
                 return Err("División por cero".to_string());
             }
@@ -275,10 +275,11 @@ impl SimpleComponent for SpreadsheetModel {
                 self.update_cell(row, col, content);
                 self.recalculate_all();
                 self.update_display();
-                let cell_name = format!("{}{}", (b'A' + col as u8) as char, row + 1);
+
                 sender
                     .output(SpreadsheetOutput::ContentChanged(
-                        cell_name,
+                        row.to_string(),
+                        col.to_string(),
                         self.cells[row][col].display_text.clone(),
                     ))
                     .unwrap();
@@ -287,19 +288,25 @@ impl SimpleComponent for SpreadsheetModel {
                 self.recalculate_all();
                 self.update_display();
             }
-            SpreadsheetMsg::UpdateSheet(_file_name, filas) => {
-                // Actualiza las celdas con los datos recibidos
+            SpreadsheetMsg::UpdateSheet(_file_name, filas_data) => {
                 for i in 0..10 {
                     for j in 0..10 {
-                        let value = filas
-                            .get(i)
-                            .and_then(|row| row.get(j))
-                            .cloned()
-                            .unwrap_or_default();
+                        let index = i * 10 + j;
+                        let value = filas_data.get(index).cloned().unwrap_or_default();
                         self.cells[i][j] = Cell::new();
                         self.update_cell(i, j, value);
                     }
                 }
+                self.update_display();
+            }
+
+            SpreadsheetMsg::UpdateSheetContent(_file_name, index_set, content) => {
+                let row = index_set / 10;
+                let col = index_set % 10;
+                if row < 10 && col < 10 {
+                    self.update_cell(row as usize, col as usize, content);
+                }
+
                 self.update_display();
             }
         }

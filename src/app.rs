@@ -1,15 +1,19 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::{
-    prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, WidgetExt},
+    prelude::{BoxExt, GtkWindowExt, OrientableExt, PopoverExt, WidgetExt},
     CssProvider,
 };
-use components::error_modal::ErrorModalMsg;
-use crate::components::{error_modal::ErrorModal, login::{LoginForm, LoginMsg, LoginOutput}};
+use crate::components::{
+    error_modal::ErrorModal,
+    login::{LoginForm, LoginMsg, LoginOutput},
+};
 use app::gtk4::glib::Propagation;
 use client::client_run;
+use components::error_modal::ErrorModalMsg;
 use components::file_workspace::{FileWorkspace, FileWorkspaceMsg, FileWorkspaceOutputMessage};
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
+use components::types::FileType;
 use std::collections::HashMap;
 use std::thread;
 
@@ -36,10 +40,11 @@ pub struct AppModel {
     command: String,
     command_sender: Option<Sender<String>>,
     username: String,
-    current_file:String,
+    current_file: String,
     subscribed_files: HashMap<String, bool>,
     error_modal: Controller<ErrorModal>,
-
+    new_file_popover: Option<gtk::Popover>,
+    file_name: String,
 }
 
 #[derive(Debug)]
@@ -52,16 +57,28 @@ pub enum AppMsg {
     CommandChanged(String),
     ExecuteCommand,
     CloseApplication,
-    RefreshData,
+    GetFiles,
+    RefreshData(String, String, String),
     CreateFile(String, String),
     SubscribeFile(String),
     UnsubscribeFile(String),
     PrepareAndExecuteCommand(String, String),
     ManageResponse(String),
-    ManageSubscribeResponse(String),
+    ManageSubscribeResponse(String, String, String),
     ManageUnsubscribeResponse(String),
+    SetContentFileCommand(String),
     Error(String),
-
+    /// Mensaje para alternar la visibilidad del popover para nuevos archivos.
+    ToggleNewFilePopover,
+    SetFileName(String),
+    /// Mensaje para crear un documento de tipo texto.
+    CreateTextDocument,
+    /// Mensaje para crear un documento de tipo hoja de cálculo.
+    CreateSpreadsheetDocument,
+    AddContent(String, String, i32),
+    AddContentSpreadSheet(String, String, String, String),
+    UpdateFilesList(Vec<String>),
+    FilesLoaded,
 }
 
 #[relm4::component(pub)]
@@ -86,25 +103,67 @@ impl SimpleComponent for AppModel {
                 set_margin_all: 10,
                 set_hexpand: true,
                 set_vexpand: true,
+
                 gtk::Box {
                     set_orientation: gtk::Orientation::Horizontal,
                     set_spacing: 15,
-                    gtk::Label {
-                        set_label: "Comandos:",
+                    set_hexpand: true,
+
+                    gtk::Box {
+                        set_halign: gtk::Align::Center,
+
+                         gtk::Image {
+                            set_from_file: Some("src/components/images/logo.png"),
+                            set_widget_name: "AppLogo",
+                            set_valign: gtk::Align::Center,
+                            set_halign: gtk::Align::Center,
+                            set_margin_bottom: 0,
+                            set_margin_start: 100,
+                            set_margin_top: 20,
+                         }
                     },
-                    #[name = "command_entry"]
-                    gtk::Entry {
-                        connect_changed[sender] => move |entry| {
-                            sender.input(AppMsg::CommandChanged(entry.text().to_string()));
-                        }
-                    },
-                    gtk::Button {
-                        set_label: "Ejecutar",
-                        add_css_class: "execute-command",
-                        connect_clicked[sender] => move |_| {
-                            sender.input(AppMsg::ExecuteCommand);
-                        }
-                    },
+
+    /*                 gtk::Box {
+                        set_hexpand: true,
+                        set_halign: gtk::Align::End,
+
+                        #[name="new_file_button"]
+                        gtk::Button {
+                            add_css_class: "new-file",
+                            add_css_class: "button",
+                            set_label: "Nuevo Archivo",
+                            connect_clicked => AppMsg::ToggleNewFilePopover,
+                        },
+
+                        #[name="new_file_popover"]
+                        gtk::Popover {
+                            set_has_arrow: true,
+                            set_autohide: true,
+                            set_position: gtk::PositionType::Bottom,
+                            #[name="popover_content"]
+                            gtk::Box {
+                                set_orientation: gtk::Orientation::Vertical,
+                                set_spacing: 5,
+                                gtk::Label {
+                                    set_label: "Nombre del archivo:",
+                                },
+                                #[name = "file_name"]
+                                gtk::Entry {
+                                    connect_changed[sender] => move |entry| {
+                                        sender.input(AppMsg::SetFileName(entry.text().to_string()));
+                                    }
+                                },
+                                gtk::Button {
+                                    set_label: "Hoja de texto",
+                                    connect_clicked => AppMsg::CreateTextDocument,
+                                },
+                                gtk::Button {
+                                    set_label: "Hoja de cálculo",
+                                    connect_clicked => AppMsg::CreateSpreadsheetDocument	,
+                                }
+                            },
+                        },
+                    } */
                 },
 
                 append: model.files_manager_cont.widget(),
@@ -145,7 +204,6 @@ impl SimpleComponent for AppModel {
             .launch(())
             .detach();
 
-
         let header_model = NavbarModel::builder().launch(()).forward(
             sender.input_sender(),
             |output| match output {
@@ -161,6 +219,13 @@ impl SimpleComponent for AppModel {
             |command: FileWorkspaceOutputMessage| match command {
                 FileWorkspaceOutputMessage::SubscribeFile(file) => AppMsg::SubscribeFile(file),
                 FileWorkspaceOutputMessage::UnsubscribeFile(file) => AppMsg::UnsubscribeFile(file),
+                FileWorkspaceOutputMessage::ContentAdded(file, text, line_number) => {
+                    AppMsg::AddContent(file, text, line_number)
+                }
+                FileWorkspaceOutputMessage::ContentAddedSpreadSheet(file, col, row, text) => {
+                    AppMsg::AddContentSpreadSheet(file, col, row, text)
+                }
+                FileWorkspaceOutputMessage::FilesLoaded => AppMsg::FilesLoaded,
             },
         );
 
@@ -184,8 +249,9 @@ impl SimpleComponent for AppModel {
             username: "".to_string(),
             current_file: "".to_string(),
             subscribed_files: HashMap::new(),
-            error_modal
-
+            error_modal,
+            new_file_popover: None,
+            file_name: "".to_string(),
         };
 
         let sender_clone = sender.clone();
@@ -196,6 +262,7 @@ impl SimpleComponent for AppModel {
             Propagation::Proceed
         });
         let widgets = view_output!();
+        //model.new_file_popover = Some(widgets.new_file_popover.clone());
         let ui_sender: relm4::Sender<AppMsg> = sender.input_sender().clone();
         let (tx, rx) = channel::<String>();
         let command_sender = Some(tx.clone());
@@ -235,11 +302,6 @@ impl SimpleComponent for AppModel {
                     .send(NavbarMsg::SetLoggedInUser(username))
                     .unwrap();
 
-                let files_manager_cont_sender = self.files_manager_cont.sender().clone();
-
-                files_manager_cont_sender
-                    .send(FileWorkspaceMsg::ReloadFiles)
-                    .unwrap();
                 self.header_cont
                     .sender()
                     .send(NavbarMsg::SetConnectionStatus(true))
@@ -265,41 +327,85 @@ impl SimpleComponent for AppModel {
             }
             AppMsg::CommandChanged(command) => {
                 self.command = command;
-                println!("comando {}", self.command);
+            }
+
+            AppMsg::FilesLoaded => {
+                sender.input(AppMsg::LoginSuccess(self.username.clone()));
             }
 
             AppMsg::ManageResponse(resp) => {
                 if resp != "OK" {
-                    self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
                     return;
                 }
                 if self.command.contains("AUTH") {
-                    sender.input(AppMsg::LoginSuccess(self.username.clone()));
+                    sender.input(AppMsg::GetFiles);
                 }
             }
-            AppMsg::ManageSubscribeResponse(qty_subs) => {
-                let qty_subs_int = match qty_subs.parse::<i32>() {
-                    Ok(n) => n,
-                    Err(_e) => -1,
+            AppMsg::GetFiles => {
+                self.command = "get_files redis".to_string();
+                sender.input(AppMsg::ExecuteCommand);
+            }
+            AppMsg::ManageSubscribeResponse(file, qty_subs, content) => {
+                let file_type = if file.ends_with(".xlsx") {
+                    FileType::Sheet
+                } else {
+                    FileType::Text
                 };
-
-                if qty_subs_int == -1 {
-                    println!("Error");
-                }
 
                 self.subscribed_files
                     .insert(self.current_file.clone(), true);
-                println!("Archivos suscriptos : {:#?}", self.subscribed_files);
                 self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(
                     self.current_file.clone(),
-                    crate::components::types::FileType::Text,
+                    qty_subs,
+                    file_type,
+                    content,
                 ));
             }
 
             AppMsg::CreateFile(file_id, content) => {
                 self.command = format!("SET {} \"{}\"", file_id, content);
                 sender.input(AppMsg::ExecuteCommand);
-                // self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
+            }
+            AppMsg::AddContent(file_id, text, line_number) => {
+                let clean_text = if text.trim_end_matches('\n').is_empty() {
+                    "<delete>".to_string()
+                } else {
+                    text
+                };
+                self.command = format!("WRITE|{}|{}|{}", line_number, clean_text, file_id);
+                sender.input(AppMsg::ExecuteCommand);
+            }
+            AppMsg::AddContentSpreadSheet(file_id, col, row, text) => {
+                let clean_text = if text.is_empty() {
+                    "<delete>".to_string()
+                } else {
+                    text
+                };
+
+                let col_index = match col.parse::<usize>() {
+                    Ok(val) => val,
+                    Err(_) => {
+                        println!("Error: col no es un número válido: {}", col);
+                        return;
+                    }
+                };
+
+                let row_index = match row.parse::<usize>() {
+                    Ok(val) => val,
+                    Err(_) => {
+                        println!("Error: row no es un número válido: {}", row);
+                        return;
+                    }
+                };
+
+                let cell_name = format!("{}{}", (b'A' + row_index as u8) as char, col_index + 1);
+                self.command = format!("WRITE|{}|{}|{}", cell_name, clean_text, file_id);
+                sender.input(AppMsg::ExecuteCommand);
+            }
+
+            AppMsg::SetContentFileCommand(command) => {
+                self.command = command;
+                sender.input(AppMsg::ExecuteCommand);
             }
 
             AppMsg::SubscribeFile(file) => {
@@ -318,9 +424,7 @@ impl SimpleComponent for AppModel {
 
             AppMsg::ManageUnsubscribeResponse(response) => {
                 if response == "OK" {
-                    // Remover el archivo de los suscritos
                     self.subscribed_files.remove(&self.current_file);
-                    println!("Desuscrito del archivo: {}", self.current_file);
                 } else {
                     println!("Error al desuscribirse: {}", response);
                 }
@@ -330,7 +434,6 @@ impl SimpleComponent for AppModel {
             }
 
             AppMsg::ExecuteCommand => {
-                println!("Se ejecuto el siguiente comando: {:#?}", self.command);
                 if let Some(channel_sender) = &self.command_sender {
                     if let Err(e) = channel_sender.send(self.command.to_string()) {
                         println!("Error enviando comando: {}", e);
@@ -339,17 +442,68 @@ impl SimpleComponent for AppModel {
                     println!("No hay un canal de comando disponible.");
                 }
             }
-            AppMsg::RefreshData => {
-                self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
+            AppMsg::RefreshData(file, index, value) => {
+                self.files_manager_cont
+                    .emit(FileWorkspaceMsg::UpdateFile(file, index, value));
             }
 
             AppMsg::CloseApplication => {
                 if let Some(channel_sender) = &self.command_sender {
-                    println!("Enviando comando de cierre al servidor");
                     if let Err(e) = channel_sender.send("close".to_string()) {
                         eprintln!("Error al enviar comando de cierre: {:?}", e);
                     }
                 }
+            }
+
+            AppMsg::ToggleNewFilePopover => {
+                if let Some(popover) = &self.new_file_popover {
+                    popover.popup();
+                }
+            }
+
+            AppMsg::SetFileName(file_name) => {
+                self.file_name = file_name;
+            }
+
+            AppMsg::CreateTextDocument => {
+                if let Some(popover) = &self.new_file_popover {
+                    popover.popdown();
+                }
+                if self.file_name.trim().is_empty() {
+                    println!("El nombre del archivo es obligatorio.");
+                    return;
+                }
+                let file_id = format!("{}.txt", self.file_name.trim());
+                sender.input(AppMsg::CreateFile(file_id, "".to_string()));
+            }
+
+            AppMsg::CreateSpreadsheetDocument => {
+                if let Some(popover) = &self.new_file_popover {
+                    popover.popdown();
+                }
+                if self.file_name.trim().is_empty() {
+                    println!("El nombre del archivo es obligatorio.");
+                    return;
+                }
+                let file_id = format!("{}.xlsx", self.file_name.trim());
+                sender.input(AppMsg::CreateFile(file_id, "".to_string()));
+            }
+
+            AppMsg::UpdateFilesList(archivos) => {
+                let archivos_tipos: Vec<(String, FileType)> = archivos
+                    .into_iter()
+                    .filter(|name| !name.is_empty())
+                    .map(|name| {
+                        let tipo = if name.ends_with(".xlsx") {
+                            FileType::Sheet
+                        } else {
+                            FileType::Text
+                        };
+                        (name, tipo)
+                    })
+                    .collect();
+                self.files_manager_cont
+                    .emit(FileWorkspaceMsg::UpdateFilesList(archivos_tipos));
             }
         }
     }
