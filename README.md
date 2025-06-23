@@ -30,14 +30,6 @@ sudo apt-get install -y \
 
 El proyecto está estructurado en tres componentes principales que se comunican entre sí:
 
-```mermaid
-graph LR
-    Client[Client GUI] -->|Commands| Microservice
-    Microservice -->|RESP Protocol| Redis[Redis Server]
-    Redis -->|Updates| Microservice
-    Microservice -->|Notifications| Client
-```
-
 ### Componentes
 
 1. **Cliente (GUI)**
@@ -47,10 +39,8 @@ graph LR
    - Recibe actualizaciones en tiempo real
 
 2. **Microservicio**
-   - Actúa como intermediario entre clientes y servidor Redis
-   - Maneja conexiones de múltiples clientes
-   - Traduce comandos del cliente al protocolo RESP
    - Distribuye actualizaciones a los clientes suscritos
+   - Persiste periódicamente el contenido de los documentos en Redis
 
 3. **Servidor Redis**
    - Almacena los documentos y su contenido
@@ -78,7 +68,7 @@ Para ejecutar el proyecto completo necesitas iniciar los tres componentes:
 
 1. Servidor Redis:
 ```bash
-make redis
+cargo run --bin redis_server <puerto>
 ```
 
 2. Microservicio:
