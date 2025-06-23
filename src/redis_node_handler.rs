@@ -249,7 +249,6 @@ fn handle_node(
     println!("aca");
 
     for command in reader.lines().map_while(Result::ok) {
-        println!("aaaaa");
 
         let encrypted_bytes = command.as_bytes();
         let decrypted_bytes = decrypt_xor(encrypted_bytes, ENCRYPTION_KEY);
@@ -439,16 +438,27 @@ fn handle_node(
                     Ok(master_state) => {
                         println!("master state: {:?}", master_state);
                         if master_state == NodeState::Inactive {
+
+                            println!("01");
+
                             let locked_nodes = match nodes.lock() {
                                 Ok(n) => n,
                                 Err(_) => continue,
                             };
+                            let hash_range;
 
-                            let hash_range = match local_node.lock() {
-                                Ok(n) => n.hash_range,
-                                Err(_) => continue,
-                            };
+                            println!("02");
 
+                            {
+                                let locked_local_node = local_node.lock().unwrap();
+                                if locked_local_node.role != NodeRole::Replica {
+                                    println!("Master node cannot initiate replica promotion");
+                                }
+
+                                hash_range = locked_local_node.hash_range;
+                            }
+
+                            println!("03");
                             for (_, peer) in locked_nodes.iter() {
                                 if peer.role == NodeRole::Replica && peer.hash_range == hash_range {
                                     if let Ok(mut peer_stream) = peer.stream.try_clone() {
@@ -456,6 +466,7 @@ fn handle_node(
                                         let encrypted_message =
                                             encrypt_xor(message.as_bytes(), ENCRYPTION_KEY);
                                         let _ = peer_stream.write_all(&encrypted_message);
+                                        println!("04");
                                     }
                                 }
                             }
@@ -465,6 +476,7 @@ fn handle_node(
                 };
             }
             "initialize_replica_promotion" => {
+                println!("here");
                 initialize_replica_promotion(local_node, &nodes);
             }
             "inactive_node" => {
@@ -804,7 +816,7 @@ fn ping_to_master(
                     }
                     Ok(_) => {
                         // ping exitoso
-                        // println!("Respuesta del master (encriptada): {:?}", line);
+                        println!("Respuesta del master (encriptada): {:?}", line);
                     }
                     Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
                         println!("Timeout esperando respuesta del master");
