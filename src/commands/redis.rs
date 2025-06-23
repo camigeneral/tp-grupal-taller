@@ -34,7 +34,6 @@ pub fn execute_command(
         "append" => string::handle_append(&request, docs),
         "scard" => set::handle_scard(&request, shared_sets),
         "smembers" => set::handle_smembers(&request, shared_sets),
-        // "sscan" => set::handle_sscan(&request, shared_sets),
         "sadd" => set::handle_sadd(&request, shared_sets), // subscribe
         "srem" => set::handle_srem(&request, shared_sets), // unsubscribe
         "llen" => list::handle_llen(&request, docs),
