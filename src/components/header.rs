@@ -84,7 +84,7 @@ impl SimpleComponent for NavbarModel {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let mut model = NavbarModel {
+        let model = NavbarModel {
             is_connected: false,
             new_file_popover: None,
             username: "".to_string(),
@@ -92,7 +92,6 @@ impl SimpleComponent for NavbarModel {
         };
 
         let widgets = view_output!();
-        // model.new_file_popover = Some(widgets.new_file_popover.clone());
         ComponentParts { model, widgets }
     }
 
