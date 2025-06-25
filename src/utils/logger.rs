@@ -1,6 +1,6 @@
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::sync::mpsc::{Sender, Receiver, channel};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 extern crate chrono;
 use self::chrono::Local;
@@ -11,7 +11,7 @@ pub struct Logger {
 }
 
 impl Logger {
-    pub fn init(log_path: String) -> Self {
+    pub fn init(log_path: String, port: usize) -> Self {
         let (tx, rx): (Sender<String>, Receiver<String>) = channel();
 
         // Hilo dedicado al logger
@@ -21,6 +21,13 @@ impl Logger {
                 .append(true)
                 .open(log_path)
                 .expect("No se pudo abrir el archivo de log");
+
+            // Solo el nodo 4000 escribe la línea de reinicio
+            if port == 4000 {
+                let now = Local::now().format("[%Y-%m-%d %H:%M:%S]");
+                let reinicio_line = format!("\n{} -------------------- REINICIO DEL SERVIDOR --------------------\n", now);
+                let _ = file.write_all(reinicio_line.as_bytes());
+            }
 
             for msg in rx {
                 let now = Local::now().format("[%Y-%m-%d %H:%M:%S]");

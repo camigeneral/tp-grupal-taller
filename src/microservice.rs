@@ -25,7 +25,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let last_command_sent: Arc<Mutex<String>> = Arc::new(Mutex::new("".to_string()));
 
     let config_path = "redis.conf";
-    let logger = logger::Logger::init(logger::Logger::get_log_path_from_config(config_path));
+    let logger = logger::Logger::init(logger::Logger::get_log_path_from_config(config_path), "0000".parse().unwrap());
 
     let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
 
@@ -207,7 +207,10 @@ fn listen_to_redis_response(
                 let resp_command = format_resp_command(&command_parts);
                 if let Err(e) = microservice_socket.write_all(resp_command.as_bytes()) {
                     eprintln!("Error al enviar mensaje de actualizacion de archivo: {}", e);
-                    logger.log(&format!("Error al enviar mensaje de actualizacion de archivo: {}", e));
+                    logger.log(&format!(
+                        "Error al enviar mensaje de actualizacion de archivo: {}",
+                        e
+                    ));
                 }
             }
             s if s.contains("WRITE|") => {
