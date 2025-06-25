@@ -25,7 +25,10 @@ impl Logger {
             // Solo el nodo 4000 escribe la línea de reinicio
             if port == 4000 {
                 let now = Local::now().format("[%Y-%m-%d %H:%M:%S]");
-                let reinicio_line = format!("\n{} -------------------- REINICIO DEL SERVIDOR --------------------\n", now);
+                let reinicio_line = format!(
+                    "\n{} -------------------- REINICIO DEL SERVIDOR --------------------\n",
+                    now
+                );
                 let _ = file.write_all(reinicio_line.as_bytes());
             }
 

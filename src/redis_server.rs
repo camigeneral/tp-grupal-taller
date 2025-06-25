@@ -345,7 +345,6 @@ fn handle_client(
                 println!("Error al parsear comando: {}", e);
                 logger.log(&format!("Error al parsear comando: {}", e));
 
-
                 if let Err(write_err) = write_response(
                     stream,
                     &CommandResponse::Error("Comando inválido".to_string()),
@@ -354,8 +353,10 @@ fn handle_client(
                         "Error al escribir respuesta de comando inválido: {}",
                         write_err
                     );
-                    logger.log(&format!("Error al escribir respuesta de comando inválido: {}",
-                        write_err));
+                    logger.log(&format!(
+                        "Error al escribir respuesta de comando inválido: {}",
+                        write_err
+                    ));
 
                     break;
                 }
@@ -402,47 +403,47 @@ fn handle_client(
             }
         };
 
-        let response = match resolve_key_location(key, &ctx.local_node, &ctx.peer_nodes, logger.clone()) {
-            Ok(()) => {
-                let unparsed_command = command_request.unparsed_command.clone();
+        let response =
+            match resolve_key_location(key, &ctx.local_node, &ctx.peer_nodes, logger.clone()) {
+                Ok(()) => {
+                    let unparsed_command = command_request.unparsed_command.clone();
 
-                let redis_response = redis::execute_command(
-                    command_request,
-                    &ctx.shared_documents,
-                    &ctx.document_subscribers,
-                    &ctx.shared_sets,
-                    client_id.clone(),
-                    &ctx.active_clients,
-                    &ctx.logged_clients,
-                );
-
-                if redis_response.publish {
-                    if let Err(e) = publish_update(
-                        &ctx.active_clients,
+                    let redis_response = redis::execute_command(
+                        command_request,
+                        &ctx.shared_documents,
                         &ctx.document_subscribers,
-                        redis_response.message,
-                        redis_response.doc,
-                        logger.clone(),
-                    ) {
-                        eprintln!("Error al publicar actualización: {}", e);
-                        logger.log(&format!("Error al publicar actualización: {}", e));
+                        &ctx.shared_sets,
+                        client_id.clone(),
+                        &ctx.active_clients,
+                        &ctx.logged_clients,
+                    );
+
+                    if redis_response.publish {
+                        if let Err(e) = publish_update(
+                            &ctx.active_clients,
+                            &ctx.document_subscribers,
+                            redis_response.message,
+                            redis_response.doc,
+                            logger.clone(),
+                        ) {
+                            eprintln!("Error al publicar actualización: {}", e);
+                            logger.log(&format!("Error al publicar actualización: {}", e));
+                        }
                     }
+
+                    if let Err(e) = redis_node_handler::broadcast_to_replicas(
+                        &ctx.local_node,
+                        &ctx.peer_nodes,
+                        unparsed_command,
+                    ) {
+                        eprintln!("Error al propagar comando a réplicas: {}", e);
+                        logger.log(&format!("Error al propagar comando a réplicas: {}", e));
+                    }
+
+                    redis_response.response
                 }
-
-                if let Err(e) = redis_node_handler::broadcast_to_replicas(
-                    &ctx.local_node,
-                    &ctx.peer_nodes,
-                    unparsed_command,
-                ) {
-                    eprintln!("Error al propagar comando a réplicas: {}", e);
-                    logger.log(&format!("Error al propagar comando a réplicas: {}", e));
-
-                }
-
-                redis_response.response
-            }
-            Err(response) => response,
-        };
+                Err(response) => response,
+            };
 
         if let Err(e) = write_response(stream, &response) {
             println!("Error al escribir respuesta: {}", e);
@@ -558,8 +559,10 @@ pub fn resolve_key_location(
             let redis_redirect_response = CommandResponse::String(response_string.clone());
 
             println!("Hashing para otro nodo: {:?}", response_string.clone());
-            logger.log(&format!("Hashing para otro nodo: {:?}", response_string.clone()));
-
+            logger.log(&format!(
+                "Hashing para otro nodo: {:?}",
+                response_string.clone()
+            ));
 
             return Err(redis_redirect_response);
         } else {
@@ -570,8 +573,10 @@ pub fn resolve_key_location(
                 "Hashing para nodo indefinido: {:?}",
                 response_string.clone()
             );
-            logger.log(&format!("Hashing para nodo indefinido: {:?}", response_string.clone()));
-
+            logger.log(&format!(
+                "Hashing para nodo indefinido: {:?}",
+                response_string.clone()
+            ));
 
             return Err(redis_redirect_response);
         }
@@ -822,7 +827,10 @@ pub fn subscribe_microservice_to_all_docs(
         Ok(lock) => lock,
         Err(poisoned) => {
             eprintln!("Error al bloquear clients_on_docs mutex: {:?}", poisoned);
-            logger.log(&format!("Error al bloquear clients_on_docs mutex: {:?}", poisoned));
+            logger.log(&format!(
+                "Error al bloquear clients_on_docs mutex: {:?}",
+                poisoned
+            ));
 
             return;
         }
@@ -839,7 +847,10 @@ pub fn subscribe_microservice_to_all_docs(
                 "Microservicio {} suscripto automáticamente a {}",
                 addr, doc_name
             );
-            logger.log(&format!("Microservicio {} suscripto automáticamente a {}",addr, doc_name));
+            logger.log(&format!(
+                "Microservicio {} suscripto automáticamente a {}",
+                addr, doc_name
+            ));
         }
     }
 }
