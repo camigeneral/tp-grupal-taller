@@ -90,6 +90,9 @@ pub fn client_run(
         }
     });
 
+    let cloned_socket = redis_socket.try_clone()?;
+    let addrs = get_client_addr(cloned_socket);
+
     let _ = connect_node_sender.send(redis_socket);
 
     for command in rx {
@@ -118,7 +121,13 @@ pub fn client_run(
                 format_resp_command(&parts)
             } else if parts[0].contains("WRITE") {
                 let splited_command: Vec<&str> = command.split("|").collect();
-                format_resp_publish(splited_command[3], &command)
+                if let Ok(ref addr) = addrs {                    
+                    let client_command = format!("{}|{}", command.clone(), addr.clone());
+                    format_resp_publish(splited_command[4], &client_command)
+                } else {
+                    continue; 
+                }
+                
             } else {
                 format_resp_publish(parts[1], &command)
             };
@@ -144,6 +153,17 @@ pub fn client_run(
     }
 
     Ok(())
+}
+
+fn get_client_addr(socket: TcpStream) -> Result<std::string::String, std::io::Error>  {
+    let local_addr = match socket.local_addr() {
+        Ok(addr) => addr,
+        Err(e) => {
+            eprintln!("Error al obtener la dirección local: {}", e);
+            return Err(e);
+        }
+    };
+    Ok(local_addr.to_string())
 }
 
 fn listen_to_redis_response(
