@@ -31,5 +31,14 @@ impl DocumentValueInfo{
         } else {
             self.value.replace('\n', "<enter>")
         };
+        self.value = self.value.replace(' ', "<space>");
+    }
+
+    pub fn decode_text(&mut self) {
+        self.value = self.value
+        .replace("<space>", " ")
+        .replace("<enter>", "\n")
+        .replace("<delete>", "")
+        ;
     }
 }

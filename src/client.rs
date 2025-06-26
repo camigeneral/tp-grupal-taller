@@ -1,6 +1,7 @@
 extern crate relm4;
 use self::relm4::Sender;
 use crate::app::AppMsg;
+use crate::components::structs::document_value_info::DocumentValueInfo;
 use commands::redis_parser::{format_resp_command, format_resp_publish};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
@@ -90,7 +91,7 @@ pub fn client_run(
         }
     });
 
-    let cloned_socket = redis_socket.try_clone()?;
+    let cloned_socket = socket.try_clone()?;
     let addrs = get_client_addr(cloned_socket);
 
     let _ = connect_node_sender.send(redis_socket);
@@ -173,6 +174,7 @@ fn listen_to_redis_response(
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     last_command_sent: Arc<Mutex<String>>,
 ) -> std::io::Result<()> {
+
     let client_socket_cloned = match client_socket.try_clone() {
         Ok(clone) => clone,
         Err(e) => {
@@ -203,7 +205,7 @@ fn listen_to_redis_response(
                 return Err(e);
             }
         };
-
+        
         println!("Respuesta de redis: {}", line);
 
         let response: Vec<&str> = line.split_whitespace().collect();
@@ -255,23 +257,24 @@ fn listen_to_redis_response(
                 }
             }
 
-            s if s.starts_with("UPDATE-CLIENT") => {
+            s if s.contains("WRITE|") => { 
+
                 if let Some(sender) = &ui_sender {
-                    let parts: Vec<&str> = if response.len() > 1 {
-                        line.trim_end_matches('\n').split('|').collect()
-                    } else {
+                    let parts: Vec<&str> =
                         response[0]
                             .trim_end_matches('\n')
                             .split('|')
                             .map(|s| s.trim_end_matches('\r'))
-                            .collect()
-                    };
-                    let file = parts[1].to_string();
-                    let index = parts[2].to_string();
-                    let text = parts[3].to_string();
-                    let _ = sender.send(AppMsg::RefreshData(file, index, text));
+                            .collect();
+                    let index = parts[1].to_string().parse::<i32>().unwrap();
+                    let text = parts[2].to_string();
+                    let file = parts[4].to_string();                                        
+                    let mut doc_info = DocumentValueInfo::new(text, index);
+                    doc_info.file = file.clone();
+                    doc_info.decode_text();
+                    let _ = sender.send(AppMsg::RefreshData(doc_info));                    
                 }
-            }
+            }      
             s if s.starts_with("FILES") => {
                 let parts: Vec<&str> = line.trim().split('|').collect();
                 let archivos = if parts.len() > 1 {

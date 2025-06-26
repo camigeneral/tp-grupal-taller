@@ -228,7 +228,6 @@ fn listen_to_redis_response(
         match first_response {
             s if s.starts_with("-ERR") => {}
             s if s.starts_with("CLIENT") => {
-                // se va a procesar lo que otro agrego
                 let response_client: Vec<&str> = response[1].split('|').collect();
                 let client_address = response_client[0];
                 let doc_name = response_client[1];
@@ -266,7 +265,7 @@ fn listen_to_redis_response(
             }
 
             s if s.contains("WRITE|") => {
-                let parts: Vec<&str> = if response.len() > 1 {
+                /* let parts: Vec<&str> = if response.len() > 1 {
                     line.trim_end_matches('\n').split('|').collect()
                 } else {
                     response[0].trim_end_matches('\n').split('|').collect()
@@ -286,7 +285,7 @@ fn listen_to_redis_response(
                     }
                     println!("RESP enviado: {}", resp_command);
                     microservice_socket.write_all(resp_command.as_bytes())?;
-                }
+                } */
             }
             "ASK" => {
                 if response.len() < 3 {

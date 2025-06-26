@@ -49,7 +49,7 @@ pub enum FileWorkspaceMsg {
     ReloadFiles,
     ContentAdded(DocumentValueInfo),
 
-    UpdateFile(String, String, String),
+    UpdateFile(DocumentValueInfo),
     ContentAddedSpreadSheet(String, String, String),
     UpdateFilesList(Vec<(String, FileType)>),
 }
@@ -231,42 +231,44 @@ impl SimpleComponent for FileWorkspace {
                 self.editor_visible = false;
             }
 
-            FileWorkspaceMsg::UpdateFile(file, index, value) => {
-                let file_type = if file.ends_with(".xlsx") {
+            FileWorkspaceMsg::UpdateFile(doc_info) => {
+                let file_type = if doc_info.file.ends_with(".xlsx") {
                     FileType::Sheet
                 } else {
                     FileType::Text
                 };
-                let mut val = value.trim_end_matches('\r').to_string();
+                let mut val = doc_info.value.trim_end_matches('\r').to_string();
                 let file_editor_sender = self.file_editor_ctrl.sender().clone();
 
-                if let Some(doc) = self.files.get_mut(&(file.clone(), file_type.clone())) {
-                    if let Ok(parsed_index) = index.parse::<usize>() {
-                        match doc {
-                            Documento::Calculo(data) => {
-                                if parsed_index < data.len() {
-                                    data[parsed_index] = val.clone();
-                                }
-                            }
-                            Documento::Texto(lines) => {
-                                if parsed_index < lines.len() {
-                                    lines[parsed_index] = val.clone();
-                                } else {
-                                    lines.push(val.clone());
-                                }
-                                val = lines.join("\n");
-                            }
-                        }
+                if let Some(doc) = self.files.get_mut(&(doc_info.file.clone(), file_type.clone())) {
 
-                        file_editor_sender
+                        if doc_info.index >= 0 {
+                            let parsed_index = doc_info.index as usize;
+                            match doc {
+                                Documento::Calculo(data) => {
+                                    if parsed_index < data.len() {
+                                        data[parsed_index] = val.clone();
+                                    }
+                                }
+                                Documento::Texto(lines) => {
+                                    if parsed_index < lines.len() {
+                                        lines[parsed_index] = val.clone();
+                                    } else {
+                                        lines.push(val.clone());
+                                    }
+                                    val = lines.join("\n");
+                                }
+                            }
+
+                            file_editor_sender
                             .send(FileEditorMessage::UpdateFileContent(
-                                file.clone(),
-                                parsed_index as i32,
+                                doc_info.file.clone(),
+                                doc_info.index,
                                 val,
                                 file_type.clone(),
                             ))
                             .unwrap();
-                    }
+                        }
                 }
             }
 

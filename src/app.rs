@@ -59,7 +59,7 @@ pub enum AppMsg {
     ExecuteCommand,
     CloseApplication,
     GetFiles,
-    RefreshData(String, String, String),
+    RefreshData(DocumentValueInfo),
     CreateFile(String, String),
     SubscribeFile(String),
     UnsubscribeFile(String),
@@ -374,7 +374,7 @@ impl SimpleComponent for AppModel {
                  doc_info.value, 
                  doc_info.timestamp,
                  doc_info.file);
-                //sender.input(AppMsg::ExecuteCommand);
+                sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::AddContentSpreadSheet(file_id, col, row, text) => {
                 let clean_text = if text.is_empty() {
@@ -443,9 +443,10 @@ impl SimpleComponent for AppModel {
                     println!("No hay un canal de comando disponible.");
                 }
             }
-            AppMsg::RefreshData(file, index, value) => {
+            AppMsg::RefreshData(doc_info) => {
+                println!("doc a actualizar: {:#?}", doc_info);
                 self.files_manager_cont
-                    .emit(FileWorkspaceMsg::UpdateFile(file, index, value));
+                    .emit(FileWorkspaceMsg::UpdateFile(doc_info));
             }
 
             AppMsg::CloseApplication => {
