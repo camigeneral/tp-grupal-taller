@@ -14,6 +14,8 @@ use components::file_editor::FileEditorMessage;
 use components::list_files::FileFilterAction;
 use components::types::FileType;
 use std::collections::HashMap;
+use crate::components::structs::document_value_info::DocumentValueInfo;
+
 
 #[derive(Debug)]
 /// Estructura principal que gestiona el espacio de trabajo de archivos, que incluye una lista de archivos
@@ -45,7 +47,7 @@ pub enum FileWorkspaceMsg {
     CloseEditor,
     SubscribeFile(String),
     ReloadFiles,
-    ContentAdded(String, i32),
+    ContentAdded(DocumentValueInfo),
 
     UpdateFile(String, String, String),
     ContentAddedSpreadSheet(String, String, String),
@@ -56,7 +58,7 @@ pub enum FileWorkspaceMsg {
 pub enum FileWorkspaceOutputMessage {
     SubscribeFile(String),
     UnsubscribeFile(String),
-    ContentAdded(String, String, i32),
+    ContentAdded(DocumentValueInfo),
     ContentAddedSpreadSheet(String, String, String, String),
     FilesLoaded,
 }
@@ -120,8 +122,8 @@ impl SimpleComponent for FileWorkspace {
                 sender.input_sender(),
                 |msg: FileEditorOutputMessage| match msg {
                     FileEditorOutputMessage::GoBack => FileWorkspaceMsg::CloseEditor,
-                    FileEditorOutputMessage::ContentAdded(new_text, offset) => {
-                        FileWorkspaceMsg::ContentAdded(new_text, offset)
+                    FileEditorOutputMessage::ContentAdded(doc_info) => {
+                        FileWorkspaceMsg::ContentAdded(doc_info)
                     }
                     FileEditorOutputMessage::ContentAddedSpreadSheet(row, col, text) => {
                         FileWorkspaceMsg::ContentAddedSpreadSheet(row, col, text)
@@ -155,11 +157,9 @@ impl SimpleComponent for FileWorkspace {
                     text,
                 ));
             }
-            FileWorkspaceMsg::ContentAdded(text, offset) => {
+            FileWorkspaceMsg::ContentAdded(doc_info) => {
                 let _ = sender.output(FileWorkspaceOutputMessage::ContentAdded(
-                    self.current_file.clone(),
-                    text,
-                    offset,
+                    doc_info
                 ));
             }
 

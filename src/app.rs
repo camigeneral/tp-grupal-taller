@@ -16,6 +16,7 @@ use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
 use components::types::FileType;
 use std::collections::HashMap;
 use std::thread;
+use crate::components::structs::document_value_info::DocumentValueInfo;
 
 use std::sync::mpsc::{channel, Sender};
 
@@ -75,7 +76,7 @@ pub enum AppMsg {
     CreateTextDocument,
     /// Mensaje para crear un documento de tipo hoja de cálculo.
     CreateSpreadsheetDocument,
-    AddContent(String, String, i32),
+    AddContent(DocumentValueInfo),
     AddContentSpreadSheet(String, String, String, String),
     UpdateFilesList(Vec<String>),
     FilesLoaded,
@@ -219,8 +220,8 @@ impl SimpleComponent for AppModel {
             |command: FileWorkspaceOutputMessage| match command {
                 FileWorkspaceOutputMessage::SubscribeFile(file) => AppMsg::SubscribeFile(file),
                 FileWorkspaceOutputMessage::UnsubscribeFile(file) => AppMsg::UnsubscribeFile(file),
-                FileWorkspaceOutputMessage::ContentAdded(file, text, line_number) => {
-                    AppMsg::AddContent(file, text, line_number)
+                FileWorkspaceOutputMessage::ContentAdded(doc_info) => {
+                    AppMsg::AddContent(doc_info)
                 }
                 FileWorkspaceOutputMessage::ContentAddedSpreadSheet(file, col, row, text) => {
                     AppMsg::AddContentSpreadSheet(file, col, row, text)
@@ -366,14 +367,14 @@ impl SimpleComponent for AppModel {
                 self.command = format!("SET {} \"{}\"", file_id, content);
                 sender.input(AppMsg::ExecuteCommand);
             }
-            AppMsg::AddContent(file_id, text, line_number) => {
-                let clean_text = if text.trim_end_matches('\n').is_empty() {
-                    "<delete>".to_string()
-                } else {
-                    text
-                };
-                self.command = format!("WRITE|{}|{}|{}", line_number, clean_text, file_id);
-                sender.input(AppMsg::ExecuteCommand);
+            AppMsg::AddContent(doc_info) => {
+                println!("Doc info: {:#?}", doc_info);            
+                self.command = format!("WRITE|{}|{}|{}|{}",
+                 doc_info.index, 
+                 doc_info.value, 
+                 doc_info.timestamp,
+                 doc_info.file);
+                //sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::AddContentSpreadSheet(file_id, col, row, text) => {
                 let clean_text = if text.is_empty() {

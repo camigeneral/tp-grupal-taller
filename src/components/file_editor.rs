@@ -14,6 +14,8 @@ use components::spreadsheet::SpreadsheetMsg;
 use components::text_editor::TextEditorMessage;
 use components::text_editor::TextEditorModel;
 use components::types::FileType;
+use crate::components::structs::document_value_info::DocumentValueInfo;
+
 
 /// Estructura que representa el modelo del editor de archivos. Contiene información sobre el archivo
 /// que se está editando, el contenido del archivo y el estado de cambios manuales en el contenido.
@@ -42,7 +44,7 @@ pub struct FileEditorModel {
 /// Enum que define los posibles mensajes que el editor de archivos puede recibir.
 #[derive(Debug)]
 pub enum FileEditorMessage {
-    ContentAdded(String, i32),
+    ContentAdded(DocumentValueInfo),
     ContentAddedSpreadSheet(String, String, String),
     UpdateFile(String, i32, String, FileType),
     UpdateFileContent(String, i32, String, FileType),
@@ -52,7 +54,7 @@ pub enum FileEditorMessage {
 /// Enum que define los posibles mensajes de salida del editor de archivos.
 #[derive(Debug)]
 pub enum FileEditorOutputMessage {
-    ContentAdded(String, i32),
+    ContentAdded(DocumentValueInfo),
     ContentAddedSpreadSheet(String, String, String),
     /// Mensaje que indica que se debe volver a la vista anterior.
     GoBack,
@@ -125,8 +127,8 @@ impl SimpleComponent for FileEditorModel {
             .launch((file_name.clone(), num_contributors, content.clone()))
             .forward(sender.input_sender(), |msg| match msg {
                 TextEditorOutputMessage::GoBack => FileEditorMessage::ResetEditor,
-                TextEditorOutputMessage::ContentAdded(text, line_number) => {
-                    FileEditorMessage::ContentAdded(text, line_number)
+                TextEditorOutputMessage::ContentAdded(doc_info) => {
+                    FileEditorMessage::ContentAdded(doc_info)
                 }
             });
 
@@ -154,8 +156,8 @@ impl SimpleComponent for FileEditorModel {
                 ));
             }
 
-            FileEditorMessage::ContentAdded(new_text, line_number) => {
-                let _ = sender.output(FileEditorOutputMessage::ContentAdded(new_text, line_number));
+            FileEditorMessage::ContentAdded(doc_info) => {
+                let _ = sender.output(FileEditorOutputMessage::ContentAdded(doc_info));
             }
             FileEditorMessage::UpdateFile(file_name, contributors, content, file_type) => {
                 self.file_name = file_name.clone();
