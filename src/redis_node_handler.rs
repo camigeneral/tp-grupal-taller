@@ -827,7 +827,7 @@ fn ping_to_master(
     let mut last_sent = Instant::now();
 
     let mut stream_to_ping = None;
-
+    println!("PING TO MASTER");
     loop {
         let mut now = Instant::now();
         if now.duration_since(last_sent) >= ping_interval {
@@ -849,15 +849,27 @@ fn ping_to_master(
 
             match stream_to_ping.as_ref() {
                 Some(mut stream) => {
+
                     stream.set_read_timeout(Some(error_interval))?;
                     let mut reader = BufReader::new(stream.try_clone()?);
                     let encrypted_b64 = encrypt_message(&cipher, "ping\n");
+
+                    println!("escribo encriptado");
+
+                    let mut encrypted_b64 = encrypt_message(&cipher, "ping\n");
+                    encrypted_b64.push('\n');
                     stream.write_all(encrypted_b64.as_bytes())?;
-                    stream.write_all(b"\n")?;
+                    println!("escibo salto de linea");
+                    stream.flush()?;
+
                     now = Instant::now();
 
                     let mut line = String::new();
-                    match reader.read_line(&mut line) {
+                    let read_result = reader.read_line(&mut line);
+
+                    println!("LEO: {:?} | line: {:?}", read_result, line.trim());
+
+                    match read_result {
                         Ok(0) => {
                             println!("Connection closed by peer");
                             request_master_state_confirmation(&local_node, &peer_nodes);
@@ -866,6 +878,7 @@ fn ping_to_master(
                         }
                         Ok(_) => {
                             println!("Received response: {}", line.trim());
+                            // Aquí podrías intentar decodificar y descifrar la respuesta si esperas un pong cifrado
                         }
                         Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
                             println!("Timeout: no response within {:?}", error_interval);
@@ -958,12 +971,19 @@ fn request_master_state_confirmation(
                 let encrypted_b64 = encrypt_message(&cipher, &message);
                 match peer.stream.try_clone() {
                     Ok(mut peer_stream) => {
-                        if peer_stream.write_all(encrypted_b64.as_bytes()).is_ok() {
-                            peer_stream.write_all(b"\n").ok();
-                            contacted_replica = true;
-                        } else {
-                            eprintln!("Error escribiendo a la réplica");
-                        }
+                        println!("Enviando confirm_master_down a {}", peer.port);
+                        let res = peer_stream.write_all(encrypted_b64.as_bytes());
+                        println!("Resultado write_all: {:?}", res);
+                        let res_nl = peer_stream.write_all(b"\n");
+                        println!("Resultado write_all salto de línea: {:?}", res_nl);
+
+                        
+                        // if peer_stream.write_all(encrypted_b64.as_bytes()).is_ok() {
+                        //     peer_stream.write_all(b"\n").ok();
+                        //     contacted_replica = true;
+                        // } else {
+                        //     eprintln!("Error escribiendo a la réplica");
+                        // }
                     }
                     Err(_) => {
                         eprintln!("Error clonando stream para réplica");
