@@ -130,12 +130,13 @@ pub fn start_node_connection(
                     };
 
                     let message = format!(
-                        "{:?} {} {:?} {} {}\n",
+                        "{:?} {} {:?} {} {} {}\n",
                         RedisMessage::Node,
                         locked_local_node.port,
                         locked_local_node.role,
                         locked_local_node.hash_range.0,
-                        locked_local_node.hash_range.1
+                        locked_local_node.hash_range.1,
+                        locked_local_node.priority,
                     );
 
                     if let Err(e) = cloned_stream.write_all(message.as_bytes()) {
@@ -150,6 +151,7 @@ pub fn start_node_connection(
                             NodeRole::Unknown,
                             (0, 16383),
                             NodeState::Active,
+                            0,
                         ),
                     );
                 }
@@ -254,9 +256,7 @@ fn handle_node(
 
         match command.as_str() {
             "node" => {
-                println!("recibi el comando node");
-
-                if input.len() < 5 {
+                if input.len() < 6 {
                     continue;
                 }
 
@@ -269,6 +269,10 @@ fn handle_node(
                     Err(_) => continue,
                 };
                 let hash_range_end = match input[4].trim().parse::<usize>() {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                let priority = match input[5].trim().parse::<usize>() {
                     Ok(v) => v,
                     Err(_) => continue,
                 };
@@ -310,6 +314,7 @@ fn handle_node(
                         node_role.clone(),
                         (hash_range_start, hash_range_end),
                         NodeState::Active,
+                        priority,
                     );
 
                     if hash_range_start == local_node_locked.hash_range.0 {
@@ -329,12 +334,13 @@ fn handle_node(
                     lock_nodes.insert(node_address.clone(), node_client);
 
                     let message = format!(
-                        "{:?} {} {:?} {} {}\n",
+                        "{:?} {} {:?} {} {} {}\n",
                         RedisMessage::Node,
                         local_node_locked.port,
                         local_node_locked.role,
                         local_node_locked.hash_range.0,
-                        local_node_locked.hash_range.1
+                        local_node_locked.hash_range.1,
+                        local_node_locked.priority,
                     );
 
                     let _ = stream_to_respond.write_all(message.as_bytes());
