@@ -1,6 +1,5 @@
 use std::collections::HashMap;
-use std::io::Write;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 #[allow(unused_imports)]
 use std::net::TcpListener;
 use std::net::TcpStream;
@@ -12,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 #[allow(unused_imports)]
 use std::time::Duration;
+
 #[path = "utils/logger.rs"]
 mod logger;
 #[path = "utils/redis_parser.rs"]
@@ -25,39 +25,26 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let last_command_sent: Arc<Mutex<String>> = Arc::new(Mutex::new("".to_string()));
 
     let config_path = "redis.conf";
-    let log_path = logger::get_log_path_from_config(config_path);
-    // Canal para conectar y lanzar escuchas por cada nodo
+    let logger = logger::Logger::init(
+        logger::Logger::get_log_path_from_config(config_path),
+        "0000".parse().unwrap(),
+    );
+
     let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
 
-    use std::fs;
-    if let Ok(metadata) = fs::metadata(&log_path) {
-        if metadata.len() > 0 {
-            if let Ok(mut file) = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&log_path)
-            {
-                let _ = writeln!(file);
-            }
-        }
-    }
-
-    println!("Conectándome al server de redis en {:?}", main_address);
+    println!("Conectandome al server de redis en {:?}", main_address);
     let mut socket: TcpStream = TcpStream::connect(&main_address)?;
-    logger::log_event(
-        &log_path,
-        &format!(
-            "Microservicio conectandose al server de redis en {:?}",
-            main_address
-        ),
-    );
+    logger.log(&format!(
+        "Microservicio conectandose al server de redis en {:?}",
+        main_address
+    ));
     let redis_socket = socket.try_clone()?;
     let redis_socket_clone_for_hashmap = socket.try_clone()?;
 
     let command = "Microservicio\r\n".to_string();
 
     println!("Enviando: {:?}", command);
-    logger::log_event(&log_path, &format!("Microservicio envia {:?}", command));
+    logger.log(&format!("Microservicio envia {:?}", command));
 
     {
         let cloned_node_streams = Arc::clone(&node_streams);
@@ -70,10 +57,8 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                 connect_nodes_receiver,
                 cloned_node_streams,
                 cloned_last_command,
-                &log_path,
             ) {
                 eprintln!("Error en la conexión con el nodo: {}", e);
-                // logger::log_event(&log_path, &format!("Error en la conexión con el nodo: {}", cloned_last_command.lock()));
             }
         });
     }
@@ -105,8 +90,11 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         match TcpStream::connect(&addr) {
             Ok(mut extra_socket) => {
                 println!("Microservicio conectado a nodo adicional: {}", addr);
+                logger.log(&format!(
+                    "Microservicio conectado a nodo adicional: {}",
+                    addr
+                ));
 
-                // Identificarse como microservicio también
                 let parts: Vec<&str> = "Microservicio".split_whitespace().collect();
                 let resp_command = format_resp_command(&parts);
                 extra_socket.write_all(resp_command.as_bytes())?;
@@ -120,6 +108,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     Err(e) => {
                         eprintln!("Error obteniendo lock de node_streams: {}", e);
+                        logger.log(&format!("Error obteniendo lock de node_streams: {}", e));
                     }
                 }
 
@@ -127,47 +116,26 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Err(e) => {
                 eprintln!("Error al conectar con nodo {}: {}", addr, e);
+                logger.log(&format!("Error al conectar con nodo {}: {}", addr, e));
             }
         }
     }
     {
         let node_streams_clone = Arc::clone(&node_streams);
-        let _main_address_clone = main_address.clone();
-        let _last_command_sent_clone = Arc::clone(&last_command_sent);
 
         thread::spawn(move || loop {
             match node_streams_clone.lock() {
-                Ok(_streams) => {
-                    /* if let Some(mut stream) = streams.get(&main_address_clone) {
-                        let command_parts = vec!["SET", "docprueba.txt", ""];
-                        let resp_command = format_resp_command(&command_parts);
-
-                        match last_command_sent_clone.lock() {
-                            Ok(mut last_command) => {
-                                *last_command = resp_command.clone();
-                            }
-                            Err(e) => {
-                                eprintln!("Error obteniendo lock de last_command_sent: {}", e);
-                            }
-                        }
-
-                        if let Err(e) = stream.write_all(resp_command.as_bytes()) {
-                            eprintln!("Error al enviar comando SET docprueba hola: {}", e);
-                        } else {
-                            println!("Comando automático enviado: SET docprueba hola");
-                        }
-                    } */
-                }
+                Ok(_) => {}
                 Err(e) => {
                     eprintln!("Error obteniendo lock de node_streams: {}", e);
+                    logger.log(&format!("Error obteniendo lock de node_streams: {}", e));
                 }
             }
-
             thread::sleep(Duration::from_secs(61812100));
         });
     }
     loop {
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        thread::sleep(Duration::from_secs(1));
     }
 }
 
@@ -176,13 +144,11 @@ fn connect_to_nodes(
     reciever: Receiver<TcpStream>,
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     last_command_sent: Arc<Mutex<String>>,
-    log_path: &str,
 ) -> std::io::Result<()> {
     for stream in reciever {
         let cloned_node_streams = Arc::clone(&node_streams);
         let cloned_last_command = Arc::clone(&last_command_sent);
         let cloned_own_sender = sender.clone();
-        let log_path_clone = log_path.to_string();
 
         thread::spawn(move || {
             if let Err(e) = listen_to_redis_response(
@@ -190,13 +156,11 @@ fn connect_to_nodes(
                 cloned_own_sender,
                 cloned_node_streams,
                 cloned_last_command,
-                &log_path_clone,
             ) {
                 eprintln!("Error en la conexión con el nodo: {}", e);
             }
         });
     }
-
     Ok(())
 }
 
@@ -205,7 +169,6 @@ fn listen_to_redis_response(
     connect_node_sender: MpscSender<TcpStream>,
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     last_command_sent: Arc<Mutex<String>>,
-    log_path: &str,
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(microservice_socket.try_clone()?);
     loop {
@@ -215,10 +178,6 @@ fn listen_to_redis_response(
             break;
         }
 
-        logger::log_event(
-            log_path,
-            &format!("Respuesta de redis en el microservicio: {}", line),
-        );
         let line_clone = line.clone();
         let response: Vec<&str> = line.split_whitespace().collect();
 
@@ -228,28 +187,20 @@ fn listen_to_redis_response(
         match first_response {
             s if s.starts_with("-ERR") => {}
             s if s.starts_with("CLIENT") => {
-                // se va a procesar lo que otro agrego
                 let response_client: Vec<&str> = response[1].split('|').collect();
                 let client_address = response_client[0];
                 let doc_name = response_client[1];
 
                 let bienvenida = format!("Welcome {} {}", doc_name, client_address);
-
                 let parts: Vec<&str> = bienvenida.split_whitespace().collect();
-
                 let mensaje_final = format_resp_command(&parts);
 
                 if let Err(e) = microservice_socket.write_all(mensaje_final.as_bytes()) {
                     eprintln!("Error al enviar mensaje de bienvenida: {}", e);
-                    logger::log_event(
-                        log_path,
-                        &format!("Error al enviar mensaje de bienvenida: {}", e),
-                    );
                 }
             }
             s if s.starts_with("UPDATE-FILES") => {
                 let parts: Vec<&str> = line_clone.trim_end_matches('\n').split('|').collect();
-
                 let doc_name: &str = parts[1];
                 let index = parts[2];
                 let text: &str = parts[3];
@@ -258,13 +209,8 @@ fn listen_to_redis_response(
                 let resp_command = format_resp_command(&command_parts);
                 if let Err(e) = microservice_socket.write_all(resp_command.as_bytes()) {
                     eprintln!("Error al enviar mensaje de actualizacion de archivo: {}", e);
-                    logger::log_event(
-                        log_path,
-                        &format!("Error al enviar mensaje de actualizacion de archivo: {}", e),
-                    );
                 }
             }
-
             s if s.contains("WRITE|") => {
                 let parts: Vec<&str> = if response.len() > 1 {
                     line.trim_end_matches('\n').split('|').collect()
@@ -276,15 +222,14 @@ fn listen_to_redis_response(
                     let line_number: &str = parts[1];
                     let text = parts[2];
                     let file_name = parts[3];
-
                     let command_parts = ["add_content", file_name, line_number, text];
-
                     let resp_command = format_resp_command(&command_parts);
                     {
                         let mut last_command = last_command_sent.lock().unwrap();
                         *last_command = resp_command.clone();
                     }
                     println!("RESP enviado: {}", resp_command);
+
                     microservice_socket.write_all(resp_command.as_bytes())?;
                 }
             }
@@ -302,11 +247,6 @@ fn listen_to_redis_response(
             }
             _ => {}
         }
-
-        let response: Vec<&str> = line.split_whitespace().collect();
-
-        let first = response[0].to_uppercase();
-        let _first_response = first.as_str();
     }
     Ok(())
 }
@@ -314,11 +254,9 @@ fn listen_to_redis_response(
 #[allow(dead_code)]
 pub fn format_resp_command(command_parts: &[&str]) -> String {
     let mut resp_message = format!("*{}\r\n", command_parts.len());
-
     for part in command_parts {
         resp_message.push_str(&format!("${}\r\n{}\r\n", part.len(), part));
     }
-
     resp_message
 }
 
@@ -345,7 +283,6 @@ fn send_command_to_nodes(
     };
 
     let new_node_address = response[2].to_string();
-
     println!("Ultimo comando ejecutado: {:#?}", last_line_cloned);
     println!("Redirigiendo a nodo: {}", new_node_address);
 
@@ -363,10 +300,10 @@ fn send_command_to_nodes(
         locked_node_streams.insert(new_node_address, final_stream);
 
         let _ = connect_node_sender.send(cloned_stream_to_connect.try_clone()?);
-        std::thread::sleep(std::time::Duration::from_millis(2));
+        thread::sleep(Duration::from_millis(2));
 
         if let Err(e) = cloned_stream_to_connect.write_all(last_line_cloned.as_bytes()) {
-            eprintln!("Error al reenviar el último comando: {}", e);
+            eprintln!("Error al reenviar el Ultimo comando: {}", e);
         }
     }
     Ok(())

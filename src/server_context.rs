@@ -13,5 +13,4 @@ pub struct ServerContext {
     pub local_node: Arc<Mutex<local_node::LocalNode>>,
     pub peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
     pub logged_clients: Arc<Mutex<HashMap<String, bool>>>,
-    pub log_path: String,
 }
