@@ -13,6 +13,8 @@ pub enum NodeRole {
 pub enum NodeState {
     Active,
     Inactive,
+    Fail,
+    PFail,
 }
 
 /// Estructura que representa la instancia de nodo levantada en la consola. Contiene el puerto en el que

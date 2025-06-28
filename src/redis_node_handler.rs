@@ -14,10 +14,13 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+const PRINT_PINGS: bool = true;
+
 #[derive(Debug)]
 pub enum RedisMessage {
     Node,
 }
+
 
 pub fn get_config_path(port: usize) -> Result<String, std::io::Error> {
     let config_path = match port {
@@ -41,12 +44,14 @@ pub fn get_config_path(port: usize) -> Result<String, std::io::Error> {
     Ok(config_path.to_string())
 }
 
+
 pub fn create_local_node(port: usize) -> Result<Arc<Mutex<LocalNode>>, std::io::Error> {
     let config_path = get_config_path(port)?;
 
     let local_node = LocalNode::new_from_config(config_path)?;
     Ok(Arc::new(Mutex::new(local_node)))
 }
+
 
 /// Intenta establecer una primera conexion con los otros nodos del servidor
 ///
@@ -89,11 +94,18 @@ pub fn start_node_connection(
         );
     });
 
-    let cloned_local_node_for_ping_pong = Arc::clone(local_node);
-    let cloned_peer_nodes = Arc::clone(peer_nodes);
+    // let cloned_local_node_for_ping_pong = Arc::clone(local_node);
+    // let cloned_peer_nodes = Arc::clone(peer_nodes);
+
+    // thread::spawn(move || {
+    //     let _ = ping_to_master(cloned_local_node_for_ping_pong, cloned_peer_nodes);
+    // });
+
+    let cloned_local_node_for_ping_pong_node = Arc::clone(local_node);
+    let cloned_peer_nodes_for_ping_pong = Arc::clone(peer_nodes);
 
     thread::spawn(move || {
-        let _ = ping_to_master(cloned_local_node_for_ping_pong, cloned_peer_nodes);
+        let _ = ping_to_node(cloned_local_node_for_ping_pong_node, cloned_peer_nodes_for_ping_pong);
     });
 
     // Bloque para conexión con otros nodos
@@ -166,6 +178,7 @@ pub fn start_node_connection(
     Ok(())
 }
 
+
 /// Permite que un nodo esuche mensajes, y maneja las conexiones con los otros nodos.
 ///
 /// # Argumentos
@@ -224,6 +237,7 @@ fn connect_nodes(
     Ok(())
 }
 
+
 /// Maneja la comunicación con otro nodo.
 ///
 /// Por el momento solo lee el comando "node", y con eso se guarda la informacion del nodo.
@@ -252,7 +266,10 @@ fn handle_node(
             .collect();
 
         let command = &input[0];
-        println!("Recibido: {:?}", input);
+
+        if command != "pong"  && command != "ping" || PRINT_PINGS {
+            println!("Recibido: {:?}", input);
+        }
 
         match command.as_str() {
             "node" => {
@@ -488,6 +505,7 @@ fn handle_node(
     Ok(())
 }
 
+
 /// Lee un archivo de configuracion y genera una lista de los puertos a los que un nodo se debe conectar
 ///
 /// # Errores
@@ -509,6 +527,7 @@ fn read_node_ports<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<usize>> {
 
     Ok(ports)
 }
+
 
 pub fn broadcast_to_replicas(
     local_node: &Arc<Mutex<LocalNode>>,
@@ -568,6 +587,7 @@ pub fn broadcast_to_replicas(
 
     Ok(())
 }
+
 
 fn handle_replica_sync(
     replica_port: &String,
@@ -642,6 +662,7 @@ fn handle_replica_sync(
     Ok(())
 }
 
+
 fn serialize_vec_hashmap(
     map: &HashMap<String, Documento>,
     mut stream: TcpStream,
@@ -662,6 +683,7 @@ fn serialize_vec_hashmap(
     Ok(())
 }
 
+
 fn serialize_hashset_hashmap(
     map: &HashMap<String, HashSet<String>>,
     mut stream: TcpStream,
@@ -677,6 +699,7 @@ fn serialize_hashset_hashmap(
     println!("se mando end");
     Ok(())
 }
+
 
 fn deserialize_hashset_hashmap(
     lines: &Vec<String>,
@@ -697,6 +720,7 @@ fn deserialize_hashset_hashmap(
     }
 }
 
+
 fn deserialize_vec_hashmap(
     lines: &Vec<String>,
     shared_documents: &Arc<Mutex<HashMap<String, Documento>>>,
@@ -715,6 +739,7 @@ fn deserialize_vec_hashmap(
         eprintln!("No se pudo bloquear shared_documents en deserialize_vec_hashmap");
     }
 }
+
 
 fn ping_to_master(
     local_node: Arc<Mutex<LocalNode>>,
@@ -787,6 +812,61 @@ fn ping_to_master(
         std::hint::spin_loop();
     }
 }
+
+
+fn ping_to_node(
+    local_node: Arc<Mutex<LocalNode>>,
+    peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
+) -> std::io::Result<()> {
+    let ping_interval = Duration::from_secs(5);
+    let error_interval = Duration::from_secs(50);
+    let mut last_sent = Instant::now();
+
+    loop {
+        let mut now = Instant::now();
+        if now.duration_since(last_sent) >= ping_interval {
+            let locked_peer_nodes = peer_nodes.lock().unwrap();
+
+            for (_, peer) in locked_peer_nodes.iter() {
+                if peer.state != NodeState::Fail {
+                    if PRINT_PINGS { println!("sending to: {}", peer.port) }
+                    match peer.stream.try_clone() {
+                        Ok(mut peer_stream) => {
+                            peer_stream.set_read_timeout(Some(error_interval))?;
+                            let mut reader = BufReader::new(peer_stream.try_clone()?);
+                            peer_stream.write_all("ping\n".to_string().as_bytes())?;
+                            now = Instant::now();
+
+                            let mut line = String::new();
+                            match reader.read_line(&mut line) {
+                                Ok(0) => {
+                                    println!("Connection closed by peer");
+                                    std::hint::spin_loop();
+                                }
+                                Ok(_) => {
+                                    if PRINT_PINGS { println!("Received response: {}", line.trim()) }
+                                }
+                                Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
+                                    println!("Timeout: no response within {:?}", error_interval);
+                                    std::hint::spin_loop();
+                                }
+                                Err(e) => {
+                                    println!("Unexpected error: {}", e);
+                                    std::hint::spin_loop();
+                                }
+                            }
+                        }
+                        Err(_) => {
+                            std::hint::spin_loop();
+                        }
+                    }
+                }
+            }
+            last_sent = now;
+        }
+    }
+}
+
 
 fn request_master_state_confirmation(
     local_node: &Arc<Mutex<LocalNode>>,
@@ -870,6 +950,7 @@ fn request_master_state_confirmation(
     }
 }
 
+
 fn confirm_master_state(
     local_node: &Arc<Mutex<LocalNode>>,
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
@@ -920,6 +1001,7 @@ fn confirm_master_state(
     Ok(master_state)
 }
 
+
 fn initialize_replica_promotion(
     local_node: &Arc<Mutex<LocalNode>>,
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
@@ -946,6 +1028,7 @@ fn initialize_replica_promotion(
 
     locked_local_node.role = NodeRole::Master;
     locked_local_node.master_node = None;
+    locked_local_node.priority = 0;
 
     let node_info_message = format!(
         "{:?} {} {:?} {} {}\n",
