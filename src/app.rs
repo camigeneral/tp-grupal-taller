@@ -77,7 +77,7 @@ pub enum AppMsg {
     /// Mensaje para crear un documento de tipo hoja de cálculo.
     CreateSpreadsheetDocument,
     AddContent(DocumentValueInfo),
-    AddContentSpreadSheet(String, String, String, String),
+    AddContentSpreadSheet(DocumentValueInfo),
     UpdateFilesList(Vec<String>),
     FilesLoaded,
 }
@@ -221,8 +221,8 @@ impl SimpleComponent for AppModel {
                 FileWorkspaceOutputMessage::SubscribeFile(file) => AppMsg::SubscribeFile(file),
                 FileWorkspaceOutputMessage::UnsubscribeFile(file) => AppMsg::UnsubscribeFile(file),
                 FileWorkspaceOutputMessage::ContentAdded(doc_info) => AppMsg::AddContent(doc_info),
-                FileWorkspaceOutputMessage::ContentAddedSpreadSheet(file, col, row, text) => {
-                    AppMsg::AddContentSpreadSheet(file, col, row, text)
+                FileWorkspaceOutputMessage::ContentAddedSpreadSheet(doc_info) => {
+                    AppMsg::AddContentSpreadSheet(doc_info)
                 }
                 FileWorkspaceOutputMessage::FilesLoaded => AppMsg::FilesLoaded,
             },
@@ -373,32 +373,9 @@ impl SimpleComponent for AppModel {
                 );
                 sender.input(AppMsg::ExecuteCommand);
             }
-            AppMsg::AddContentSpreadSheet(file_id, col, row, text) => {
-                let clean_text = if text.is_empty() {
-                    "<delete>".to_string()
-                } else {
-                    text
-                };
-
-                let col_index = match col.parse::<usize>() {
-                    Ok(val) => val,
-                    Err(_) => {
-                        println!("Error: col no es un número válido: {}", col);
-                        return;
-                    }
-                };
-
-                let row_index = match row.parse::<usize>() {
-                    Ok(val) => val,
-                    Err(_) => {
-                        println!("Error: row no es un número válido: {}", row);
-                        return;
-                    }
-                };
-
-                let total_columns = 10;
-                let index = row_index * total_columns + col_index;
-                self.command = format!("WRITE|{}|{}|{}", index, clean_text, file_id);
+            AppMsg::AddContentSpreadSheet(doc_info) => {
+                
+                self.command = format!("WRITE|{}|{}|{}|{}", doc_info.index, doc_info.value, doc_info.index, doc_info.file);
                 sender.input(AppMsg::ExecuteCommand);
             }
 

@@ -44,7 +44,7 @@ pub struct FileEditorModel {
 #[derive(Debug)]
 pub enum FileEditorMessage {
     ContentAdded(DocumentValueInfo),
-    ContentAddedSpreadSheet(String, String, String),
+    ContentAddedSpreadSheet(DocumentValueInfo),
     UpdateFile(String, i32, String, FileType),
     UpdateFileContent(String, i32, String, FileType),
     ResetEditor,
@@ -54,7 +54,7 @@ pub enum FileEditorMessage {
 #[derive(Debug)]
 pub enum FileEditorOutputMessage {
     ContentAdded(DocumentValueInfo),
-    ContentAddedSpreadSheet(String, String, String),
+    ContentAddedSpreadSheet(DocumentValueInfo),
     /// Mensaje que indica que se debe volver a la vista anterior.
     GoBack,
 }
@@ -116,8 +116,8 @@ impl SimpleComponent for FileEditorModel {
             sender.input_sender(),
             |msg| match msg {
                 SpreadsheetOutput::GoBack => FileEditorMessage::ResetEditor,
-                SpreadsheetOutput::ContentChanged(row, col, text) => {
-                    FileEditorMessage::ContentAddedSpreadSheet(row, col, text)
+                SpreadsheetOutput::ContentChanged(content) => {
+                    FileEditorMessage::ContentAddedSpreadSheet(content)
                 }
             },
         );
@@ -149,9 +149,9 @@ impl SimpleComponent for FileEditorModel {
 
     fn update(&mut self, message: FileEditorMessage, sender: ComponentSender<Self>) {
         match message {
-            FileEditorMessage::ContentAddedSpreadSheet(row, col, text) => {
+            FileEditorMessage::ContentAddedSpreadSheet(doc_info) => {
                 let _ = sender.output(FileEditorOutputMessage::ContentAddedSpreadSheet(
-                    row, col, text,
+                    doc_info
                 ));
             }
 

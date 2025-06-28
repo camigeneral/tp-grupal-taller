@@ -1,6 +1,8 @@
 extern crate gtk4;
 extern crate relm4;
 
+use crate::components::structs::document_value_info::DocumentValueInfo;
+
 use self::gtk4::prelude::{BoxExt, EditableExt, EntryExt, GridExt, OrientableExt, WidgetExt};
 use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
 
@@ -39,7 +41,7 @@ pub enum SpreadsheetMsg {
 
 #[derive(Debug)]
 pub enum SpreadsheetOutput {
-    ContentChanged(String, String, String),
+    ContentChanged(DocumentValueInfo),
     GoBack,
 }
 
@@ -272,16 +274,16 @@ impl SimpleComponent for SpreadsheetModel {
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
             SpreadsheetMsg::CellChanged(row, col, content) => {
-                self.update_cell(row, col, content);
+                self.update_cell(row, col, content.clone());
                 self.recalculate_all();
                 self.update_display();
 
+                let index = (row * 10 + col) as i32;
+                let doc_info = DocumentValueInfo::new(content.clone(), index);
+                
+
                 sender
-                    .output(SpreadsheetOutput::ContentChanged(
-                        row.to_string(),
-                        col.to_string(),
-                        self.cells[row][col].display_text.clone(),
-                    ))
+                    .output(SpreadsheetOutput::ContentChanged(doc_info))
                     .unwrap();
             }
             SpreadsheetMsg::RecalculateAll => {

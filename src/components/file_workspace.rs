@@ -49,7 +49,7 @@ pub enum FileWorkspaceMsg {
     ContentAdded(DocumentValueInfo),
 
     UpdateFile(DocumentValueInfo),
-    ContentAddedSpreadSheet(String, String, String),
+    ContentAddedSpreadSheet(DocumentValueInfo),
     UpdateFilesList(Vec<(String, FileType)>),
 }
 
@@ -58,7 +58,7 @@ pub enum FileWorkspaceOutputMessage {
     SubscribeFile(String),
     UnsubscribeFile(String),
     ContentAdded(DocumentValueInfo),
-    ContentAddedSpreadSheet(String, String, String, String),
+    ContentAddedSpreadSheet(DocumentValueInfo),
     FilesLoaded,
 }
 
@@ -124,8 +124,8 @@ impl SimpleComponent for FileWorkspace {
                     FileEditorOutputMessage::ContentAdded(doc_info) => {
                         FileWorkspaceMsg::ContentAdded(doc_info)
                     }
-                    FileEditorOutputMessage::ContentAddedSpreadSheet(row, col, text) => {
-                        FileWorkspaceMsg::ContentAddedSpreadSheet(row, col, text)
+                    FileEditorOutputMessage::ContentAddedSpreadSheet(doc_info) => {
+                        FileWorkspaceMsg::ContentAddedSpreadSheet(doc_info)
                     }
                 },
             );
@@ -148,12 +148,10 @@ impl SimpleComponent for FileWorkspace {
 
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
-            FileWorkspaceMsg::ContentAddedSpreadSheet(row, col, text) => {
+            FileWorkspaceMsg::ContentAddedSpreadSheet(mut doc_info) => {
+                doc_info.file = self.current_file.clone();
                 let _ = sender.output(FileWorkspaceOutputMessage::ContentAddedSpreadSheet(
-                    self.current_file.clone(),
-                    row,
-                    col,
-                    text,
+                    doc_info
                 ));
             }
             FileWorkspaceMsg::ContentAdded(doc_info) => {
