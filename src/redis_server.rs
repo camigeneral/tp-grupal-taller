@@ -261,7 +261,7 @@ fn handle_new_client_connection(
             ) {
                 eprintln!("Error al escribir respuesta: {}", write_err);
             }
-            return Ok(()); // Salir anticipadamente
+            return Ok(());
         }
     };
 
@@ -316,6 +316,15 @@ fn handle_new_client_connection(
     let log_path = ctx.log_path.clone();
     let ctx_clone = Arc::clone(&ctx);
 
+    if client_type == ClientType::Microservice {
+        subscribe_to_internal_channel(Arc::clone(&ctx), client_addr.to_string());
+        let message: &str = "mensaje_bienvenida";    
+        if let Err(e) = publish_to_subscription_channel(Arc::clone(&ctx), message) {            
+            println!("Error: {:?}", e);            
+        }
+    }
+
+
     thread::spawn(move || {
         match handle_client(&mut client_stream, ctx_clone, client_addr_str.clone()) {
             Ok(_) => {
@@ -334,6 +343,61 @@ fn handle_new_client_connection(
         }
     });
 
+    Ok(())
+}
+
+/// Suscribe al microservicio al canal de suscripciones
+///
+/// # Argumentos
+/// * `ctx` - Contexto del servidor
+/// * `microservice_id` - ID del microservicio
+///
+pub fn subscribe_to_internal_channel(
+    ctx: Arc<ServerContext>,    
+    microservice_id: String,
+) {
+    let mut channels_guard = match ctx.internal_subscription_channel.lock() {
+        Ok(lock) => lock,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    
+    let microservice = channels_guard.entry("subscriptions".to_string()).or_insert_with(String::new);
+    if microservice.is_empty() {
+        *microservice = microservice_id.clone();
+        println!("Cliente {} suscrito al canal interno {}", microservice_id, "subscriptions".to_string());
+    }
+}
+
+/// Publica un mensaje en el canal de subscriptions
+///
+/// # Argumentos
+/// * `ctx` - Contexto del servidor
+/// * `message` - Mensaje a publicar
+///
+pub fn publish_to_subscription_channel(
+    ctx: Arc<ServerContext>,    
+    message: &str,
+) -> std::io::Result<()> {
+    let channel = "subscriptions".to_string();
+    let channel_guard = match ctx.internal_subscription_channel.lock() {
+        Ok(lock) => lock,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    let mut clients_guard = match ctx.active_clients.lock() {
+        Ok(lock) => lock,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    let resp_message = format_resp_command(&[&channel.clone(), message]);
+    
+    if let Some(microservice_id) = channel_guard.get(&channel.clone()) {            
+        if let Some(client) = clients_guard.get_mut(microservice_id) {
+            if let Err(e) = write!(client.stream, "{}", resp_message) {
+                eprintln!("Error enviando mensaje a {} en canal {}: {}", microservice_id, channel, e);
+                return Err(e);
+            }
+        }        
+    }
+    
     Ok(())
 }
 
