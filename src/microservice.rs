@@ -76,19 +76,7 @@ impl Microservice {
 
         self.start_node_connection_handler(connect_node_sender.clone(), connect_nodes_receiver);
 
-        {
-            match self.node_streams.lock() {
-                Ok(mut map) => {
-                    map.insert(
-                        main_address.clone(),
-                        redis_socket_clone_for_hashmap.try_clone()?,
-                    );
-                }
-                Err(e) => {
-                    eprintln!("Error obteniendo lock de node_streams: {}", e);
-                }
-            }
-        }
+        self.add_node_stream(&main_address, redis_socket_clone_for_hashmap)?;
 
         let parts: Vec<&str> = command.split_whitespace().collect();
         let resp_command = format_resp_command(&parts);
@@ -97,74 +85,56 @@ impl Microservice {
 
         connect_node_sender.send(redis_socket)?;
 
-        let otros_puertos = vec![4001, 4002];
-        for port in otros_puertos {
-            let addr = format!("127.0.0.1:{}", port);
-            match TcpStream::connect(&addr) {
-                Ok(mut extra_socket) => {
-                    println!("Microservicio conectado a nodo adicional: {}", addr);
+        self.connect_to_replica_nodes(&connect_node_sender)?;
 
-                    let parts: Vec<&str> = "Microservicio".split_whitespace().collect();
-                    let resp_command = format_resp_command(&parts);
-                    extra_socket.write_all(resp_command.as_bytes())?;
-
-                    match self.node_streams.lock() {
-                        Ok(mut map) => {
-                            map.insert(addr.clone(), extra_socket.try_clone()?);
-                        }
-                        Err(e) => {
-                            eprintln!("Error obteniendo lock de node_streams: {}", e);
-                        }
-                    }
-
-                    connect_node_sender.send(extra_socket)?;
-                }
-                Err(e) => {
-                    eprintln!("Error al conectar con nodo {}: {}", addr, e);
-                }
-            }
-        }
-        {
-            let node_streams_clone = Arc::clone(&self.node_streams);
-            let _main_address_clone = main_address.clone();
-            let _last_command_sent_clone = Arc::clone(&self.last_command_sent);
-
-            thread::spawn(move || loop {
-                match node_streams_clone.lock() {
-                    Ok(_streams) => {
-                        /* if let Some(mut stream) = streams.get(&main_address_clone) {
-                            let command_parts = vec!["SET", "docprueba.txt", ""];
-                            let resp_command = format_resp_command(&command_parts);
-
-                            match last_command_sent_clone.lock() {
-                                Ok(mut last_command) => {
-                                    *last_command = resp_command.clone();
-                                }
-                                Err(e) => {
-                                    eprintln!("Error obteniendo lock de last_command_sent: {}", e);
-                                }
-                            }
-
-                            if let Err(e) = stream.write_all(resp_command.as_bytes()) {
-                                eprintln!("Error al enviar comando SET docprueba hola: {}", e);
-                            } else {
-                                println!("Comando automático enviado: SET docprueba hola");
-                            }
-                        } */
-                    }
-                    Err(e) => {
-                        eprintln!("Error obteniendo lock de node_streams: {}", e);
-                    }
-                }
-
-                thread::sleep(Duration::from_secs(61812100));
-            });
-        }
+        self.start_automatic_commands();
+        
         loop {
             std::thread::sleep(std::time::Duration::from_secs(1));
         }
     }
 
+    fn connect_to_replica_nodes(&self,
+        connect_node_sender: &MpscSender<TcpStream>,) -> Result<(), Box<dyn std::error::Error>> {
+            let otros_puertos = vec![4001, 4002];
+            for port in otros_puertos {
+                let addr = format!("127.0.0.1:{}", port);
+                match TcpStream::connect(&addr) {
+                    Ok(mut extra_socket) => {
+                        println!("Microservicio conectado a nodo adicional: {}", addr);
+    
+                        let parts: Vec<&str> = "Microservicio".split_whitespace().collect();
+                        let resp_command = redis_parser::format_resp_command(&parts);
+                        extra_socket.write_all(resp_command.as_bytes())?;
+    
+                        self.add_node_stream(&addr, extra_socket.try_clone()?)?;
+                        connect_node_sender.send(extra_socket)?;
+                    }
+                    Err(e) => {
+                        eprintln!("Error al conectar con nodo {}: {}", addr, e);
+                    }
+                }
+            }
+            Ok(())
+        }
+
+    fn start_automatic_commands(&self) {
+        let node_streams_clone = Arc::clone(&self.node_streams);
+        let _last_command_sent_clone = Arc::clone(&self.last_command_sent);
+
+        thread::spawn(move || loop {
+            match node_streams_clone.lock() {
+                Ok(_streams) => {
+                    // Comandos automáticos comentados por ahora
+                }
+                Err(e) => {
+                    eprintln!("Error obteniendo lock de node_streams: {}", e);
+                }
+            }
+
+            thread::sleep(Duration::from_secs(61812100));
+        });
+    }
     fn start_node_connection_handler(
         &self,
         connect_node_sender: MpscSender<TcpStream>,
@@ -187,6 +157,26 @@ impl Microservice {
                 eprintln!("Error en la conexión con el nodo: {}", e);
             }
         });
+    }
+    
+    fn add_node_stream(
+        &self,
+        address: &str,
+        stream: TcpStream,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        match self.node_streams.lock() {
+            Ok(mut map) => {
+                map.insert(address.to_string(), stream);
+                Ok(())
+            }
+            Err(e) => {
+                eprintln!("Error obteniendo lock de node_streams: {}", e);
+                Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Error obteniendo lock de node_streams: {}", e),
+                )))
+            }
+        }
     }
 
     fn connect_to_nodes(
