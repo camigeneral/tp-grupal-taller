@@ -36,6 +36,8 @@ use redis_types::{*};
 #[path = "utils/logger.rs"]
 mod logger;
 use crate::commands::redis_parser::{parse_command, write_response, CommandResponse};
+#[path = "shared.rs"]
+mod shared;
 
 /// Número de argumentos esperados para iniciar el servidor
 static REQUIRED_ARGS: usize = 2;
@@ -403,13 +405,11 @@ fn handle_client(
                 continue;
             }
         };
-        let mut doc = String::new();
-        if command_request.arguments.len() > 1 {
-            doc = match &command_request.key {
-                Some(doc) => doc.clone(),
-                _ => "".to_string(),
-            };
-        }
+        let doc = match &command_request.key {
+            Some(doc) => doc.clone(),
+            _ => "".to_string(),
+        };
+    
         let command = command_request.command.clone();
 
         println!("Comando recibido: {:?}", command_request);
@@ -569,7 +569,6 @@ fn get_microservice_peer_addr(ctx: &Arc<ServerContext>) -> Option<String> {
     };
     
     if let Some(microservice) = channels_guard.get("subscriptions") {
-        // Intentar obtener la dirección peer del stream del microservicio
         if let Ok(stream_guard) = microservice.stream.lock() {
             if let Some(stream) = stream_guard.as_ref() {
                 if let Ok(peer_addr) = stream.peer_addr() {
@@ -587,7 +586,6 @@ pub fn notify_subscriptions_channel(
     doc: String,
     client_id: String,
 ) {
-    // Obtener la dirección peer del microservicio
     let microservice_addr = match get_microservice_peer_addr(&ctx) {
         Some(addr) => addr,
         None => {
@@ -596,7 +594,13 @@ pub fn notify_subscriptions_channel(
         }
     };
     
-    let message = redis_parser::format_resp_command(&["client-subscribed", &doc.clone(), &client_id.clone()]);
+    let message_enum = shared::MicroserviceMessage::ClientSubscribed { 
+        document: doc.clone(), 
+        client_id: client_id.clone() 
+    };
+    
+    let message = message_enum.to_string();
+
     let command_request = CommandRequest{
         command: "publish".to_string(),
         key: Some("subscriptions".to_string()),
@@ -606,20 +610,22 @@ pub fn notify_subscriptions_channel(
         unparsed_command: format!("publish subscriptions {}", message)
     };
 
-    // Ejecutar el comando internamente usando la función modularizada
-    match execute_command_internal(command_request, Arc::clone(&ctx), microservice_addr.to_string()) {
-        Ok(response) => {
-            println!("Notificación de suscripción enviada al canal interno: {:?}", response);
-            println!("Microservicio notificado: {}", microservice_addr);
-        }
-        Err(e) => {
-            eprintln!("Error al enviar notificación de suscripción al canal interno: {}", e);
-        }
-    }
+    let _ = redis::execute_command(
+        command_request,
+        &ctx.shared_documents,
+        &ctx.document_subscribers,
+        &ctx.shared_sets,
+        microservice_addr.clone(),
+        &ctx.active_clients,
+        &ctx.logged_clients,
+        &ctx.internal_subscription_channel
+    );
+
+
 }
 
 fn _is_authorized_client(
-    logged_clients: Arc<Mutex<HashMap<String, bool>>>,
+    logged_clients: LoggedClientsMap,
     client_id: String,
 ) -> bool {
     let locked = match logged_clients.lock() {
