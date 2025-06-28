@@ -186,12 +186,7 @@ impl Microservice {
     /// Inicia el procesamiento automático de comandos en un hilo separado.
     /// 
     /// Este método crea un hilo que se ejecuta en segundo plano y realiza
-    /// verificaciones periódicas de las conexiones de nodos. Actualmente
-    /// solo verifica que se pueda obtener el lock de node_streams, pero
-    /// está diseñado para expandirse con funcionalidad adicional.
-    /// 
-    /// El hilo se ejecuta indefinidamente con un intervalo de sueño muy largo
-    /// (aproximadamente 2 años) para mantener la funcionalidad activa.
+    /// verificaciones periódicas de las conexiones de nodos.       
     fn start_automatic_commands(&self) {
         let node_streams_clone = Arc::clone(&self.node_streams);
         let _last_command_sent_clone = Arc::clone(&self.last_command_sent);
@@ -347,7 +342,7 @@ impl Microservice {
             if parts.is_empty() {
                 break;
             }
-            //println!("partes: {:#?}", parts);
+            println!("partes: {:#?}", parts);
             let first_response = parts[0].to_uppercase();
 
             match first_response.as_str() {
