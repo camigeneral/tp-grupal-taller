@@ -73,3 +73,5 @@ pub mod utils;
 pub mod documento;
 
 pub mod server_context;
+
+pub mod redis_types;
