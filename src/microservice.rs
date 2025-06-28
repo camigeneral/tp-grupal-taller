@@ -63,7 +63,7 @@ impl Microservice {
         let log_path = logger::get_log_path_from_config(config_path);
         if let Ok(metadata) = fs::metadata(&log_path) {
             if metadata.len() > 0 {
-                if let Ok(mut file) = std::fs::OpenOptions::new()(puertos 4001 y 4002)
+                if let Ok(mut file) = std::fs::OpenOptions::new()
                     .create(true)
                     .append(true)
                     .open(&log_path)
