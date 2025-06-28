@@ -26,6 +26,7 @@ pub struct LocalNode {
     pub master_node: Option<usize>,
     pub replica_nodes: Vec<usize>,
     pub priority: usize,
+    pub epoch: usize,
 }
 
 impl LocalNode {
@@ -78,6 +79,7 @@ impl LocalNode {
             master_node: None,
             replica_nodes: Vec::new(),
             priority,
+            epoch: 0
         })
     }
 }

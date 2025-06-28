@@ -165,6 +165,7 @@ pub fn start_node_connection(
                             (0, 16383),
                             NodeState::Active,
                             0,
+                            0
                         ),
                     );
                 }
@@ -333,6 +334,7 @@ fn handle_node(
                         (hash_range_start, hash_range_end),
                         NodeState::Active,
                         priority,
+                        0
                     );
 
                     if hash_range_start == local_node_locked.hash_range.0 {
@@ -407,6 +409,19 @@ fn handle_node(
             "start_replica_command" => saving_command = true,
             "end_replica_command" => {
                 saving_command = false;
+                {
+                    let mut locked_local_node = local_node.lock().unwrap();
+                    let mut locked_peer_nodes = nodes.lock().unwrap();
+                    let updated_epoch = locked_local_node.epoch + 1;
+                    locked_local_node.epoch = updated_epoch;
+                    for replica in locked_local_node.replica_nodes.clone() {
+                        let replica_address = format!("127.0.0.1:{}", replica);
+                        if let Some(replica_node) = locked_peer_nodes.get_mut(&replica_address) {
+                            let message = format!("update_epoch {} {}\n", locked_local_node.port, updated_epoch);
+                            let _ = replica_node.stream.write_all(message.as_bytes());
+                        }
+                    }
+                }
                 let cursor = Cursor::new(command_string.clone());
                 let mut reader_for_command = BufReader::new(cursor);
 
@@ -454,6 +469,27 @@ fn handle_node(
                 if promote_replica {
                     initialize_replica_promotion(local_node, &nodes, inactive_port);
                 }
+            }
+            "update_epoch" => {
+                let port = match input[1].trim().parse::<usize>() {
+                    Ok(p) => p,
+                    Err(_) => continue,
+                };
+
+                let epoch = match input[2].trim().parse::<usize>() {
+                    Ok(p) => p,
+                    Err(_) => continue,
+                };
+
+                {
+                    let mut locked_peer_nodes = nodes.lock().unwrap();
+                    let address = format!("127.0.0.1:{}", port);
+
+                    if let Some(replica_node) = locked_peer_nodes.get_mut(&address) {
+                        replica_node.epoch = epoch;
+                    }
+                }
+
             }
             _ => {
                 if saving_command {
@@ -799,9 +835,13 @@ fn detect_failed_node(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex
                     for replica in locked_local_node.replica_nodes.clone() {
                         let replica_address = format!("127.0.0.1:{}", replica);
                         if let Some(replica_node) = locked_peer_nodes.get_mut(&replica_address) {
-                            if replica_node.priority < locked_local_node.priority && replica_node.priority != 0 {
-                                promote_replica = false;
-                            }
+                            // por las dudas verifico que no sea master y que este activo
+                            if replica_node.state == NodeState::Active && replica_node.role != NodeRole::Master {
+                               // si hay otra replica mas actualizada o si tenemos el mismo epoch pero la otra tiene una prioridad menor, no me vuelvo master
+                                if (replica_node.epoch > locked_local_node.epoch )|| (replica_node.epoch == locked_local_node.epoch && replica_node.priority < locked_local_node.priority) {
+                                    promote_replica = false;
+                                }
+                            }                        
                         }
                     }
                 }
@@ -838,9 +878,13 @@ fn set_failed_node(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex<Ha
                 for replica in locked_local_node.replica_nodes.clone() {
                     let replica_address = format!("127.0.0.1:{}", replica);
                     if let Some(replica_node) = locked_peer_nodes.get_mut(&replica_address) {
-                        if replica_node.priority < locked_local_node.priority {
-                            promote_replica = false;
-                        }
+                        // por las dudas verifico que no sea master y que este activo
+                        if replica_node.state == NodeState::Active && replica_node.role != NodeRole::Master {
+                            // si hay otra replica mas actualizada o si tenemos el mismo epoch pero la otra tiene una prioridad menor, no me vuelvo master
+                             if (replica_node.epoch > locked_local_node.epoch )|| (replica_node.epoch == locked_local_node.epoch && replica_node.priority < locked_local_node.priority) {
+                                 promote_replica = false;
+                             }
+                         }
                     }
                 }
             }

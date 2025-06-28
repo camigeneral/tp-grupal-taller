@@ -12,6 +12,7 @@ pub struct PeerNode {
     pub hash_range: (usize, usize),
     pub state: NodeState,
     pub priority: usize,
+    pub epoch: usize,
 }
 
 impl PeerNode {
@@ -22,6 +23,7 @@ impl PeerNode {
         hash_range: (usize, usize),
         state: NodeState,
         priority: usize,
+        epoch: usize,
     ) -> Self {
         PeerNode {
             stream,
@@ -30,6 +32,7 @@ impl PeerNode {
             hash_range,
             state,
             priority,
+            epoch,
         }
     }
 }
