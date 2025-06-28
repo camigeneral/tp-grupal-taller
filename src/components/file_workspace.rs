@@ -247,13 +247,21 @@ impl SimpleComponent for FileWorkspace {
                             Documento::Calculo(data) => {
                                 if parsed_index < data.len() {
                                     data[parsed_index] = val.clone();
+                                } else {
+                                    while data.len() <= parsed_index {
+                                        data.push(String::new());
+                                    }
+                                    data[parsed_index] = val.clone();
                                 }
                             }
                             Documento::Texto(lines) => {
                                 if parsed_index < lines.len() {
                                     lines[parsed_index] = val.clone();
                                 } else {
-                                    lines.push(val.clone());
+                                    while lines.len() < parsed_index {
+                                        lines.push(String::new());
+                                    }
+                                    lines.insert(parsed_index, val.clone());
                                 }
                                 val = lines.join("\n");
                             }
