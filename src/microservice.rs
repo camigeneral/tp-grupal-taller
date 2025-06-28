@@ -333,9 +333,9 @@ impl Microservice {
             if parts.is_empty() {
                 break;
             }
-            //println!("partes: {:#?}", parts);
+            println!("partes: {:#?}", parts);
             let message = MicroserviceMessage::from_parts(&parts);
-
+            println!("message: {:#?}", message);
             match message {
                 MicroserviceMessage::ClientSubscribed {
                     document,
@@ -406,7 +406,69 @@ impl Microservice {
                         eprintln!("Error obteniendo lock de documents");
                     }
                 }
+                MicroserviceMessage::Write { index, content, file } => {
+                    log_clone.log(&format!(
+                        "Write recibido: índice {}, contenido '{}', archivo {}",
+                        index, content, file
+                    ));
+                    if let Ok(mut docs) = documents.lock() {
+                        if let Some(documento) = docs.get_mut(&file) {
+                            let parsed_index = match index.parse::<usize>() {
+                                Ok(idx) => idx,
+                                Err(e) => {
+                                    eprintln!("Error parseando índice: {}", e);
+                                    log_clone.log(&format!("Error parseando índice: {}", e));
+                                    continue;
+                                }
+                            };
 
+                            match documento {
+                                Documento::Texto(lines) => {
+                                    if content.contains("<enter>") {
+                                        let parts: Vec<&str> = content.split("<enter>").collect();
+                                        
+                                        if parts.len() == 2 {
+                                            let before_newline = parts[0];
+                                            let after_newline = parts[1];
+                                            
+                                            if parsed_index < lines.len() {
+                                                lines[parsed_index] = before_newline.to_string();
+                                                
+                                                lines.insert(parsed_index + 1, after_newline.to_string());
+                                            } else {
+                                                while lines.len() < parsed_index {
+                                                    lines.push(String::new());
+                                                }
+                                                lines.push(before_newline.to_string());
+                                                lines.push(after_newline.to_string());
+                                            }
+                                        } else {
+                                            log_clone.log(&format!("Formato de salto de línea inválido: {}", content));
+                                        }
+                                    } else if parsed_index < lines.len() {
+                                        lines[parsed_index] = content.clone();
+                                    } else {
+                                        lines.push(content.clone());
+                                    }
+                                }
+                                Documento::Calculo(lines) => {
+                                    if parsed_index < lines.len() {
+                                        lines[parsed_index] = content.clone();
+                                    } else {
+                                        while lines.len() <= parsed_index {
+                                            lines.push(String::new());
+                                        }
+                                        lines[parsed_index] = content.clone();
+                                    }                                  
+                                }
+                            }
+                        } else {
+                            log_clone.log(&format!("Documento no encontrado: {}", file));
+                        }
+                    } else {
+                        log_clone.log("Error obteniendo lock de documents para write");
+                    }
+                },
                 MicroserviceMessage::Error(_) => {}
                 _ => {}
             }
