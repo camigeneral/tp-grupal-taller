@@ -221,7 +221,6 @@ impl Microservice {
             if let Ok(docs) = documents_clone.lock() {
                 if let Ok(mut streams) = node_streams_clone.lock() {
                     if let Some((node_addr, stream)) = streams.iter_mut().next() {
-                        println!("Enviando comandos SET para persistir {} documentos al nodo {}", docs.len(), node_addr);
                         logger_clone.log(&format!("Enviando comandos SET para persistir {} documentos al nodo {}", docs.len(), node_addr));
                         
                         for (doc_name, documento) in docs.iter() {
@@ -230,7 +229,6 @@ impl Microservice {
                             let set_parts = vec!["SET", doc_name, &document_data];
                             let set_command = redis_parser::format_resp_command(&set_parts);
                             
-                            println!("Enviando comando SET para persistir documento {}: {}", doc_name, set_command.replace("\r\n", "\\r\\n"));
                             logger_clone.log(&format!("Enviando comando SET para persistir documento {}: {}", doc_name, set_command));
 
                             if let Err(e) = stream.write_all(set_command.as_bytes()) {
@@ -238,7 +236,6 @@ impl Microservice {
                                 logger_clone.log(&format!("Error enviando comando SET a nodo {}: {}", node_addr, e));
                                 break; 
                             } else {
-                                println!("Comando SET enviado exitosamente a nodo {}", node_addr);
                                 logger_clone.log(&format!("Comando SET enviado exitosamente a nodo {}", node_addr));
                             }
 
