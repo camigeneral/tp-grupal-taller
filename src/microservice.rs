@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::io::Write;
 use std::io::{BufReader};
-use std::fs;
 #[allow(unused_imports)]
 use std::net::TcpListener;
 use std::net::TcpStream;
@@ -16,8 +15,10 @@ mod documento;
 use documento::Documento;
 #[allow(unused_imports)]
 use std::time::Duration;
+
 #[path = "utils/logger.rs"]
 mod logger;
+use self::logger::{*};
 #[path = "utils/redis_parser.rs"]
 mod redis_parser;
 #[path = "shared.rs"]
@@ -46,7 +47,7 @@ pub struct Microservice {
     documents: Arc<Mutex<HashMap<String, Documento>>>,
     
     /// Ruta al archivo de log donde se registran los eventos del microservicio.
-    log_path: String,
+    logger: Logger,
 }
 
 impl Microservice {    
@@ -62,23 +63,15 @@ impl Microservice {
     /// * `Err(Box<dyn std::error::Error>)` - Error si no se puede leer la configuración o crear el archivo de log.
     /// 
     pub fn new(config_path: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let log_path = logger::get_log_path_from_config(config_path);
-        if let Ok(metadata) = fs::metadata(&log_path) {
-            if metadata.len() > 0 {
-                if let Ok(mut file) = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&log_path)
-                {
-                    let _ = writeln!(file);
-                }
-            }
-        }
+        let logger = logger::Logger::init(
+            logger::Logger::get_log_path_from_config(config_path),
+            "0000".parse().unwrap(),
+        );
         Ok(Microservice {
             node_streams: Arc::new(Mutex::new(HashMap::new())),
             last_command_sent: Arc::new(Mutex::new("".to_string())),
             documents: Arc::new(Mutex::new(HashMap::new())),
-            log_path,
+            logger,
         })
     }
 
@@ -105,8 +98,7 @@ impl Microservice {
 
         println!("Conectándome al server de redis en {:?}", main_address);
         let mut socket: TcpStream = TcpStream::connect(&main_address)?;
-        logger::log_event(
-            &self.log_path,
+        self.logger.log(
             &format!(
                 "Microservicio conectandose al server de redis en {:?}",
                 main_address
@@ -120,7 +112,7 @@ impl Microservice {
         let command = "Microservicio\r\n".to_string();
 
         println!("Enviando: {:?}", command);
-        logger::log_event(&self.log_path, &format!("Microservicio envia {:?}", command));
+        self.logger.log(&format!("Microservicio envia {:?}", command));
 
         self.start_node_connection_handler(connect_node_sender.clone(), connect_nodes_receiver);
 
@@ -192,6 +184,7 @@ impl Microservice {
     fn start_automatic_commands(&self) {
         let node_streams_clone = Arc::clone(&self.node_streams);
         let _last_command_sent_clone = Arc::clone(&self.last_command_sent);
+        let logger_clone = self.logger.clone();
 
         thread::spawn(move || loop {
             match node_streams_clone.lock() {
@@ -199,9 +192,9 @@ impl Microservice {
                 }
                 Err(e) => {
                     eprintln!("Error obteniendo lock de node_streams: {}", e);
+                    logger_clone.log(&format!("Error obteniendo lock de node_streams: {}", e));
                 }
             }
-
             thread::sleep(Duration::from_secs(61812100));
         });
     }
@@ -212,8 +205,8 @@ impl Microservice {
     ) {
         let cloned_node_streams = Arc::clone(&self.node_streams);
         let cloned_last_command = Arc::clone(&self.last_command_sent);
-        let cloned_documents = Arc::clone(&self.documents);
-        let log_path = self.log_path.clone();
+        let cloned_documents: Arc<Mutex<HashMap<String, Documento>>> = Arc::clone(&self.documents);
+        let logger = self.logger.clone();
 
         thread::spawn(move || {
             if let Err(e) = Self::connect_to_nodes(
@@ -222,7 +215,7 @@ impl Microservice {
                 cloned_node_streams,
                 cloned_last_command,
                 cloned_documents,
-                &log_path,
+                logger,
             ) {
                 eprintln!("Error en la conexión con el nodo: {}", e);
             }
@@ -283,13 +276,13 @@ impl Microservice {
         _node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
         _last_command_sent: Arc<Mutex<String>>,
         documents: Arc<Mutex<HashMap<String, Documento>>>,
-        log_path: &str,
+        logger: Logger,
     ) -> std::io::Result<()> {
         for stream in reciever {
             let cloned_node_streams = Arc::clone(&_node_streams);
             let cloned_documents = Arc::clone(&documents);
             let cloned_own_sender = _sender.clone();
-            let log_path_clone = log_path.to_string();
+            let log_clone = logger.clone();
 
             thread::spawn(move || {
                 if let Err(e) = Self::listen_to_redis_response(
@@ -297,7 +290,7 @@ impl Microservice {
                     cloned_own_sender,
                     cloned_node_streams,
                     cloned_documents,
-                    &log_path_clone,
+                    log_clone,
                 ) {
                     eprintln!("Error en la conexión con el nodo: {}", e);
                 }
@@ -329,7 +322,7 @@ impl Microservice {
         connect_node_sender: MpscSender<TcpStream>,
         node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,    
         documents: Arc<Mutex<HashMap<String, Documento>>>,
-        log_path: &str,
+        log_clone: Logger,
     ) -> std::io::Result<()> {
         if let Ok(peer_addr) = microservice_socket.peer_addr() {
             println!("Escuchando respuestas del nodo: {}", peer_addr);
@@ -359,28 +352,24 @@ impl Microservice {
                             let message_resp = redis_parser::format_resp_command(message_parts);
                             let command_resp = redis_parser::format_resp_publish(&document.clone(), &message_resp);
                             println!("Enviando publish: {}", command_resp.replace("\r\n", "\\r\\n"));
-                            logger::log_event(
-                                log_path,
+                            log_clone.log(                                
                                 &format!("Enviando publish para client-subscribed: {}", command_resp),
                             );
                             if let Err(e) = microservice_socket.write_all(command_resp.as_bytes()) {
                                 eprintln!("Error al enviar mensaje de actualizacion de archivo: {}", e);
-                                logger::log_event(
-                                    log_path,
+                                log_clone.log(                                
                                     &format!("Error al enviar mensaje de actualizacion de archivo: {}", e),
                                 );
                             }                            
                         } else {
                             eprintln!("Documento no encontrado: {}", document);
-                            logger::log_event(
-                                log_path,
+                            log_clone.log(
                                 &format!("Documento no encontrado: {}", document),
                             );
                         }
                     } else {
                         eprintln!("Error obteniendo lock de documents para client-subscribed");
-                        logger::log_event(
-                            log_path,
+                        log_clone.log(
                             "Error obteniendo lock de documents para client-subscribed",
                         );
                     }
@@ -391,8 +380,7 @@ impl Microservice {
                         document,
                         content.len()
                     );
-                    logger::log_event(
-                        log_path,
+                    log_clone.log(
                         &format!(
                             "Documento recibido: {} con {} líneas",
                             document,

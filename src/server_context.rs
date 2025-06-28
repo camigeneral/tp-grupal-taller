@@ -7,7 +7,6 @@ pub struct ServerContext {
     pub shared_sets: SetsMap,
     pub local_node: LocalNodeMap,
     pub peer_nodes: PeerNodeMap,
-    pub logged_clients: LoggedClientsMap,
-    pub log_path: String,
+    pub logged_clients: LoggedClientsMap,    
     pub internal_subscription_channel: ClientsMap,
 }
