@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::io::Write;
-use std::io::{BufRead, BufReader};
+use std::io::{BufReader};
 use std::fs;
 #[allow(unused_imports)]
 use std::net::TcpListener;
@@ -79,7 +79,7 @@ impl Microservice {
         self.add_node_stream(&main_address, redis_socket_clone_for_hashmap)?;
 
         let parts: Vec<&str> = command.split_whitespace().collect();
-        let resp_command = format_resp_command(&parts);
+        let resp_command = redis_parser::format_resp_command(&parts);
         println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
         socket.write_all(resp_command.as_bytes())?;
 
@@ -125,7 +125,6 @@ impl Microservice {
         thread::spawn(move || loop {
             match node_streams_clone.lock() {
                 Ok(_streams) => {
-                    // Comandos automáticos comentados por ahora
                 }
                 Err(e) => {
                     eprintln!("Error obteniendo lock de node_streams: {}", e);
