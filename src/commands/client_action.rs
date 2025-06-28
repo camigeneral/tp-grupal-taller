@@ -4,14 +4,14 @@ use crate::client_info;
 use crate::commands::list::{handle_llen, handle_lset, handle_rpush};
 use crate::commands::set::handle_scard;
 use crate::commands::string::handle_get;
-use commands::redis_parser::{CommandRequest, CommandResponse, ValueType};
+use commands::redis_parser::{CommandRequest, CommandResponse, ValueType, format_resp_command};
 use documento::Documento;
 #[allow(unused_imports)]
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
 use std::sync::{Arc, Mutex};
-
+/* 
 pub fn handle_welcome(
     request: &CommandRequest,
     _active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
@@ -57,20 +57,14 @@ pub fn handle_welcome(
             match &get_response.response {
                 CommandResponse::String(content) => {
                     let lines: Vec<&str> = content.split('\n').collect();
+                    let parts = format!("");
                     notification = format!("STATUS {}|{}|{}|", client_addr_str, qty_subs, doc);
-
-                    for (i, line) in lines.iter().enumerate().take(100) {
-                        if i > 0 {
-                            notification.push(',');
-                        }
-                        notification.push_str(line);
-                    }
-
-                    for i in lines.len()..100 {
-                        if i > 0 {
-                            notification.push(',');
-                        }
-                    }
+                    let commands = vec!["STATUS", vec![
+                        client_addr_str,
+                        qty_subs.to_string(),
+                        doc,
+                        lines.join(",")
+                    ]];                    
                 }
                 CommandResponse::Null => {
                     notification =
@@ -97,7 +91,7 @@ pub fn handle_welcome(
         doc,
     )
 }
-
+ */
 struct ConfigurationFile {
     doc: String,
     final_text: String,
@@ -339,12 +333,15 @@ pub fn get_files(_docs: &Arc<Mutex<HashMap<String, Documento>>>) -> RedisRespons
 
     let mut doc_names_vec: Vec<String> = doc_names.into_iter().collect();
     doc_names_vec.sort();
+    let mut vector_doc: Vec<CommandResponse> = vec![CommandResponse::String("FILES".to_string())];
+    for doc in doc_names_vec {
+        vector_doc.push(CommandResponse::String(doc.clone()));
+    }
 
-    let msg = format!("FILES|{}", doc_names_vec.join(","));
     RedisResponse::new(
-        CommandResponse::String(msg.clone()),
+        CommandResponse::Array(vector_doc),
         true,
-        msg,
+        "".to_string(),
         "".to_string(),
     )
 }
