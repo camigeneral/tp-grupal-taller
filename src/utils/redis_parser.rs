@@ -72,10 +72,10 @@ pub enum CommandResponse {
 impl CommandResponse {
     pub fn get_resp(&self) -> String {
         match self {
-            CommandResponse::Ok => "+OK\r\n".to_string(), // Simple String
-            CommandResponse::String(s) => format!("${}\r\n{}\r\n", s.len(), s), // Bulk String
-            CommandResponse::Integer(i) => format!(":{}\r\n", i), // Integer
-            CommandResponse::Null => "$-1\r\n".to_string(), // Null Bulk String
+            CommandResponse::Ok => "+OK\r\n".to_string(),
+            CommandResponse::String(s) => format!("${}\r\n{}\r\n", s.len(), s),
+            CommandResponse::Integer(i) => format!(":{}\r\n", i),
+            CommandResponse::Null => "$-1\r\n".to_string(),
             CommandResponse::Error(msg) => format!("-ERR {}\r\n", msg),
             CommandResponse::Array(arr) => {
                 let mut resp = format!("*{}\r\n", arr.len());
