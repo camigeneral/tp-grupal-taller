@@ -9,7 +9,8 @@ use std::net::{TcpListener, TcpStream};
 use std::str;
 use std::sync::{Arc, Mutex};
 use std::thread;
-
+#[path = "utils/redis_parser.rs"]
+mod redis_parser;
 use crate::commands::redis_parser::CommandRequest;
 use crate::commands::redis_parser::ValueType;
 use crate::hashing::get_hash_slots;
@@ -449,11 +450,12 @@ fn handle_client(
         };
         let mut doc = String::new();
         if command_request.arguments.len() > 1 {
-            doc = match &command_request.arguments[0] {
-                ValueType::String(doc) => doc.clone(),
+            doc = match &command_request.key {
+                Some(doc) => doc.clone(),
                 _ => "".to_string(),
             };
         }
+        let command = command_request.command.clone();
 
         println!("Comando recibido: {:?}", command_request);
         logger::log_event(
@@ -549,6 +551,12 @@ fn handle_client(
             break;
         }
 
+        let is_subscribed_command = command == "subscribe";
+        if is_subscribed_command && response.get_resp().contains("ASK") {
+            println!("acaaaaa");
+            notify_subscriptions_channel(Arc::clone(&ctx), doc, client_id.to_string());
+        }
+
         logger::log_event(
             &ctx.log_path,
             &format!("Respuesta enviada a {}: {:?}", client_id, response),
@@ -562,6 +570,21 @@ fn handle_client(
     cleanup_client_resources(&client_id, &ctx.active_clients, &ctx.document_subscribers);
 
     Ok(())
+}
+
+
+pub fn notify_subscriptions_channel(
+    ctx: Arc<ServerContext>,    
+    doc: String,
+    client_id: String,
+) {
+    let message = redis_parser::format_resp_command(&["client-subscribed", &doc.clone(), &client_id.clone()]);
+    
+    if let Err(e) = publish_to_subscription_channel(Arc::clone(&ctx), &message) {
+        eprintln!("Error al enviar notificación al canal subscriptions: {}", e);
+    } else {
+        println!("Notificación enviada al canal subscriptions: {} - {}", doc, client_id);
+    }
 }
 
 fn _is_authorized_client(
