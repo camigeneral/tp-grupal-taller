@@ -135,7 +135,6 @@ pub fn parse_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<Comma
 /// Retorna `std::io::Error` si hay fallas al escribir en el stream.
 #[allow(dead_code)]
 pub fn write_response(mut stream: &TcpStream, response: &CommandResponse) -> std::io::Result<()> {
-        println!("respuesta_resp: {}",response.get_resp());
        stream.write_all(response.get_resp().as_bytes())
 }
 
