@@ -138,6 +138,34 @@ impl SpreadsheetModel {
             .map_err(|_| format!("Expresión inválida: {}", expr))
     }
 
+
+    fn extract_cell_references(&self, formula: &str) -> HashSet<(usize, usize)> {
+        let mut references = HashSet::new();
+        let mut current_ref = String::new();
+        
+        for ch in formula.chars() {
+            if ch.is_ascii_alphabetic() || ch.is_ascii_digit() {
+                current_ref.push(ch);
+            } else {
+                if !current_ref.is_empty() {
+                    if let Some((row, col)) = self.parse_cell_reference(&current_ref) {
+                        references.insert((row, col));
+                    }
+                    current_ref.clear();
+                }
+            }
+        }
+
+        if !current_ref.is_empty() {
+            if let Some((row, col)) = self.parse_cell_reference(&current_ref) {
+                references.insert((row, col));
+            }
+        }
+        
+        references
+    }
+
+
     fn update_cell(&mut self, row: usize, col: usize, content: String) {
         self.cells[row][col].raw_content = content.clone();
 
@@ -145,6 +173,8 @@ impl SpreadsheetModel {
             self.cells[row][col].is_formula = true;
             let formula = &content[1..];
 
+            let new_dependencies = self.extract_cell_references(formula);
+            println!("debug: {:#?}", new_dependencies); 
             match self.evaluate_expression(formula) {
                 Ok(value) => {
                     self.cells[row][col].calculated_value = value;
