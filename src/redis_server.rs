@@ -35,7 +35,7 @@ use crate::commands::redis_parser::{parse_command, write_response, CommandRespon
 
 type SubscribersMap = Arc<Mutex<HashMap<String, Vec<String>>>>;
 type SetsMap = Arc<Mutex<HashMap<String, HashSet<String>>>>;
-type InternalChannelsMap = Arc<Mutex<HashMap<String, Vec<String>>>>;
+type InternalChannelsMap = Arc<Mutex<HashMap<String, String>>>;
 
 /// Número de argumentos esperados para iniciar el servidor
 static REQUIRED_ARGS: usize = 2;
@@ -170,6 +170,7 @@ fn start_server(
         peer_nodes: Arc::clone(&peer_nodes),
         logged_clients: Arc::clone(&logged_clients),
         log_path: log_path.clone(),
+        internal_subscription_channel: initialize_subscription_channel()
     });
 
     for incoming_connection in tcp_listener.incoming() {
@@ -838,4 +839,14 @@ pub fn subscribe_microservice_to_all_docs(
     if let Err(e) = client_stream.flush() {
         eprintln!("Error al hacer flush del stream: {}", e);
     }
+}
+
+/// Inicializa los canales de comunicación internos del sistema
+///
+/// # Retorna
+/// InternalChannelsMap con los canales internos inicializados
+fn initialize_subscription_channel() -> InternalChannelsMap {
+    let mut internal_channels: HashMap<String, String> = HashMap::new();    
+    internal_channels.insert("subscriptions".to_string(), String::new());            
+    Arc::new(Mutex::new(internal_channels))
 }
