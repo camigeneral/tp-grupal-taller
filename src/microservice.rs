@@ -106,17 +106,13 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(mut extra_socket) => {
                 println!("Microservicio conectado a nodo adicional: {}", addr);
 
-                // Identificarse como microservicio también
                 let parts: Vec<&str> = "Microservicio".split_whitespace().collect();
                 let resp_command = format_resp_command(&parts);
                 extra_socket.write_all(resp_command.as_bytes())?;
 
                 match node_streams.lock() {
                     Ok(mut map) => {
-                        map.insert(
-                            main_address.clone(),
-                            redis_socket_clone_for_hashmap.try_clone()?,
-                        );
+                        map.insert(addr.clone(), extra_socket.try_clone()?);
                     }
                     Err(e) => {
                         eprintln!("Error obteniendo lock de node_streams: {}", e);
@@ -207,28 +203,27 @@ fn listen_to_redis_response(
     last_command_sent: Arc<Mutex<String>>,
     log_path: &str,
 ) -> std::io::Result<()> {
+    if let Ok(peer_addr) = microservice_socket.peer_addr() {
+        println!("Escuchando respuestas del nodo: {}", peer_addr);
+    }
+
     let mut reader = BufReader::new(microservice_socket.try_clone()?);
     loop {
-        let mut line = String::new();
-        let bytes_read = reader.read_line(&mut line)?;
-        if bytes_read == 0 {
+        let (parts, _) = redis_parser::parse_resp_command(&mut reader)?;
+        if parts.is_empty() {
             break;
         }
+        println!("partes: {:#?}", parts);
+        let first_response = parts[0].to_uppercase();
 
-        logger::log_event(
-            log_path,
-            &format!("Respuesta de redis en el microservicio: {}", line),
-        );
-        let line_clone = line.clone();
-        let response: Vec<&str> = line.split_whitespace().collect();
+        match first_response.as_str() {
 
-        let first = response[0].to_uppercase();
-        let first_response = first.as_str();
-
-        match first_response {
+            "subscribe" => {
+                println!("alguien se suscribio");
+            }
             s if s.starts_with("-ERR") => {}
             s if s.starts_with("CLIENT") => {
-                let response_client: Vec<&str> = response[1].split('|').collect();
+                /* let response_client: Vec<&str> = response[1].split('|').collect();
                 let client_address = response_client[0];
                 let doc_name = response_client[1];
 
@@ -244,10 +239,10 @@ fn listen_to_redis_response(
                         log_path,
                         &format!("Error al enviar mensaje de bienvenida: {}", e),
                     );
-                }
+                } */
             }
             s if s.starts_with("UPDATE-FILES") => {
-                let parts: Vec<&str> = line_clone.trim_end_matches('\n').split('|').collect();
+                /* let parts: Vec<&str> = line_clone.trim_end_matches('\n').split('|').collect();
 
                 let doc_name: &str = parts[1];
                 let index = parts[2];
@@ -261,7 +256,24 @@ fn listen_to_redis_response(
                         log_path,
                         &format!("Error al enviar mensaje de actualizacion de archivo: {}", e),
                     );
-                }
+                } */
+            }
+            "DOC" if parts.len() >= 2 => {
+                let doc_name = &parts[1];
+                let content = &parts[2..]; 
+                
+                println!("Documento recibido: {} con ", doc_name);
+                logger::log_event(
+                    log_path,
+                    &format!("Documento recibido: {} con {} líneas", doc_name, content.len()),
+                );
+                
+                // Aquí puedes procesar el contenido completo del documento
+                /* for (i, line) in content.iter().enumerate() {
+                    if !line.is_empty() {
+                        println!("Línea {}: {}", i, line);
+                    }
+                } */
             }
 
             s if s.contains("WRITE|") => {
@@ -287,7 +299,7 @@ fn listen_to_redis_response(
                     microservice_socket.write_all(resp_command.as_bytes())?;
                 } */
             }
-            "ASK" => {
+            /* "ASK" => {
                 if response.len() < 3 {
                     println!("Nodo de redireccion no disponible");
                 } else {
@@ -298,14 +310,11 @@ fn listen_to_redis_response(
                         response,
                     );
                 }
-            }
+            } */
             _ => {}
         }
 
-        let response: Vec<&str> = line.split_whitespace().collect();
-
-        let first = response[0].to_uppercase();
-        let _first_response = first.as_str();
+        
     }
     Ok(())
 }
