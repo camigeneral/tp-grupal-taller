@@ -6,20 +6,19 @@ use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use super::redis_response::RedisResponse;
 use super::set;
 use super::string;
-use crate::client_info;
-use crate::documento::Documento;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
+use redis_types::{*};
 
 pub fn execute_command(
     request: CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Documento>>>,
-    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
-    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    docs: &SharedDocumentsMap,
+    document_subscribers: &SubscribersMap,
+    shared_sets: &SetsMap,
     client_addr: String,
-    active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
-    logged_clients: &Arc<Mutex<HashMap<String, bool>>>,
+    active_clients: &ClientsMap,
+    logged_clients: &LoggedClientsMap,
+    suscription_channel: &ClientsMap
 ) -> RedisResponse {
     match request.command.as_str() {
         "get" => string::handle_get(&request, docs),
@@ -30,7 +29,7 @@ pub fn execute_command(
         "unsubscribe" => {
             pub_sub::handle_unsubscribe(&request, document_subscribers, client_addr, shared_sets)
         }
-        "publish" => pub_sub::handle_publish(&request, document_subscribers, active_clients),
+        "publish" => pub_sub::handle_publish(&request, document_subscribers, active_clients, suscription_channel),
         "append" => string::handle_append(&request, docs),
         "scard" => set::handle_scard(&request, shared_sets),
         "smembers" => set::handle_smembers(&request, shared_sets),
@@ -55,11 +54,11 @@ pub fn execute_command(
 
 pub fn execute_replica_command(
     request: CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Documento>>>,
-    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
-    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    docs: &SharedDocumentsMap,
+    document_subscribers: &SubscribersMap,
+    shared_sets: &SetsMap,
 ) -> RedisResponse {
-    let shared_map: Arc<Mutex<HashMap<String, client_info::Client>>> =
+    let shared_map: ClientsMap =
         Arc::new(Mutex::new(HashMap::new()));
     match request.command.as_str() {
         "get" => string::handle_get(&request, docs),
