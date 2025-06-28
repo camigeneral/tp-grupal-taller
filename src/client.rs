@@ -4,7 +4,7 @@ use crate::app::AppMsg;
 use crate::components::structs::document_value_info::DocumentValueInfo;
 use commands::redis_parser::{format_resp_command, format_resp_publish};
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::{channel, Receiver, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
@@ -121,13 +121,9 @@ pub fn client_run(
             {
                 format_resp_command(&parts)
             } else if parts[0].contains("WRITE") {
-                let splited_command: Vec<&str> = command.split("|").collect();
-                if let Ok(ref addr) = addrs {                    
-                    let client_command = format!("{}|{}", command.clone(), addr.clone());
-                    format_resp_publish(splited_command[4], &client_command)
-                } else {
-                    continue; 
-                }
+                let splited_command: Vec<&str> = command.split("|").collect();            
+                let client_command = format!("{}", format_resp_command(&splited_command).clone());
+                format_resp_publish(splited_command[4], &client_command)
                 
             } else {
                 format_resp_publish(parts[1], &command)
@@ -183,21 +179,23 @@ fn listen_to_redis_response(
         }
     };
 
-    let mut reader = BufReader::new(client_socket);
+    let mut reader: BufReader<TcpStream> = BufReader::new(client_socket);
 
     loop {
-        let mut line = String::new();
-        let bytes_read = match reader.read_line(&mut line) {
-            Ok(bytes) => bytes,
+        println!("Respuesta de redis: {:#?}", reader);
+
+        let (response, _) = match redis_parser::parse_resp_command(&mut reader) {
+            Ok((parts, s)) => (parts, s),
             Err(e) => {
                 eprintln!("Error al leer línea desde el socket: {}", e);
-                return Err(e);
+                break;
             }
         };
 
-        if bytes_read == 0 {
+        if response.is_empty() {
             break;
         }
+
         let local_addr = match client_socket_cloned.local_addr() {
             Ok(addr) => addr,
             Err(e) => {
@@ -206,14 +204,12 @@ fn listen_to_redis_response(
             }
         };
         
-        println!("Respuesta de redis: {}", line);
+        println!("Respuesta de redis: {}", response.join(" "));
 
-        let response: Vec<&str> = line.split_whitespace().collect();
+        let first_response = response[0].to_uppercase();
 
-        let first = response[0].to_uppercase();
-        let first_response = first.as_str();
 
-        match first_response {
+        match first_response.as_str() {
             s if s.starts_with("-ERR") => {
                 let error_message = if response.len() > 1 {
                     response[1..].join(" ")
@@ -257,7 +253,7 @@ fn listen_to_redis_response(
                 }
             }
 
-            s if s.contains("WRITE|") => { 
+            /* s if s.contains("WRITE|") => { 
 
                 if let Some(sender) = &ui_sender {
                     let parts: Vec<&str> =
@@ -274,14 +270,10 @@ fn listen_to_redis_response(
                     doc_info.decode_text();
                     let _ = sender.send(AppMsg::RefreshData(doc_info));                    
                 }
-            }      
-            s if s.starts_with("FILES") => {
-                let parts: Vec<&str> = line.trim().split('|').collect();
-                let archivos = if parts.len() > 1 {
-                    parts[1]
-                        .split(',')
-                        .map(|s| s.to_string())
-                        .collect::<Vec<_>>()
+            }  */     
+            "FILES" => {
+                let archivos = if response.len() > 1 {
+                    response[1..].to_vec()
                 } else {
                     vec![]
                 };
@@ -291,7 +283,7 @@ fn listen_to_redis_response(
             }
             _ => {
                 if let Some(sender) = &ui_sender {
-                    let _ = sender.send(AppMsg::ManageResponse(first));
+                    let _ = sender.send(AppMsg::ManageResponse(response[0].clone()));
                 }
             }
         }
@@ -304,7 +296,7 @@ fn send_command_to_nodes(
     connect_node_sender: MpscSender<TcpStream>,
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     last_command_sent: Arc<Mutex<String>>,
-    response: Vec<&str>,
+    response: Vec<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let last_line_cloned = match last_command_sent.lock() {
         Ok(locked) => locked.clone(),
