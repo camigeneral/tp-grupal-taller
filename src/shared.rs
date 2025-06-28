@@ -18,6 +18,9 @@ pub enum MicroserviceMessage {
         content: String,
         file: String,
     },
+    Ask {
+        response: Vec<String>,
+    },
     Error(String),
     Unknown(String),
 }
@@ -43,6 +46,9 @@ impl MicroserviceMessage {
                 let file =  parts[4].to_string(); 
                 MicroserviceMessage::Write { index, content, file }
             
+            },
+            "ASK" => MicroserviceMessage::Ask {
+                response: parts.to_vec(),
             },
             cmd if cmd.starts_with("-ERR") => MicroserviceMessage::Error(cmd.to_string()),
             other => MicroserviceMessage::Unknown(other.to_string()),
