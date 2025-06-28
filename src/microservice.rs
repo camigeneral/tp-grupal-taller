@@ -74,24 +74,7 @@ impl Microservice {
         println!("Enviando: {:?}", command);
         logger::log_event(&self.log_path, &format!("Microservicio envia {:?}", command));
 
-        {
-            let cloned_node_streams = Arc::clone(&self.node_streams);
-            let cloned_last_command = Arc::clone(&self.last_command_sent);
-            let connect_node_sender_cloned = connect_node_sender.clone();
-
-            thread::spawn(move || {
-                if let Err(e) = connect_to_nodes(
-                    connect_node_sender_cloned,
-                    connect_nodes_receiver,
-                    cloned_node_streams,
-                    cloned_last_command,
-                    &self.log_path,
-                ) {
-                    eprintln!("Error en la conexión con el nodo: {}", e);
-                    // logger::log_event(&log_path, &format!("Error en la conexión con el nodo: {}", cloned_last_command.lock()));
-                }
-            });
-        }
+        self.start_node_connection_handler(connect_node_sender.clone(), connect_nodes_receiver);
 
         {
             match self.node_streams.lock() {
@@ -204,6 +187,99 @@ impl Microservice {
                 eprintln!("Error en la conexión con el nodo: {}", e);
             }
         });
+    }
+
+    fn connect_to_nodes(
+        sender: MpscSender<TcpStream>,
+        reciever: Receiver<TcpStream>,
+        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+        last_command_sent: Arc<Mutex<String>>,
+        documents: Arc<Mutex<HashMap<String, Documento>>>,
+        log_path: &str,
+    ) -> std::io::Result<()> {
+        for stream in reciever {
+            let cloned_node_streams = Arc::clone(&node_streams);
+            let cloned_last_command = Arc::clone(&last_command_sent);
+            let cloned_documents = Arc::clone(&documents);
+            let cloned_own_sender = sender.clone();
+            let log_path_clone = log_path.to_string();
+
+            thread::spawn(move || {
+                if let Err(e) = Self::listen_to_redis_response(
+                    stream,
+                    cloned_own_sender,
+                    cloned_node_streams,
+                    cloned_last_command,
+                    cloned_documents,
+                    &log_path_clone,
+                ) {
+                    eprintln!("Error en la conexión con el nodo: {}", e);
+                }
+            });
+        }
+
+        Ok(())
+    }
+    fn listen_to_redis_response(
+        mut microservice_socket: TcpStream,
+        connect_node_sender: MpscSender<TcpStream>,
+        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+        last_command_sent: Arc<Mutex<String>>,
+        documents: Arc<Mutex<HashMap<String, Documento>>>,
+        log_path: &str,
+    ) -> std::io::Result<()> {
+        if let Ok(peer_addr) = microservice_socket.peer_addr() {
+            println!("Escuchando respuestas del nodo: {}", peer_addr);
+        }
+
+        let mut reader = BufReader::new(microservice_socket.try_clone()?);
+        loop {
+            let (parts, _) = redis_parser::parse_resp_command(&mut reader)?;
+            if parts.is_empty() {
+                break;
+            }
+            println!("partes: {:#?}", parts);
+            let first_response = parts[0].to_uppercase();
+
+            match first_response.as_str() {
+                "subscribe" => {
+                    println!("alguien se suscribio");
+                }
+                s if s.starts_with("-ERR") => {}
+                "DOC" if parts.len() >= 2 => {
+                    let doc_name = &parts[1];
+                    let content = &parts[2..];
+
+                    println!(
+                        "Documento recibido: {} con {} líneas",
+                        doc_name,
+                        content.len()
+                    );
+                    logger::log_event(
+                        log_path,
+                        &format!(
+                            "Documento recibido: {} con {} líneas",
+                            doc_name,
+                            content.len()
+                        ),
+                    );
+                    let is_calc = doc_name.ends_with(".xslx");
+                    if let Ok(mut docs) = documents.lock() {
+                        let documento = if is_calc {
+                            Documento::Calculo(content.to_vec())
+                        } else {
+                            Documento::Texto(content.to_vec())
+                        };
+                        docs.insert(doc_name.to_string(), documento);
+                        println!("Documento '{}' guardado en el microservicio", doc_name);
+                    } else {
+                        eprintln!("Error obteniendo lock de documents");
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
     }
 
 
