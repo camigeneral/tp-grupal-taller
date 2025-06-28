@@ -234,7 +234,7 @@ fn listen_to_redis_response(
             "STATUS" => {
                 let socket = response[2].clone();
                 let doc = response[1].clone();
-                let content =  response[3].clone();
+                let content = response[3].clone();
                 println!("socket {} vs local_addr {}", socket, local_addr.to_string());
                 if socket != local_addr.to_string() {
                     continue;
@@ -386,7 +386,7 @@ fn connect_to_nodes(
                 cloned_own_sender,
                 cloned_node_streams,
                 cloned_last_command,
-           ) {
+            ) {
                 eprintln!("Error en la conexión con el nodo: {}", e);
             }
         });

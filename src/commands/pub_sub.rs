@@ -2,11 +2,11 @@ use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use super::redis_response::RedisResponse;
 use commands::set::handle_sadd;
 use commands::set::handle_srem;
+use redis_types::{ClientsMap, SubscribersMap, WriteClient};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
-use redis_types::{ClientsMap, WriteClient, SubscribersMap};
 
 /// Maneja el comando SUBSCRIBE que permite a un cliente suscribirse a un documento
 ///
@@ -47,19 +47,19 @@ pub fn handle_subscribe(
             );
         }
     };
-    
+
     if let Some(list) = map.get_mut(doc) {
         list.push(client_addr.clone());
-    
+
         let request = CommandRequest {
             command: "sadd".to_string(),
             key: Some(doc.clone()),
             arguments: vec![ValueType::String(client_addr.clone())],
             unparsed_command: String::new(),
         };
-    
+
         let _ = handle_sadd(&request, shared_sets);
-    
+
         return RedisResponse::new(
             CommandResponse::String("subscribe".to_string()),
             false,
@@ -67,14 +67,13 @@ pub fn handle_subscribe(
             doc.to_string(),
         );
     }
-    
+
     RedisResponse::new(
         CommandResponse::Error("Document not found".to_string()),
         false,
         String::new(),
         String::new(),
     )
-     
 }
 
 /// Maneja el comando UNSUBSCRIBE que permite a un cliente cancelar su suscripción a un documento
@@ -145,11 +144,7 @@ pub fn handle_unsubscribe(
     }
 }
 
-
-fn publish_to_internal_channel(
-    message: &str,
-    subscription_channel: &ClientsMap,
-) -> i64 {
+fn publish_to_internal_channel(message: &str, subscription_channel: &ClientsMap) -> i64 {
     let channels_guard = subscription_channel.lock().unwrap();
     if let Some(microservice) = channels_guard.get("subscriptions") {
         if let Ok(mut stream_guard) = microservice.stream.lock() {
@@ -158,7 +153,10 @@ fn publish_to_internal_channel(
                     eprintln!("Error enviando mensaje al microservicio: {}", e);
                     return 0;
                 } else {
-                    println!("Mensaje enviado al microservicio del canal interno: {}", message);
+                    println!(
+                        "Mensaje enviado al microservicio del canal interno: {}",
+                        message
+                    );
                     return 1;
                 }
             }
@@ -166,7 +164,6 @@ fn publish_to_internal_channel(
     }
     0
 }
-
 
 fn publish_to_subscribers<T: Write>(
     doc: &str,
@@ -186,7 +183,7 @@ fn publish_to_subscribers<T: Write>(
             }
         }
     }
-    
+
     sent_count
 }
 
@@ -242,7 +239,6 @@ pub fn handle_publish<T: Write>(
         doc.to_string(),
     )
 }
-
 
 // #[cfg(test)]
 // mod tests {

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
+use std::io::BufReader;
 use std::io::Write;
-use std::io::{BufReader};
 #[allow(unused_imports)]
 use std::net::TcpListener;
 use std::net::TcpStream;
@@ -18,16 +18,15 @@ use std::time::Duration;
 
 #[path = "utils/logger.rs"]
 mod logger;
-use self::logger::{*};
+use self::logger::*;
 #[path = "utils/redis_parser.rs"]
 mod redis_parser;
 #[path = "shared.rs"]
 mod shared;
 use self::shared::MicroserviceMessage;
 
-
 /// Microservicio que actúa como intermediario entre clientes y nodos Redis.
-/// 
+///
 /// Esta estructura maneja las conexiones TCP con múltiples nodos Redis,
 /// procesa comandos RESP (Redis Serialization Protocol), y almacena documentos
 /// recibidos de los nodos. Proporciona funcionalidad para:
@@ -38,30 +37,30 @@ use self::shared::MicroserviceMessage;
 pub struct Microservice {
     /// Mapa de conexiones TCP activas con los nodos Redis.
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
-    
+
     /// El último comando enviado a los nodos Redis.
     /// Se mantiene para referencia y debugging.
     last_command_sent: Arc<Mutex<String>>,
-    
+
     /// Documentos almacenados en memoria recibidos de los nodos Redis.
     documents: Arc<Mutex<HashMap<String, Documento>>>,
-    
+
     /// Ruta al archivo de log donde se registran los eventos del microservicio.
     logger: Logger,
 }
 
-impl Microservice {    
+impl Microservice {
     /// Crea una nueva instancia del microservicio.
-    /// 
+    ///
     /// # Argumentos
-    /// 
+    ///
     /// * `config_path` - Ruta al archivo de configuración que contiene la configuración del log.
-    /// 
+    ///
     /// # Retorna
-    /// 
+    ///
     /// * `Ok(Microservice)` - Una nueva instancia del microservicio inicializada.
     /// * `Err(Box<dyn std::error::Error>)` - Error si no se puede leer la configuración o crear el archivo de log.
-    /// 
+    ///
     pub fn new(config_path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let logger = logger::Logger::init(
             logger::Logger::get_log_path_from_config(config_path),
@@ -98,12 +97,10 @@ impl Microservice {
 
         println!("Conectándome al server de redis en {:?}", main_address);
         let mut socket: TcpStream = TcpStream::connect(&main_address)?;
-        self.logger.log(
-            &format!(
-                "Microservicio conectandose al server de redis en {:?}",
-                main_address
-            ),
-        );
+        self.logger.log(&format!(
+            "Microservicio conectandose al server de redis en {:?}",
+            main_address
+        ));
         let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
 
         let redis_socket = socket.try_clone()?;
@@ -112,7 +109,8 @@ impl Microservice {
         let command = "Microservicio\r\n".to_string();
 
         println!("Enviando: {:?}", command);
-        self.logger.log(&format!("Microservicio envia {:?}", command));
+        self.logger
+            .log(&format!("Microservicio envia {:?}", command));
 
         self.start_node_connection_handler(connect_node_sender.clone(), connect_nodes_receiver);
 
@@ -128,57 +126,59 @@ impl Microservice {
         self.connect_to_replica_nodes(&connect_node_sender)?;
 
         self.start_automatic_commands();
-        
+
         loop {
             std::thread::sleep(std::time::Duration::from_secs(1));
         }
     }
 
     /// Conecta el microservicio a nodos Redis réplica adicionales.
-    /// 
+    ///
     /// Este método intenta conectarse a nodos Redis en los puertos 4001 y 4002.
     /// Para cada conexión exitosa:
     /// - Envía el comando de identificación "Microservicio"
     /// - Agrega el stream TCP al mapa de conexiones
     /// - Envía el stream al manejador de conexiones
-    /// 
+    ///
     /// Si una conexión falla, se registra el error pero el proceso continúa
     /// con los demás nodos.
-    /// 
+    ///
     /// # Argumentos
-    /// 
+    ///
     /// * `connect_node_sender` - Sender para enviar streams TCP al manejador de conexiones.
-    /// 
+    ///
     /// # Retorna
-    /// 
+    ///
     /// * `Ok(())` - Las conexiones se establecieron correctamente (aunque algunas puedan haber fallado).
     /// * `Err(Box<dyn std::error::Error>)` - Error si no se puede escribir en algún stream TCP.
-    fn connect_to_replica_nodes(&self,
-        connect_node_sender: &MpscSender<TcpStream>,) -> Result<(), Box<dyn std::error::Error>> {
-            let otros_puertos = vec![4001, 4002];
-            for port in otros_puertos {
-                let addr = format!("127.0.0.1:{}", port);
-                match TcpStream::connect(&addr) {
-                    Ok(mut extra_socket) => {
-                        println!("Microservicio conectado a nodo adicional: {}", addr);
-    
-                        let parts: Vec<&str> = "Microservicio".split_whitespace().collect();
-                        let resp_command = redis_parser::format_resp_command(&parts);
-                        extra_socket.write_all(resp_command.as_bytes())?;
-    
-                        self.add_node_stream(&addr, extra_socket.try_clone()?)?;
-                        connect_node_sender.send(extra_socket)?;
-                    }
-                    Err(e) => {
-                        eprintln!("Error al conectar con nodo {}: {}", addr, e);
-                    }
+    fn connect_to_replica_nodes(
+        &self,
+        connect_node_sender: &MpscSender<TcpStream>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let otros_puertos = vec![4001, 4002];
+        for port in otros_puertos {
+            let addr = format!("127.0.0.1:{}", port);
+            match TcpStream::connect(&addr) {
+                Ok(mut extra_socket) => {
+                    println!("Microservicio conectado a nodo adicional: {}", addr);
+
+                    let parts: Vec<&str> = "Microservicio".split_whitespace().collect();
+                    let resp_command = redis_parser::format_resp_command(&parts);
+                    extra_socket.write_all(resp_command.as_bytes())?;
+
+                    self.add_node_stream(&addr, extra_socket.try_clone()?)?;
+                    connect_node_sender.send(extra_socket)?;
+                }
+                Err(e) => {
+                    eprintln!("Error al conectar con nodo {}: {}", addr, e);
                 }
             }
-            Ok(())
         }
+        Ok(())
+    }
 
     /// Inicia el procesamiento automático de comandos en un hilo separado.
-    /// 
+    ///
     /// Este método crea un hilo que se ejecuta en segundo plano y realiza
     /// verificaciones periódicas de las conexiones de nodos.       
     fn start_automatic_commands(&self) {
@@ -188,8 +188,7 @@ impl Microservice {
 
         thread::spawn(move || loop {
             match node_streams_clone.lock() {
-                Ok(_streams) => {
-                }
+                Ok(_streams) => {}
                 Err(e) => {
                     eprintln!("Error obteniendo lock de node_streams: {}", e);
                     logger_clone.log(&format!("Error obteniendo lock de node_streams: {}", e));
@@ -221,15 +220,15 @@ impl Microservice {
             }
         });
     }
-    
+
     /// Inicia el manejador de conexiones de nodos en un hilo separado.
-    /// 
+    ///
     /// Este método crea un hilo que se encarga de procesar las conexiones
     /// entrantes de los nodos Redis. Utiliza un canal de comunicación
     /// para recibir streams TCP de nuevos nodos y los procesa en paralelo.
-    /// 
+    ///
     /// # Argumentos
-    /// 
+    ///
     /// * `connect_node_sender` - Sender para enviar streams TCP al manejador.
     /// * `connect_nodes_receiver` - Receiver para recibir streams TCP de nuevos nodos.
     fn add_node_stream(
@@ -320,7 +319,7 @@ impl Microservice {
     fn listen_to_redis_response(
         mut microservice_socket: TcpStream,
         connect_node_sender: MpscSender<TcpStream>,
-        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,    
+        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
         documents: Arc<Mutex<HashMap<String, Documento>>>,
         log_clone: Logger,
     ) -> std::io::Result<()> {
@@ -338,55 +337,63 @@ impl Microservice {
             let message = MicroserviceMessage::from_parts(&parts);
 
             match message {
-
-                MicroserviceMessage::ClientSubscribed { document, client_id }  => {
+                MicroserviceMessage::ClientSubscribed {
+                    document,
+                    client_id,
+                } => {
                     if let Ok(docs) = documents.lock() {
                         if let Some(documento) = docs.get(&document) {
                             let doc_content = match documento {
                                 Documento::Texto(lines) => lines.join(","),
                                 Documento::Calculo(lines) => lines.join(","),
                             };
-                                                                                    
-                            
-                            let message_parts = &["status", &document.clone(), &client_id.clone(), &doc_content.clone()];
+                            let message_parts = &[
+                                "status",
+                                &document.clone(),
+                                &client_id.clone(),
+                                &doc_content.clone(),
+                            ];
                             let message_resp = redis_parser::format_resp_command(message_parts);
-                            let command_resp = redis_parser::format_resp_publish(&document.clone(), &message_resp);
-                            println!("Enviando publish: {}", command_resp.replace("\r\n", "\\r\\n"));
-                            log_clone.log(                                
-                                &format!("Enviando publish para client-subscribed: {}", command_resp),
+                            let command_resp =
+                                redis_parser::format_resp_publish(&document.clone(), &message_resp);
+                            println!(
+                                "Enviando publish: {}",
+                                command_resp.replace("\r\n", "\\r\\n")
                             );
+                            log_clone.log(&format!(
+                                "Enviando publish para client-subscribed: {}",
+                                command_resp
+                            ));
                             if let Err(e) = microservice_socket.write_all(command_resp.as_bytes()) {
-                                eprintln!("Error al enviar mensaje de actualizacion de archivo: {}", e);
-                                log_clone.log(                                
-                                    &format!("Error al enviar mensaje de actualizacion de archivo: {}", e),
+                                eprintln!(
+                                    "Error al enviar mensaje de actualizacion de archivo: {}",
+                                    e
                                 );
-                            }                            
+                                log_clone.log(&format!(
+                                    "Error al enviar mensaje de actualizacion de archivo: {}",
+                                    e
+                                ));
+                            }
                         } else {
                             eprintln!("Documento no encontrado: {}", document);
-                            log_clone.log(
-                                &format!("Documento no encontrado: {}", document),
-                            );
+                            log_clone.log(&format!("Documento no encontrado: {}", document));
                         }
                     } else {
                         eprintln!("Error obteniendo lock de documents para client-subscribed");
-                        log_clone.log(
-                            "Error obteniendo lock de documents para client-subscribed",
-                        );
+                        log_clone.log("Error obteniendo lock de documents para client-subscribed");
                     }
                 }
-                MicroserviceMessage::Doc{document, content} => {                    
+                MicroserviceMessage::Doc { document, content } => {
                     println!(
                         "Documento recibido: {} con {} líneas",
                         document,
                         content.len()
                     );
-                    log_clone.log(
-                        &format!(
-                            "Documento recibido: {} con {} líneas",
-                            document,
-                            content.len()
-                        ),
-                    );
+                    log_clone.log(&format!(
+                        "Documento recibido: {} con {} líneas",
+                        document,
+                        content.len()
+                    ));
                     let is_calc = document.ends_with(".xslx");
                     if let Ok(mut docs) = documents.lock() {
                         let documento = if is_calc {
@@ -394,22 +401,19 @@ impl Microservice {
                         } else {
                             Documento::Texto(content)
                         };
-                        docs.insert(document.to_string(), documento);                    
+                        docs.insert(document.to_string(), documento);
                     } else {
                         eprintln!("Error obteniendo lock de documents");
                     }
                 }
 
-                MicroserviceMessage::Error(_) => {                
-                }
+                MicroserviceMessage::Error(_) => {}
                 _ => {}
             }
         }
         Ok(())
     }
 }
-
-
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config_path = "redis.conf";

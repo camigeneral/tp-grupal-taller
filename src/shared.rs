@@ -3,8 +3,14 @@ mod redis_parser;
 
 /// Mensajes que procesa el microservicio
 pub enum MicroserviceMessage {
-    ClientSubscribed { document: String, client_id: String },
-    Doc {document: String, content: Vec<String>},
+    ClientSubscribed {
+        document: String,
+        client_id: String,
+    },
+    Doc {
+        document: String,
+        content: Vec<String>,
+    },
     Error(String),
     Unknown(String),
 }
@@ -16,17 +22,13 @@ impl MicroserviceMessage {
         }
 
         match parts[0].to_uppercase().as_str() {
-            "CLIENT-SUBSCRIBED" if parts.len() >= 3 => {
-                MicroserviceMessage::ClientSubscribed {
-                    document: parts[1].clone(),
-                    client_id: parts[2].clone(),
-                }
-            }
-            "DOC" if parts.len() >= 2 => {
-                MicroserviceMessage::Doc {
-                    document : parts[1].clone(),
-                    content : parts[2..].to_vec(),
-                }
+            "CLIENT-SUBSCRIBED" if parts.len() >= 3 => MicroserviceMessage::ClientSubscribed {
+                document: parts[1].clone(),
+                client_id: parts[2].clone(),
+            },
+            "DOC" if parts.len() >= 2 => MicroserviceMessage::Doc {
+                document: parts[1].clone(),
+                content: parts[2..].to_vec(),
             },
             cmd if cmd.starts_with("-ERR") => MicroserviceMessage::Error(cmd.to_string()),
             other => MicroserviceMessage::Unknown(other.to_string()),
@@ -37,14 +39,11 @@ impl MicroserviceMessage {
 impl ToString for MicroserviceMessage {
     fn to_string(&self) -> String {
         match self {
-            MicroserviceMessage::ClientSubscribed { document, client_id } => {
-                redis_parser::format_resp_command(&[
-                    "client-subscribed",
-                    document,
-                    client_id,
-                ])
-            }
-            _ => {"".to_string()}
+            MicroserviceMessage::ClientSubscribed {
+                document,
+                client_id,
+            } => redis_parser::format_resp_command(&["client-subscribed", document, client_id]),
+            _ => "".to_string(),
         }
     }
-} 
+}
