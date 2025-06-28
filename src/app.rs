@@ -80,6 +80,7 @@ pub enum AppMsg {
     AddContentSpreadSheet(DocumentValueInfo),
     UpdateFilesList(Vec<String>),
     FilesLoaded,
+    ReloadFile(String, String),
 }
 
 #[relm4::component(pub)]
@@ -481,6 +482,23 @@ impl SimpleComponent for AppModel {
                     .collect();
                 self.files_manager_cont
                     .emit(FileWorkspaceMsg::UpdateFilesList(archivos_tipos));
+            }
+
+            AppMsg::ReloadFile(file_id, content) => {
+                // Determinar el tipo de archivo basado en la extensión
+                let file_type = if file_id.ends_with(".xlsx") {
+                    FileType::Sheet
+                } else {
+                    FileType::Text
+                };
+
+                // Actualizar directamente el FileWorkspace con el nuevo contenido
+                self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(
+                    file_id.clone(),
+                    "1".to_string(), // qty_subs
+                    file_type,
+                    content,
+                ));
             }
         }
     }
