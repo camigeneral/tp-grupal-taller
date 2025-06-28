@@ -3,14 +3,14 @@ use super::redis;
 use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use super::redis_response::RedisResponse;
 use crate::client_info;
-use crate::documento::Documento;
 use client_info::ClientType;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use redis_types::RedisDocumentsMap;
 
 pub fn handle_get(
     request: &CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Documento>>>,
+    docs: &RedisDocumentsMap,
 ) -> RedisResponse {
     let key = match &request.key {
         Some(k) => k,
@@ -37,20 +37,9 @@ pub fn handle_get(
     };
 
     match docs_lock.get(key) {
-        Some(Documento::Texto(lines)) => {
-            let content = lines.join("\n");
+        Some(data) => {
             RedisResponse::new(
-                CommandResponse::String(content),
-                false,
-                "".to_string(),
-                "".to_string(),
-            )
-        }
-        Some(Documento::Calculo(spreadsheet_data)) => {
-            // Para documentos de cálculo, simplemente une las líneas con \n
-            let content = spreadsheet_data.join("\n");
-            RedisResponse::new(
-                CommandResponse::String(content),
+                CommandResponse::String(data.clone()),
                 false,
                 "".to_string(),
                 "".to_string(),
@@ -77,7 +66,7 @@ pub fn handle_get(
 /// - `RedisResponse::Ok` con notificación activa y nombre del documento.
 pub fn handle_set(
     request: &CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Documento>>>,
+    docs: &RedisDocumentsMap,
     document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
     active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
 ) -> RedisResponse {
@@ -106,14 +95,8 @@ pub fn handle_set(
 
     // Bloqueo y escritura de documento
     let docs_result = docs.lock();
-    if let Ok(mut docs_lock) = docs_result {
-        if doc_name.ends_with(".xlsx") {
-            docs_lock.insert(doc_name.clone(), Documento::Calculo(vec![]));
-        } else if content.trim().is_empty() {
-            docs_lock.insert(doc_name.clone(), Documento::Texto(vec![]));
-        } else {
-            docs_lock.insert(doc_name.clone(), Documento::Texto(vec![content.clone()]));
-        }
+    if let Ok(mut docs_lock) = docs_result {        
+            docs_lock.insert(doc_name.clone(), content.clone());
     } else {
         return RedisResponse::new(
             CommandResponse::Error("Internal server error: could not access docs".to_string()),
@@ -160,71 +143,6 @@ pub fn handle_set(
     RedisResponse::new(CommandResponse::Ok, true, notification, doc_name)
 }
 
-/// Maneja el comando APPEND para agregar contenido a un documento línea por línea.
-///
-/// - Si no se especifica documento o contenido, devuelve un error.
-/// - Si el documento no existe, lo crea automáticamente.
-/// - Agrega una nueva línea de texto al final del documento.
-/// - Retorna el número de línea donde se agregó el contenido.
-/// - Publica una notificación para los clientes suscritos.
-///
-/// # Parámetros
-/// - `request`: contiene la clave del documento y el contenido a agregar.
-/// - `docs`: acceso a los documentos en memoria compartida.
-///
-/// # Retorna
-/// - `RedisResponse::Integer(line_number)` con notificación activa y nombre del documento.
-pub fn handle_append(
-    request: &CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Documento>>>,
-) -> RedisResponse {
-    let doc = match &request.key {
-        Some(k) => k.clone(),
-        None => {
-            return RedisResponse::new(
-                CommandResponse::Error("Usage: APPEND <document> <text...>".to_string()),
-                false,
-                "".to_string(),
-                "".to_string(),
-            );
-        }
-    };
-
-    if request.arguments.is_empty() {
-        return RedisResponse::new(
-            CommandResponse::Error("Usage: APPEND <document> <text...>".to_string()),
-            false,
-            "".to_string(),
-            "".to_string(),
-        );
-    }
-
-    let content = redis::extract_string_arguments(&request.arguments);
-    let line_number: usize = match docs.lock() {
-        Ok(mut docs_lock) => {
-            let entry = docs_lock.entry(doc.clone()).or_default();
-            entry.push(content.clone());
-            entry.len()
-        }
-        Err(_) => {
-            return RedisResponse::new(
-                CommandResponse::Error("Error interno al modificar documento".to_string()),
-                false,
-                "".to_string(),
-                "".to_string(),
-            );
-        }
-    };
-
-    let notification = format!("WRITTEN {}|{}|{} ", doc, line_number, content);
-
-    RedisResponse::new(
-        CommandResponse::Integer(line_number as i64),
-        true,
-        notification,
-        doc,
-    )
-}
 
 // #[cfg(test)]
 // mod tests {

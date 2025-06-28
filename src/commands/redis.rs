@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 
 pub fn execute_command(
     request: CommandRequest,
-    docs: &SharedDocumentsMap,
+    docs: &RedisDocumentsMap,
     document_subscribers: &SubscribersMap,
     shared_sets: &SetsMap,
     client_addr: String,
@@ -35,17 +35,15 @@ pub fn execute_command(
             active_clients,
             suscription_channel,
         ),
-        "append" => string::handle_append(&request, docs),
         "scard" => set::handle_scard(&request, shared_sets),
         "smembers" => set::handle_smembers(&request, shared_sets),
         "sadd" => set::handle_sadd(&request, shared_sets), // subscribe
         "srem" => set::handle_srem(&request, shared_sets), // unsubscribe
-        "llen" => list::handle_llen(&request, docs),
+/*         "llen" => list::handle_llen(&request, docs),
         "rpush" => list::handle_rpush(&request, docs),
         "lset" => list::handle_lset(&request, docs),
-        "linsert" => list::handle_linsert(&request, docs),
+        "linsert" => list::handle_linsert(&request, docs), */
         "auth" => auth::handle_auth(&request, logged_clients, active_clients, client_addr),
-        "add_content" => client_action::set_content_file(&request, docs),
         "get_files" => client_action::get_files(docs),
         _ => RedisResponse::new(
             CommandResponse::Error("Unknown".to_string()),
@@ -58,7 +56,7 @@ pub fn execute_command(
 
 pub fn execute_replica_command(
     request: CommandRequest,
-    docs: &SharedDocumentsMap,
+    docs: &RedisDocumentsMap,
     document_subscribers: &SubscribersMap,
     shared_sets: &SetsMap,
 ) -> RedisResponse {
@@ -66,14 +64,12 @@ pub fn execute_replica_command(
     match request.command.as_str() {
         "get" => string::handle_get(&request, docs),
         "set" => string::handle_set(&request, docs, document_subscribers, &shared_map),
-        "append" => string::handle_append(&request, docs),
         "sadd" => set::handle_sadd(&request, shared_sets),
         "srem" => set::handle_srem(&request, shared_sets),
-        "rpush" => list::handle_rpush(&request, docs),
-        "lset" => list::handle_lset(&request, docs),
+        /* "rpush" => list::handle_rpush(&request, docs),
+        "lset" => list::handle_lset(&request, docs), */
         "get_files" => client_action::get_files(docs),
-        "add_content" => client_action::set_content_file(&request, docs),
-        "linsert" => list::handle_linsert(&request, docs),
+        /* "linsert" => list::handle_linsert(&request, docs), */
         _ => RedisResponse::new(
             CommandResponse::Error("Unknown".to_string()),
             false,

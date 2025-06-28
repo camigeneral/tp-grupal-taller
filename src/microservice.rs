@@ -10,9 +10,9 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::{channel, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
-#[path = "documento.rs"]
-mod documento;
-use documento::Documento;
+#[path = "document.rs"]
+mod document;
+use document::Documento;
 #[allow(unused_imports)]
 use std::time::Duration;
 
@@ -392,15 +392,26 @@ impl Microservice {
                         "Documento recibido: {} con {} líneas",
                         document,
                         content.len()
-                    ));
-                    let is_calc = document.ends_with(".xslx");
-                    if let Ok(mut docs) = documents.lock() {
-                        let documento = if is_calc {
-                            Documento::Calculo(content)
+                    ));                    
+                    if let Ok(mut docs) = documents.lock() {                        
+                        if document.ends_with(".txt") {
+                            let messages: Vec<String> = content
+                                .split("/--/")
+                                .filter(|s| !s.is_empty())
+                                .map(|s| s.to_string())
+                                .collect();
+                            docs.insert(document.clone(), Documento::Texto(messages));
                         } else {
-                            Documento::Texto(content)
-                        };
-                        docs.insert(document.to_string(), documento);
+                            let mut rows: Vec<String> =
+                                content.split("/--/").map(|s| s.to_string()).collect();
+                
+                            while rows.len() < 100 {
+                                rows.push(String::new());
+                            }
+                
+                            docs.insert(document.clone(), Documento::Calculo(rows));
+                        }            
+                        println!("docs: {:#?}", docs);
                     } else {
                         eprintln!("Error obteniendo lock de documents");
                     }

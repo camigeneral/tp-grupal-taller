@@ -18,7 +18,6 @@ use crate::local_node::NodeState;
 use commands::redis_parser::format_resp_command;
 mod client_info;
 mod commands;
-mod documento;
 mod encryption;
 mod hashing;
 mod local_node;
@@ -28,7 +27,6 @@ mod server_context;
 mod utils;
 use crate::server_context::ServerContext;
 use client_info::ClientType;
-use documento::Documento;
 #[path = "redis_types.rs"]
 mod redis_types;
 use redis_types::*;
@@ -130,7 +128,7 @@ fn start_server(
 
     // Inicializar estructuras de datos compartidas
 
-    let shared_documents: SharedDocumentsMap = Arc::new(Mutex::new(stored_documents));
+    let shared_documents: RedisDocumentsMap = Arc::new(Mutex::new(stored_documents));
     let (document_subscribers, shared_sets) = initialize_datasets(&shared_documents);
     let active_clients = Arc::new(Mutex::new(HashMap::new()));
     let logged_clients: LoggedClientsMap = Arc::new(Mutex::new(HashMap::new()));
@@ -188,7 +186,7 @@ fn start_server(
 /// # Retorna
 /// (Arc::new(Mutex::new(subscriber_map)), Arc::new(Mutex::new(doc_set))) con las listas de suscriptores
 /// inicializadas y los sets iniciales
-fn initialize_datasets(documents: &SharedDocumentsMap) -> (SubscribersMap, SetsMap) {
+fn initialize_datasets(documents: &RedisDocumentsMap) -> (SubscribersMap, SetsMap) {
     // Intentamos obtener la lista de keys; si falla el lock, devolvemos vectores vacíos
     let document_keys: Vec<String> = match documents.lock() {
         Ok(locked_documents) => locked_documents.keys().cloned().collect(),
@@ -459,10 +457,6 @@ fn handle_client(
             "Respuesta enviada a {}: {:?}",
             client_id, response
         ));
-
-        if let Err(e) = persist_documents(&ctx.shared_documents, &ctx.local_node) {
-            eprintln!("Error al persistir documentos: {}", e);
-        }
     }
 
     cleanup_client_resources(
@@ -822,13 +816,13 @@ fn cleanup_client_resources(
         logger.log("Mutex poisoned al limpiar document_subscribers");
     }
 }
-
+/* 
 /// Persiste el estado actual de los documentos en el archivo.
 ///
 /// # Errores
 /// Retorna un error si hay problemas al escribir en el archivo
 pub fn persist_documents(
-    documents: &SharedDocumentsMap,
+    documents: &RedisDocumentsMap,
     local_node: &LocalNodeMap,
 ) -> io::Result<()> {
     let file_name = match local_node.lock() {
@@ -864,6 +858,14 @@ pub fn persist_documents(
     };
 
     for (document_id, doc) in documents_guard.iter() {
+        let is_calc = document_id.ends_with(".xslx");
+        let content = if is_calc {
+            let mut document_data = format!("{}/++/", document_id);
+                for linea in lineas {
+                    document_data.push_str(linea);
+                    document_data.push_str("/--/");
+                }
+        }
         match doc {
             Documento::Texto(lineas) => {
                 let mut document_data = format!("{}/++/", document_id);
@@ -891,13 +893,13 @@ pub fn persist_documents(
 
     Ok(())
 }
-
+ */
 /// Carga los documentos persistidos desde el archivo.
 ///
 /// # Retorna
 /// HashMap con los documentos y sus mensajes, o un error si hay problemas
 /// al leer el archivo
-pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Documento>, String> {
+pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, String>, String> {
     let mut documents = HashMap::new();
 
     let file = match File::open(file_path) {
@@ -920,34 +922,17 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Documen
         }
 
         let document_id = parts[0].to_string();
-        let messages_data = parts[1];
-
-        if document_id.ends_with(".txt") {
-            let messages: Vec<String> = messages_data
-                .split("/--/")
-                .filter(|s| !s.is_empty())
-                .map(|s| s.to_string())
-                .collect();
-            documents.insert(document_id, Documento::Texto(messages));
-        } else {
-            let mut rows: Vec<String> =
-                messages_data.split("/--/").map(|s| s.to_string()).collect();
-
-            while rows.len() < 100 {
-                rows.push(String::new());
-            }
-
-            documents.insert(document_id, Documento::Calculo(rows));
-        }
+        let messages_data = parts[1];    
+        documents.insert(document_id, messages_data.to_string());        
     }
-
+    println!("documentos: {:#?}", documents);
     Ok(documents)
 }
 
 pub fn subscribe_microservice_to_all_docs(
     mut client_stream: TcpStream,
     addr: String,
-    docs: SharedDocumentsMap,
+    docs: RedisDocumentsMap,
     clients_on_docs: SubscribersMap,
     logger: Logger,
 ) {
@@ -980,16 +965,11 @@ pub fn subscribe_microservice_to_all_docs(
                 "Microservicio {} suscripto automáticamente a {}",
                 addr, doc_name
             );
-            let content = match document.clone() {
-                Documento::Texto(content) => content,
-                Documento::Calculo(content) => content,
-            };
-            let mut command_parts = vec!["DOC", doc_name];
-            for line in &content {
-                command_parts.push(line);
-            }
+            let document_data = document.to_string().clone();
 
-            let message = format_resp_command(&command_parts);
+            let command_parts = vec!["DOC", doc_name, &document_data];        
+
+            let message = format_resp_command(&command_parts.clone());
             if let Err(e) = client_stream.write_all(message.as_bytes()) {
                 eprintln!("Error enviando notificación DOC al microservicio: {}", e);
             }

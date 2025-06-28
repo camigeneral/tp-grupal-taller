@@ -10,7 +10,7 @@ pub enum MicroserviceMessage {
     },
     Doc {
         document: String,
-        content: Vec<String>,
+        content: String,
     },
 
     Write {
@@ -35,7 +35,7 @@ impl MicroserviceMessage {
             },
             "DOC" if parts.len() >= 2 => MicroserviceMessage::Doc {
                 document: parts[1].clone(),
-                content: parts[2..].to_vec(),
+                content: parts[2].clone(),
             },
             "WRITE" if parts.len() >= 2 => {  
                 let index = parts[1].to_string();
