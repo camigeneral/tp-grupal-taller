@@ -1,6 +1,6 @@
 # Número de instancias por defecto si no se especifica
 nodes ?= 1
-
+port ?= 4000
 redis:
 	@if [ $(nodes) -lt 1 ] || [ $(nodes) -gt 3 ]; then \
 		echo "Error: El número de instancias debe estar entre 1 y 3"; \
@@ -17,8 +17,7 @@ microservice:
 	cargo run --bin microservice
 
 client: 
-	cargo run --bin client 4000
-
+	cargo run --bin client $(port)
 
 clean_redis:
 	pkill -f "redis_server" || true
