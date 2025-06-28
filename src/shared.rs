@@ -2,6 +2,7 @@
 mod redis_parser;
 
 /// Mensajes que procesa el microservicio
+#[derive(Debug)]
 pub enum MicroserviceMessage {
     ClientSubscribed {
         document: String,
@@ -10,6 +11,12 @@ pub enum MicroserviceMessage {
     Doc {
         document: String,
         content: Vec<String>,
+    },
+
+    Write {
+        index: String,
+        content: String,
+        file: String,
     },
     Error(String),
     Unknown(String),
@@ -29,6 +36,13 @@ impl MicroserviceMessage {
             "DOC" if parts.len() >= 2 => MicroserviceMessage::Doc {
                 document: parts[1].clone(),
                 content: parts[2..].to_vec(),
+            },
+            "WRITE" if parts.len() >= 2 => {  
+                let index = parts[1].to_string();
+                let content = parts[2].to_string();
+                let file =  parts[4].to_string(); 
+                MicroserviceMessage::Write { index, content, file }
+            
             },
             cmd if cmd.starts_with("-ERR") => MicroserviceMessage::Error(cmd.to_string()),
             other => MicroserviceMessage::Unknown(other.to_string()),
