@@ -10,7 +10,7 @@ use super::file_editor::FileEditorModel;
 use super::list_files::FileListView;
 use crate::components::file_editor::FileEditorOutputMessage;
 use crate::components::structs::document_value_info::DocumentValueInfo;
-use crate::documento::Documento;
+use crate::document::Documento;
 use components::file_editor::FileEditorMessage;
 use components::list_files::FileFilterAction;
 use components::types::FileType;

@@ -70,7 +70,7 @@ pub mod commands;
 /// Incluye el parser de comandos RESP y otras utilidades compartidas.
 pub mod utils;
 
-pub mod documento;
+pub mod document;
 
 pub mod server_context;
 
