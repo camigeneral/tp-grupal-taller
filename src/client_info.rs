@@ -7,6 +7,7 @@ pub enum ClientType {
     Microservicio,
 }
 
+#[derive(Debug)]
 pub struct Client {
     pub stream: TcpStream,
     pub client_type: ClientType,
