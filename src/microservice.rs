@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::io::Write;
 use std::io::{BufRead, BufReader};
+use std::fs;
 #[allow(unused_imports)]
 use std::net::TcpListener;
 use std::net::TcpStream;
@@ -28,6 +29,32 @@ pub struct Microservice {
     log_path: String,
 
 }
+
+impl Microservice {
+    pub fn new(config_path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let log_path = logger::get_log_path_from_config(config_path);
+        if let Ok(metadata) = fs::metadata(&log_path) {
+            if metadata.len() > 0 {
+                if let Ok(mut file) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&log_path)
+                {
+                    let _ = writeln!(file);
+                }
+            }
+        }
+        Ok(Microservice {
+            node_streams: Arc::new(Mutex::new(HashMap::new())),
+            last_command_sent: Arc::new(Mutex::new("".to_string())),
+            documents: Arc::new(Mutex::new(HashMap::new())),
+            log_path,
+        })
+    }
+
+}
+
+
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let redis_port = 4000;
