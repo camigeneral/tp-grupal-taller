@@ -2,7 +2,6 @@ use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use super::redis_response::RedisResponse;
 use commands::set::handle_sadd;
 use commands::set::handle_srem;
-use crate::client_info;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::Write;
