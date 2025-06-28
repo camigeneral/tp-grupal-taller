@@ -52,6 +52,161 @@ impl Microservice {
         })
     }
 
+    pub fn start(&self, redis_port: u16) -> Result<(), Box<dyn std::error::Error>> {
+        let main_address = format!("127.0.0.1:{}", redis_port);
+
+        println!("Conectándome al server de redis en {:?}", main_address);
+        let mut socket: TcpStream = TcpStream::connect(&main_address)?;
+        logger::log_event(
+            &self.log_path,
+            &format!(
+                "Microservicio conectandose al server de redis en {:?}",
+                main_address
+            ),
+        );
+        let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
+
+        let redis_socket = socket.try_clone()?;
+        let redis_socket_clone_for_hashmap = socket.try_clone()?;
+
+        let command = "Microservicio\r\n".to_string();
+
+        println!("Enviando: {:?}", command);
+        logger::log_event(&self.log_path, &format!("Microservicio envia {:?}", command));
+
+        {
+            let cloned_node_streams = Arc::clone(&self.node_streams);
+            let cloned_last_command = Arc::clone(&self.last_command_sent);
+            let connect_node_sender_cloned = connect_node_sender.clone();
+
+            thread::spawn(move || {
+                if let Err(e) = connect_to_nodes(
+                    connect_node_sender_cloned,
+                    connect_nodes_receiver,
+                    cloned_node_streams,
+                    cloned_last_command,
+                    &self.log_path,
+                ) {
+                    eprintln!("Error en la conexión con el nodo: {}", e);
+                    // logger::log_event(&log_path, &format!("Error en la conexión con el nodo: {}", cloned_last_command.lock()));
+                }
+            });
+        }
+
+        {
+            match self.node_streams.lock() {
+                Ok(mut map) => {
+                    map.insert(
+                        main_address.clone(),
+                        redis_socket_clone_for_hashmap.try_clone()?,
+                    );
+                }
+                Err(e) => {
+                    eprintln!("Error obteniendo lock de node_streams: {}", e);
+                }
+            }
+        }
+
+        let parts: Vec<&str> = command.split_whitespace().collect();
+        let resp_command = format_resp_command(&parts);
+        println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
+        socket.write_all(resp_command.as_bytes())?;
+
+        connect_node_sender.send(redis_socket)?;
+
+        let otros_puertos = vec![4001, 4002];
+        for port in otros_puertos {
+            let addr = format!("127.0.0.1:{}", port);
+            match TcpStream::connect(&addr) {
+                Ok(mut extra_socket) => {
+                    println!("Microservicio conectado a nodo adicional: {}", addr);
+
+                    let parts: Vec<&str> = "Microservicio".split_whitespace().collect();
+                    let resp_command = format_resp_command(&parts);
+                    extra_socket.write_all(resp_command.as_bytes())?;
+
+                    match self.node_streams.lock() {
+                        Ok(mut map) => {
+                            map.insert(addr.clone(), extra_socket.try_clone()?);
+                        }
+                        Err(e) => {
+                            eprintln!("Error obteniendo lock de node_streams: {}", e);
+                        }
+                    }
+
+                    connect_node_sender.send(extra_socket)?;
+                }
+                Err(e) => {
+                    eprintln!("Error al conectar con nodo {}: {}", addr, e);
+                }
+            }
+        }
+        {
+            let node_streams_clone = Arc::clone(&self.node_streams);
+            let _main_address_clone = main_address.clone();
+            let _last_command_sent_clone = Arc::clone(&self.last_command_sent);
+
+            thread::spawn(move || loop {
+                match node_streams_clone.lock() {
+                    Ok(_streams) => {
+                        /* if let Some(mut stream) = streams.get(&main_address_clone) {
+                            let command_parts = vec!["SET", "docprueba.txt", ""];
+                            let resp_command = format_resp_command(&command_parts);
+
+                            match last_command_sent_clone.lock() {
+                                Ok(mut last_command) => {
+                                    *last_command = resp_command.clone();
+                                }
+                                Err(e) => {
+                                    eprintln!("Error obteniendo lock de last_command_sent: {}", e);
+                                }
+                            }
+
+                            if let Err(e) = stream.write_all(resp_command.as_bytes()) {
+                                eprintln!("Error al enviar comando SET docprueba hola: {}", e);
+                            } else {
+                                println!("Comando automático enviado: SET docprueba hola");
+                            }
+                        } */
+                    }
+                    Err(e) => {
+                        eprintln!("Error obteniendo lock de node_streams: {}", e);
+                    }
+                }
+
+                thread::sleep(Duration::from_secs(61812100));
+            });
+        }
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+    }
+
+    fn start_node_connection_handler(
+        &self,
+        connect_node_sender: MpscSender<TcpStream>,
+        connect_nodes_receiver: Receiver<TcpStream>,
+    ) {
+        let cloned_node_streams = Arc::clone(&self.node_streams);
+        let cloned_last_command = Arc::clone(&self.last_command_sent);
+        let cloned_documents = Arc::clone(&self.documents);
+        let log_path = self.log_path.clone();
+
+        thread::spawn(move || {
+            if let Err(e) = Self::connect_to_nodes(
+                connect_node_sender,
+                connect_nodes_receiver,
+                cloned_node_streams,
+                cloned_last_command,
+                cloned_documents,
+                &log_path,
+            ) {
+                eprintln!("Error en la conexión con el nodo: {}", e);
+            }
+        });
+    }
+
+
 }
 
 
