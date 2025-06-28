@@ -4,7 +4,7 @@ use crate::app::AppMsg;
 use crate::components::structs::document_value_info::DocumentValueInfo;
 use commands::redis_parser::{format_resp_command, format_resp_publish};
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufReader, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::{channel, Receiver, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
@@ -91,9 +91,6 @@ pub fn client_run(
         }
     });
 
-    let cloned_socket = socket.try_clone()?;
-    let addrs = get_client_addr(cloned_socket);
-
     let _ = connect_node_sender.send(redis_socket);
 
     for command in rx {
@@ -149,17 +146,6 @@ pub fn client_run(
     }
 
     Ok(())
-}
-
-fn get_client_addr(socket: TcpStream) -> Result<std::string::String, std::io::Error> {
-    let local_addr = match socket.local_addr() {
-        Ok(addr) => addr,
-        Err(e) => {
-            eprintln!("Error al obtener la dirección local: {}", e);
-            return Err(e);
-        }
-    };
-    Ok(local_addr.to_string())
 }
 
 fn listen_to_redis_response(
