@@ -438,16 +438,6 @@ fn handle_node(
                 let message = "pong\n";
                 let _ = stream.write_all(message.as_bytes());
             }
-            "inactive_node" => {
-                if input.len() > 1 {
-                    let inactive_node_addr = format!("127.0.0.1:{}", input[1]);
-                    if let Ok(mut locked_nodes) = nodes.lock() {
-                        if let Some(node) = locked_nodes.get_mut(&inactive_node_addr) {
-                            node.state = NodeState::Inactive;
-                        }
-                    }
-                }
-            }
             "node_status" => {
                 // ("node_status {} {:?}\n", inactive_port, NodeState::Fail);
 
@@ -720,7 +710,7 @@ fn ping_to_node(
     peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
 ) -> std::io::Result<()> {
     let ping_interval = Duration::from_secs(5);
-    let error_interval = Duration::from_secs(50);
+    let error_interval = Duration::from_secs(5);
     let mut last_sent = Instant::now();
 
     loop {
@@ -733,7 +723,7 @@ fn ping_to_node(
 
                 for (_, peer) in locked_peer_nodes.iter_mut() {
                     if peer.state != NodeState::Fail {
-                        if PRINT_PINGS { println!("sending to: {}", peer.port) }
+                        if PRINT_PINGS { println!("sending to: {} {:?}", peer.port, peer.state) }
                         match peer.stream.try_clone() {
                             Ok(mut peer_stream) => {
                                 peer_stream.set_read_timeout(Some(error_interval))?;
@@ -771,7 +761,7 @@ fn ping_to_node(
                 }
             }
 
-            if (failed_port != 0) {
+            if failed_port != 0 {
                 let promote_replica: bool = detect_failed_node(&local_node, &peer_nodes, failed_port);
                 if promote_replica {
                     initialize_replica_promotion(&local_node, &peer_nodes, failed_port);
@@ -809,7 +799,7 @@ fn detect_failed_node(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex
                     for replica in locked_local_node.replica_nodes.clone() {
                         let replica_address = format!("127.0.0.1:{}", replica);
                         if let Some(replica_node) = locked_peer_nodes.get_mut(&replica_address) {
-                            if replica_node.priority < locked_local_node.priority {
+                            if replica_node.priority < locked_local_node.priority && replica_node.priority != 0 {
                                 promote_replica = false;
                             }
                         }
@@ -924,8 +914,6 @@ fn initialize_replica_promotion(
         locked_local_node.priority,
     );
 
-    let inactive_node_message = format!("inactive_node {}\n", inactive_port);
-
     for (_, peer) in locked_peer_nodes.iter() {
         if peer.state == NodeState::Active {
             println!("sending promotion info to: {}", peer.port);
@@ -933,9 +921,6 @@ fn initialize_replica_promotion(
                 Ok(mut peer_stream) => {
                     if let Err(e) = peer_stream.write_all(node_info_message.as_bytes()) {
                         eprintln!("Error writing node_info_message: {}", e);
-                    }
-                    if let Err(e) = peer_stream.write_all(inactive_node_message.as_bytes()) {
-                        eprintln!("Error writing inactive_node_message: {}", e);
                     }
                 }
                 Err(_) => {
