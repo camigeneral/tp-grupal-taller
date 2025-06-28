@@ -1,6 +1,7 @@
 extern crate relm4;
 use self::relm4::Sender;
 use crate::app::AppMsg;
+use crate::components::structs::document_value_info::DocumentValueInfo;
 use commands::redis_parser::{format_resp_command, format_resp_publish};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
@@ -248,24 +249,39 @@ fn listen_to_redis_response(
                 }
             }
 
-            /* s if s.contains("WRITE|") => {
-
+            "WRITE" => {
                 if let Some(sender) = &ui_sender {
-                    let parts: Vec<&str> =
-                        response[0]
-                            .trim_end_matches('\n')
-                            .split('|')
-                            .map(|s| s.trim_end_matches('\r'))
-                            .collect();
-                    let index = parts[1].to_string().parse::<i32>().unwrap();
-                    let text = parts[2].to_string();
-                    let file = parts[4].to_string();
-                    let mut doc_info = DocumentValueInfo::new(text, index);
-                    doc_info.file = file.clone();
-                    doc_info.decode_text();
-                    let _ = sender.send(AppMsg::RefreshData(doc_info));
+                    let index = match response[1].parse::<i32>() {
+                        Ok(i) => i,
+                        Err(_) => {
+                            eprintln!("Error parsing index from response: {:?}", response[1]);
+                            break;
+                        }
+                    };
+
+                    let text = response[2].to_string();
+                    let file = response[4].to_string();
+
+                    let split_text = text.split("<enter>").collect::<Vec<_>>();
+
+                    if split_text.len() == 2 {
+                        let (before_newline, after_newline) = (split_text[0], split_text[1]);
+
+                        for (offset, content) in [(0, before_newline), (1, after_newline)] {
+                            let mut doc_info = DocumentValueInfo::new(content.to_string(), index + offset);
+                            doc_info.file = file.clone();
+                            doc_info.decode_text();
+                            let _ = sender.send(AppMsg::RefreshData(doc_info));
+                        }
+                    } else {
+                        let mut doc_info = DocumentValueInfo::new(text, index);
+                        doc_info.file = file.clone();
+                        doc_info.decode_text();
+                        let _ = sender.send(AppMsg::RefreshData(doc_info));
+                    }
                 }
-            }  */
+            }
+
             "FILES" => {
                 let archivos = if response.len() > 1 {
                     response[1..].to_vec()
