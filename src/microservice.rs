@@ -10,12 +10,24 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::{channel, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
+#[path = "documento.rs"]
+mod documento;
+use documento::Documento;
 #[allow(unused_imports)]
 use std::time::Duration;
 #[path = "utils/logger.rs"]
 mod logger;
 #[path = "utils/redis_parser.rs"]
 mod redis_parser;
+
+//
+pub struct Microservice {
+    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+    last_command_sent: Arc<Mutex<String>>,
+    documents: Arc<Mutex<HashMap<String, Documento>>>,
+    log_path: String,
+
+}
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let redis_port = 4000;
