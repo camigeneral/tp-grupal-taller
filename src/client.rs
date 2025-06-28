@@ -180,8 +180,6 @@ fn listen_to_redis_response(
     let mut reader: BufReader<TcpStream> = BufReader::new(client_socket);
 
     loop {
-        println!("Respuesta de redis: {:#?}", reader);
-
         let (response, _) = match redis_parser::parse_resp_command(&mut reader) {
             Ok((parts, s)) => (parts, s),
             Err(e) => {
@@ -234,18 +232,19 @@ fn listen_to_redis_response(
                 }
             }
             "STATUS" => {
-                let response_status: Vec<&str> = response[1].split('|').collect();
-                let socket = response_status[0];
-
+                let socket = response[2].clone();
+                let doc = response[1].clone();
+                let content =  response[3].clone();
+                println!("socket {} vs local_addr {}", socket, local_addr.to_string());
                 if socket != local_addr.to_string() {
                     continue;
                 }
 
                 if let Some(sender) = &ui_sender {
                     let _ = sender.send(AppMsg::ManageSubscribeResponse(
-                        response_status[2].to_string(),
-                        response_status[1].to_string(),
-                        response_status[3].to_string(),
+                        doc.to_string(),
+                        "1".to_string(),
+                        content.to_string(),
                     ));
                 }
             }
@@ -387,7 +386,7 @@ fn connect_to_nodes(
                 cloned_own_sender,
                 cloned_node_streams,
                 cloned_last_command,
-            ) {
+           ) {
                 eprintln!("Error en la conexión con el nodo: {}", e);
             }
         });
