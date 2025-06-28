@@ -201,7 +201,6 @@ impl Microservice {
             }
         };
         document_data
-        
     }
     /// Inicia el procesamiento automático de comandos en un hilo separado.
     ///
@@ -226,27 +225,41 @@ impl Microservice {
             if let Ok(docs) = documents_clone.lock() {
                 if let Ok(doc_streams) = document_streams_clone.lock() {
                     if let Ok(mut streams) = node_streams_clone.lock() {
-                        logger_clone.log(&format!("Enviando comandos SET para persistir {} documentos", docs.len()));
-                        
+                        logger_clone.log(&format!(
+                            "Enviando comandos SET para persistir {} documentos",
+                            docs.len()
+                        ));
+
                         for (doc_name, documento) in docs.iter() {
                             let document_data = Self::get_document_data(doc_name, documento);
-                            
-                            // Obtener el stream_id para este documento
+
                             let default_stream = "127.0.0.1:4000".to_string();
                             let stream_id = doc_streams.get(doc_name).unwrap_or(&default_stream);
-                            
+
                             let set_parts = vec!["SET", doc_name, &document_data];
                             let set_command = redis_parser::format_resp_command(&set_parts);
-                            
-                            logger_clone.log(&format!("Enviando comando SET para persistir documento {}: {}", doc_name, set_command));
+
+                            logger_clone.log(&format!(
+                                "Enviando comando SET para persistir documento {}: {}",
+                                doc_name, set_command
+                            ));
 
                             if let Some(stream) = streams.get_mut(stream_id) {
                                 if let Err(e) = stream.write_all(set_command.as_bytes()) {
-                                    eprintln!("Error enviando comando SET a nodo {}: {}", stream_id, e);
-                                    logger_clone.log(&format!("Error enviando comando SET a nodo {}: {}", stream_id, e));
-                                    continue; 
+                                    eprintln!(
+                                        "Error enviando comando SET a nodo {}: {}",
+                                        stream_id, e
+                                    );
+                                    logger_clone.log(&format!(
+                                        "Error enviando comando SET a nodo {}: {}",
+                                        stream_id, e
+                                    ));
+                                    continue;
                                 } else {
-                                    logger_clone.log(&format!("Comando SET enviado exitosamente a nodo {}", stream_id));
+                                    logger_clone.log(&format!(
+                                        "Comando SET enviado exitosamente a nodo {}",
+                                        stream_id
+                                    ));
                                 }
 
                                 if let Ok(mut last_command) = last_command_sent_clone.lock() {
@@ -254,20 +267,43 @@ impl Microservice {
                                 }
 
                                 let doc_name_cloned = doc_name.clone();
-                                let reload_message_parts = vec!["RELOAD-FILE", &doc_name, &document_data, stream_id];
-                                let reload_message_resp = redis_parser::format_resp_command(&reload_message_parts);
-                                let publis_reload_command = redis_parser::format_resp_publish(&doc_name_cloned.clone(), &reload_message_resp);
-                                logger_clone.log(&format!("Enviando mensaje RELOAD-FILE para documento {}: {}", doc_name, reload_message_resp));
+                                let reload_message_parts =
+                                    vec!["RELOAD-FILE", &doc_name, &document_data, stream_id];
+                                let reload_message_resp =
+                                    redis_parser::format_resp_command(&reload_message_parts);
+                                let publis_reload_command = redis_parser::format_resp_publish(
+                                    &doc_name_cloned.clone(),
+                                    &reload_message_resp,
+                                );
+                                logger_clone.log(&format!(
+                                    "Enviando mensaje RELOAD-FILE para documento {}: {}",
+                                    doc_name, reload_message_resp
+                                ));
 
                                 if let Err(e) = stream.write_all(publis_reload_command.as_bytes()) {
-                                    eprintln!("Error enviando mensaje RELOAD-FILE a nodo {}: {}", stream_id, e);
-                                    logger_clone.log(&format!("Error enviando mensaje RELOAD-FILE a nodo {}: {}", stream_id, e));
+                                    eprintln!(
+                                        "Error enviando mensaje RELOAD-FILE a nodo {}: {}",
+                                        stream_id, e
+                                    );
+                                    logger_clone.log(&format!(
+                                        "Error enviando mensaje RELOAD-FILE a nodo {}: {}",
+                                        stream_id, e
+                                    ));
                                 } else {
-                                    logger_clone.log(&format!("Mensaje RELOAD-FILE enviado exitosamente a nodo {}", stream_id));
+                                    logger_clone.log(&format!(
+                                        "Mensaje RELOAD-FILE enviado exitosamente a nodo {}",
+                                        stream_id
+                                    ));
                                 }
                             } else {
-                                eprintln!("Stream no encontrado para documento {} con stream_id {}", doc_name, stream_id);
-                                logger_clone.log(&format!("Stream no encontrado para documento {} con stream_id {}", doc_name, stream_id));
+                                eprintln!(
+                                    "Stream no encontrado para documento {} con stream_id {}",
+                                    doc_name, stream_id
+                                );
+                                logger_clone.log(&format!(
+                                    "Stream no encontrado para documento {} con stream_id {}",
+                                    doc_name, stream_id
+                                ));
                             }
                         }
                     } else {
@@ -450,14 +486,18 @@ impl Microservice {
                         log_clone.log("Error obteniendo lock de documents para client-subscribed");
                     }
                 }
-                MicroserviceMessage::Doc { document, content, stream_id } => {
+                MicroserviceMessage::Doc {
+                    document,
+                    content,
+                    stream_id,
+                } => {
                     log_clone.log(&format!(
                         "Documento recibido: {} con {} líneas del stream {}",
                         document,
                         content.len(),
                         stream_id
-                    ));                    
-                    if let Ok(mut docs) = documents.lock() {                        
+                    ));
+                    if let Ok(mut docs) = documents.lock() {
                         if document.ends_with(".txt") {
                             let messages: Vec<String> = content
                                 .split("/--/")
@@ -468,13 +508,13 @@ impl Microservice {
                         } else {
                             let mut rows: Vec<String> =
                                 content.split("/--/").map(|s| s.to_string()).collect();
-                
+
                             while rows.len() < 100 {
                                 rows.push(String::new());
                             }
-                
+
                             docs.insert(document.clone(), Documento::Calculo(rows));
-                        }            
+                        }
                     } else {
                         eprintln!("Error obteniendo lock de documents");
                     }
@@ -485,7 +525,11 @@ impl Microservice {
                         eprintln!("Error obteniendo lock de document_streams");
                     }
                 }
-                MicroserviceMessage::Write { index, content, file } => {
+                MicroserviceMessage::Write {
+                    index,
+                    content,
+                    file,
+                } => {
                     log_clone.log(&format!(
                         "Write recibido: índice {}, contenido '{}', archivo {}",
                         index, content, file
@@ -505,15 +549,18 @@ impl Microservice {
                                 Documento::Texto(lines) => {
                                     if content.contains("<enter>") {
                                         let parts: Vec<&str> = content.split("<enter>").collect();
-                                        
+
                                         if parts.len() == 2 {
                                             let before_newline = parts[0];
                                             let after_newline = parts[1];
-                                            
+
                                             if parsed_index < lines.len() {
                                                 lines[parsed_index] = before_newline.to_string();
-                                                
-                                                lines.insert(parsed_index + 1, after_newline.to_string());
+
+                                                lines.insert(
+                                                    parsed_index + 1,
+                                                    after_newline.to_string(),
+                                                );
                                             } else {
                                                 while lines.len() < parsed_index {
                                                     lines.push(String::new());
@@ -522,7 +569,10 @@ impl Microservice {
                                                 lines.push(after_newline.to_string());
                                             }
                                         } else {
-                                            log_clone.log(&format!("Formato de salto de línea inválido: {}", content));
+                                            log_clone.log(&format!(
+                                                "Formato de salto de línea inválido: {}",
+                                                content
+                                            ));
                                         }
                                     } else if parsed_index < lines.len() {
                                         lines[parsed_index] = content.clone();
@@ -538,7 +588,7 @@ impl Microservice {
                                             lines.push(String::new());
                                         }
                                         lines[parsed_index] = content.clone();
-                                    }                                  
+                                    }
                                 }
                             }
                         } else {
@@ -553,7 +603,7 @@ impl Microservice {
                     } else {
                         log_clone.log("Error obteniendo lock de documents para write");
                     }
-                },
+                }
                 MicroserviceMessage::Ask { response } => {
                     if response.len() < 3 {
                         log_clone.log("Nodo de redireccion no disponible");
@@ -567,7 +617,7 @@ impl Microservice {
                         println!("Redirigiendo comando a nodo: {:?}", response);
                         log_clone.log(&format!("Redirigiendo comando a nodo: {:?}", response));
                     }
-                },
+                }
                 MicroserviceMessage::Error(_) => {}
                 _ => {}
             }
@@ -591,7 +641,7 @@ impl Microservice {
                 )));
             }
         };
-    
+
         let mut locked_node_streams = match node_streams.lock() {
             Ok(locked) => locked,
             Err(e) => {
@@ -602,12 +652,12 @@ impl Microservice {
                 ))));
             }
         };
-    
+
         let new_node_address = response[2].to_string();
-    
+
         println!("Ultimo comando ejecutado: {:#?}", last_line_cloned);
         println!("Redirigiendo a nodo: {}", new_node_address);
-    
+
         if let Some(stream) = locked_node_streams.get_mut(&new_node_address) {
             println!("Usando conexión existente al nodo {}", new_node_address);
             if let Err(e) = stream.write_all(last_line_cloned.as_bytes()) {
@@ -629,7 +679,7 @@ impl Microservice {
                 eprintln!("Error al escribir en el nuevo nodo: {}", e);
                 return Err(Box::new(e));
             }
-    
+
             let mut cloned_stream_to_connect = match final_stream.try_clone() {
                 Ok(clone) => clone,
                 Err(e) => {
@@ -638,13 +688,13 @@ impl Microservice {
                 }
             };
             locked_node_streams.insert(new_node_address, final_stream);
-    
+
             if let Err(e) = connect_node_sender.send(cloned_stream_to_connect.try_clone()?) {
                 eprintln!("Error al enviar el nodo conectado: {}", e);
                 return Err(Box::new(e));
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
-    
+
             if let Err(e) = cloned_stream_to_connect.write_all(last_line_cloned.as_bytes()) {
                 eprintln!("Error al reenviar el último comando: {}", e);
                 return Err(Box::new(e));

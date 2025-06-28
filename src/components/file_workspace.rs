@@ -151,7 +151,7 @@ impl SimpleComponent for FileWorkspace {
             FileWorkspaceMsg::ContentAddedSpreadSheet(mut doc_info) => {
                 doc_info.file = self.current_file.clone();
                 let _ = sender.output(FileWorkspaceOutputMessage::ContentAddedSpreadSheet(
-                    doc_info
+                    doc_info,
                 ));
             }
             FileWorkspaceMsg::ContentAdded(doc_info) => {

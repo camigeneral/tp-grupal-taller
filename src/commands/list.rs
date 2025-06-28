@@ -336,7 +336,7 @@ pub fn handle_rpush(
         doc,
     )
 }
-/* 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;

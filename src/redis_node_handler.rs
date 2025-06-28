@@ -179,7 +179,7 @@ pub fn start_node_connection(
 fn connect_nodes(
     address: &str,
     nodes: PeerNodeMap,
-    local_node: LocalNodeMap,    
+    local_node: LocalNodeMap,
     document_subscribers: SubscribersMap,
     shared_documents: RedisDocumentsMap,
     shared_sets: SetsMap,
@@ -232,7 +232,7 @@ fn connect_nodes(
 fn handle_node(
     stream: &mut TcpStream,
     nodes: PeerNodeMap,
-    local_node: &LocalNodeMap,    
+    local_node: &LocalNodeMap,
     document_subscribers: SubscribersMap,
     shared_documents: RedisDocumentsMap,
     shared_sets: SetsMap,
@@ -645,7 +645,7 @@ fn serialize_vec_hashmap(
     mut stream: TcpStream,
 ) -> std::io::Result<()> {
     for (key, line) in map {
-        let message= format!("serialize_vec {}:{}\n", key, line);
+        let message = format!("serialize_vec {}:{}\n", key, line);
         stream.write_all(message.as_bytes())?;
     }
     let message = "end_serialize_vec\n";
@@ -688,13 +688,10 @@ fn deserialize_hashset_hashmap(
     }
 }
 
-fn deserialize_vec_hashmap(
-    lines: &Vec<String>,
-    shared_documents: &RedisDocumentsMap,
-) {
+fn deserialize_vec_hashmap(lines: &Vec<String>, shared_documents: &RedisDocumentsMap) {
     if let Ok(mut locked_documents) = shared_documents.lock() {
         for line in lines {
-            if let Some((key, values_str)) = line.split_once(':') {                
+            if let Some((key, values_str)) = line.split_once(':') {
                 locked_documents.insert(key.to_string(), values_str.to_string());
             }
         }

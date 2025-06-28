@@ -13,8 +13,8 @@ pub struct Cell {
     calculated_value: f64,
     display_text: String,
     is_formula: bool,
-    dependencies: HashSet<(usize, usize)>,//Seria las celdas de las que depende por ejemplo A3 = A1 + A2, depende de a1 y a2
-    dependents: HashSet<(usize, usize)>, //las que dependen de esta celda, si a1 cambia, hay que avisar a a3   
+    dependencies: HashSet<(usize, usize)>, //Seria las celdas de las que depende por ejemplo A3 = A1 + A2, depende de a1 y a2
+    dependents: HashSet<(usize, usize)>, //las que dependen de esta celda, si a1 cambia, hay que avisar a a3
 }
 
 impl Cell {
@@ -81,8 +81,6 @@ impl SpreadsheetModel {
         }
     }
 
-    
-
     fn evaluate_expression(&self, expr: &str) -> Result<f64, String> {
         let expr = expr.trim();
 
@@ -146,11 +144,10 @@ impl SpreadsheetModel {
             .map_err(|_| format!("Expresión inválida: {}", expr))
     }
 
-
     fn extract_cell_references(&self, formula: &str) -> HashSet<(usize, usize)> {
         let mut references = HashSet::new();
         let mut current_ref = String::new();
-        
+
         for ch in formula.chars() {
             if ch.is_ascii_alphabetic() || ch.is_ascii_digit() {
                 current_ref.push(ch);
@@ -169,22 +166,30 @@ impl SpreadsheetModel {
                 references.insert((row, col));
             }
         }
-        
+
         references
     }
 
-    fn update_dependencies(&mut self, cell_row: usize, cell_col: usize, new_dependencies: HashSet<(usize, usize)>) {
-        
+    fn update_dependencies(
+        &mut self,
+        cell_row: usize,
+        cell_col: usize,
+        new_dependencies: HashSet<(usize, usize)>,
+    ) {
         let old_dependencies = self.cells[cell_row][cell_col].dependencies.clone();
         for &(dep_row, dep_col) in &old_dependencies {
-            self.cells[dep_row][dep_col].dependents.remove(&(cell_row, cell_col));
+            self.cells[dep_row][dep_col]
+                .dependents
+                .remove(&(cell_row, cell_col));
         }
-                
+
         self.cells[cell_row][cell_col].clear_dependencies();
 
         for &(dep_row, dep_col) in &new_dependencies {
             self.cells[cell_row][cell_col].add_dependency(dep_row, dep_col);
-            self.cells[dep_row][dep_col].dependents.insert((cell_row, cell_col));
+            self.cells[dep_row][dep_col]
+                .dependents
+                .insert((cell_row, cell_col));
         }
     }
 
@@ -196,9 +201,12 @@ impl SpreadsheetModel {
             let formula = &content[1..];
 
             let new_dependencies = self.extract_cell_references(formula);
-            
+
             self.update_dependencies(row, col, new_dependencies);
-            println!("celda dependencias y dependentes: {:#?}, {:#?}",self.cells[row][col].dependencies, self.cells[row][col].dependents);
+            println!(
+                "celda dependencias y dependentes: {:#?}, {:#?}",
+                self.cells[row][col].dependencies, self.cells[row][col].dependents
+            );
             match self.evaluate_expression(formula) {
                 Ok(value) => {
                     self.cells[row][col].calculated_value = value;
@@ -209,11 +217,11 @@ impl SpreadsheetModel {
                     self.cells[row][col].display_text = format!("#ERROR: {}", error);
                 }
             }
-        } else if content.starts_with('=') && content.len() == 1 {            
+        } else if content.starts_with('=') && content.len() == 1 {
             self.cells[row][col].is_formula = false;
             self.cells[row][col].calculated_value = 0.0;
             self.cells[row][col].display_text = content;
-        } else {            
+        } else {
             self.cells[row][col].is_formula = false;
 
             match content.parse::<f64>() {
@@ -333,13 +341,13 @@ impl SimpleComponent for SpreadsheetModel {
 
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
-            SpreadsheetMsg::CellChanged(row, col, content) => {            
-                self.update_cell(row, col, content.clone());                
+            SpreadsheetMsg::CellChanged(row, col, content) => {
+                self.update_cell(row, col, content.clone());
                 self.update_display();
 
                 let index = (row * 10 + col) as i32;
                 let doc_info = DocumentValueInfo::new(content.clone(), index);
-                
+
                 sender
                     .output(SpreadsheetOutput::ContentChanged(doc_info))
                     .unwrap();

@@ -1,9 +1,8 @@
 use super::redis_response::RedisResponse;
 use commands::redis_parser::CommandResponse;
+use redis_types::RedisDocumentsMap;
 use std::collections::HashSet;
 use std::fs;
-use redis_types::RedisDocumentsMap;
-
 
 pub fn get_files(_docs: &RedisDocumentsMap) -> RedisResponse {
     let mut doc_names = HashSet::new();

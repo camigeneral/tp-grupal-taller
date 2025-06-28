@@ -4,14 +4,11 @@ use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use super::redis_response::RedisResponse;
 use crate::client_info;
 use client_info::ClientType;
+use redis_types::RedisDocumentsMap;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use redis_types::RedisDocumentsMap;
 
-pub fn handle_get(
-    request: &CommandRequest,
-    docs: &RedisDocumentsMap,
-) -> RedisResponse {
+pub fn handle_get(request: &CommandRequest, docs: &RedisDocumentsMap) -> RedisResponse {
     let key = match &request.key {
         Some(k) => k,
         None => {
@@ -37,14 +34,12 @@ pub fn handle_get(
     };
 
     match docs_lock.get(key) {
-        Some(data) => {
-            RedisResponse::new(
-                CommandResponse::String(data.clone()),
-                false,
-                "".to_string(),
-                "".to_string(),
-            )
-        }
+        Some(data) => RedisResponse::new(
+            CommandResponse::String(data.clone()),
+            false,
+            "".to_string(),
+            "".to_string(),
+        ),
         None => RedisResponse::new(CommandResponse::Null, false, "".to_string(), "".to_string()),
     }
 }
@@ -95,8 +90,8 @@ pub fn handle_set(
 
     // Bloqueo y escritura de documento
     let docs_result = docs.lock();
-    if let Ok(mut docs_lock) = docs_result {        
-            docs_lock.insert(doc_name.clone(), content.clone());
+    if let Ok(mut docs_lock) = docs_result {
+        docs_lock.insert(doc_name.clone(), content.clone());
     } else {
         return RedisResponse::new(
             CommandResponse::Error("Internal server error: could not access docs".to_string()),
@@ -142,7 +137,6 @@ pub fn handle_set(
 
     RedisResponse::new(CommandResponse::Ok, true, notification, doc_name)
 }
-
 
 // #[cfg(test)]
 // mod tests {

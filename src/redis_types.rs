@@ -1,5 +1,5 @@
 use crate::client_info::Client;
-#[path="document.rs"]
+#[path = "document.rs"]
 pub mod document;
 use self::document::Documento;
 use local_node::LocalNode;

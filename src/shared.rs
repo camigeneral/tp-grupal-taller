@@ -42,13 +42,16 @@ impl MicroserviceMessage {
                 content: parts[2].clone(),
                 stream_id: parts[3].clone(),
             },
-            "WRITE" if parts.len() >= 2 => {  
+            "WRITE" if parts.len() >= 2 => {
                 let index = parts[1].to_string();
                 let content = parts[2].to_string();
-                let file =  parts[4].to_string(); 
-                MicroserviceMessage::Write { index, content, file }
-            
-            },
+                let file = parts[4].to_string();
+                MicroserviceMessage::Write {
+                    index,
+                    content,
+                    file,
+                }
+            }
             "ASK" => MicroserviceMessage::Ask {
                 response: parts.to_vec(),
             },

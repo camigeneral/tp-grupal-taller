@@ -1,9 +1,9 @@
 use commands::redis;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::fs::OpenOptions;
 use std::env::args;
-use std::fs::{File};
+use std::fs::File;
+use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::str;
@@ -156,7 +156,7 @@ fn start_server(
         peer_nodes: Arc::clone(&peer_nodes),
         logged_clients: Arc::clone(&logged_clients),
         internal_subscription_channel: initialize_subscription_channel(),
-        main_addrs: bind_address.to_string()
+        main_addrs: bind_address.to_string(),
     });
 
     for incoming_connection in tcp_listener.incoming() {
@@ -263,7 +263,7 @@ fn handle_new_client_connection(
             Arc::clone(&ctx.shared_documents),
             Arc::clone(&ctx.document_subscribers),
             logger.clone(),
-            ctx.main_addrs.clone()
+            ctx.main_addrs.clone(),
         );
         ClientType::Microservice
     } else {
@@ -521,7 +521,10 @@ fn execute_command_internal(
             if command_request.command.to_lowercase() == "set" {
                 if let Err(e) = persist_documents(&ctx.shared_documents, &ctx.local_node) {
                     eprintln!("Error persistiendo documentos después de SET: {}", e);
-                    logger.log(&format!("Error persistiendo documentos después de SET: {}", e));
+                    logger.log(&format!(
+                        "Error persistiendo documentos después de SET: {}",
+                        e
+                    ));
                 } else {
                     println!("Documentos persistidos exitosamente después de comando SET");
                     logger.log("Documentos persistidos exitosamente después de comando SET");
@@ -839,7 +842,6 @@ pub fn persist_documents(
     documents: &RedisDocumentsMap,
     local_node: &LocalNodeMap,
 ) -> std::io::Result<()> {
-
     let file_name = match local_node.lock() {
         Ok(locked_node) => {
             format!(
@@ -871,8 +873,8 @@ pub fn persist_documents(
         Err(poisoned) => poisoned.into_inner(),
     };
 
-    for (_document_id, doc) in documents_guard.iter() {        
-        writeln!(persistence_file, "{}", doc)?;               
+    for (_document_id, doc) in documents_guard.iter() {
+        writeln!(persistence_file, "{}", doc)?;
     }
 
     Ok(())
@@ -906,8 +908,8 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, String>
         }
 
         let document_id = parts[0].to_string();
-        let messages_data = parts[1];    
-        documents.insert(document_id, messages_data.to_string());        
+        let messages_data = parts[1];
+        documents.insert(document_id, messages_data.to_string());
     }
     println!("documentos: {:#?}", documents);
     Ok(documents)
@@ -919,7 +921,7 @@ pub fn subscribe_microservice_to_all_docs(
     docs: RedisDocumentsMap,
     clients_on_docs: SubscribersMap,
     logger: Logger,
-    main_addrs: String
+    main_addrs: String,
 ) {
     let docs_lock = match docs.lock() {
         Ok(lock) => lock,
@@ -952,7 +954,7 @@ pub fn subscribe_microservice_to_all_docs(
             );
             let document_data = document.to_string().clone();
 
-            let command_parts = vec!["DOC", doc_name, &document_data, &main_addrs];        
+            let command_parts = vec!["DOC", doc_name, &document_data, &main_addrs];
 
             let message = format_resp_command(&command_parts.clone());
             if let Err(e) = client_stream.write_all(message.as_bytes()) {

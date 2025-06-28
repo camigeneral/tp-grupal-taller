@@ -150,9 +150,7 @@ impl SimpleComponent for FileEditorModel {
     fn update(&mut self, message: FileEditorMessage, sender: ComponentSender<Self>) {
         match message {
             FileEditorMessage::ContentAddedSpreadSheet(doc_info) => {
-                let _ = sender.output(FileEditorOutputMessage::ContentAddedSpreadSheet(
-                    doc_info
-                ));
+                let _ = sender.output(FileEditorOutputMessage::ContentAddedSpreadSheet(doc_info));
             }
 
             FileEditorMessage::ContentAdded(doc_info) => {

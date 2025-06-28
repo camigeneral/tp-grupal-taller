@@ -375,8 +375,10 @@ impl SimpleComponent for AppModel {
                 sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::AddContentSpreadSheet(doc_info) => {
-                
-                self.command = format!("WRITE|{}|{}|{}|{}", doc_info.index, doc_info.value, doc_info.index, doc_info.file);
+                self.command = format!(
+                    "WRITE|{}|{}|{}|{}",
+                    doc_info.index, doc_info.value, doc_info.index, doc_info.file
+                );
                 sender.input(AppMsg::ExecuteCommand);
             }
 

@@ -253,7 +253,8 @@ fn listen_to_redis_response(
                         let (before_newline, after_newline) = (split_text[0], split_text[1]);
 
                         for (offset, content) in [(0, before_newline), (1, after_newline)] {
-                            let mut doc_info = DocumentValueInfo::new(content.to_string(), index + offset);
+                            let mut doc_info =
+                                DocumentValueInfo::new(content.to_string(), index + offset);
                             doc_info.file = file.clone();
                             doc_info.decode_text();
                             let _ = sender.send(AppMsg::RefreshData(doc_info));
@@ -281,7 +282,10 @@ fn listen_to_redis_response(
                 if response.len() >= 3 {
                     let file_id = response[1].clone();
                     let content = response[2].clone();
-                    println!("Recibido RELOAD-FILE para {} con contenido: {}", file_id, content);
+                    println!(
+                        "Recibido RELOAD-FILE para {} con contenido: {}",
+                        file_id, content
+                    );
                     if let Some(sender) = &ui_sender {
                         let _ = sender.send(AppMsg::ReloadFile(file_id, content));
                     }
