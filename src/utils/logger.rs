@@ -5,7 +5,7 @@ use std::thread;
 extern crate chrono;
 use self::chrono::Local;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Logger {
     sender: Sender<String>,
 }
