@@ -12,7 +12,6 @@ pub enum NodeRole {
 #[derive(Debug, PartialEq)]
 pub enum NodeState {
     Active,
-    Inactive,
     Fail,
     PFail,
 }
