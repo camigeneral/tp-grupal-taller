@@ -4,6 +4,7 @@ use self::gtk4::prelude::{
     BoxExt, Cast, EventControllerExt, OrientableExt, TextBufferExt, TextViewExt, WidgetExt,
 };
 use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
+use crate::components::structs::document_value_info::DocumentValueInfo;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -27,7 +28,7 @@ pub struct TextEditorModel {
 /// Enum que define los posibles mensajes que el editor de archivos puede recibir.
 #[derive(Debug)]
 pub enum TextEditorMessage {
-    ContentAdded(String, i32),
+    ContentAdded(DocumentValueInfo),
     UpdateFile(String, i32, String),
     ResetEditor,
 }
@@ -37,7 +38,7 @@ pub enum TextEditorMessage {
 pub enum TextEditorOutputMessage {
     /// Mensaje que indica que se debe volver a la vista anterior.
     GoBack,
-    ContentAdded(String, i32),
+    ContentAdded(DocumentValueInfo),
 }
 
 #[relm4::component(pub)]
@@ -118,8 +119,9 @@ impl SimpleComponent for TextEditorModel {
                             } else {
                                 format!("{}\n{}", before_cursor, after_cursor)
                             };
-                            sender_insert
-                                .input(TextEditorMessage::ContentAdded(final_string, line_number));
+                            let doc_info = DocumentValueInfo::new(final_string, line_number);
+
+                            sender_insert.input(TextEditorMessage::ContentAdded(doc_info));
                         }
                     }
                 }
@@ -136,12 +138,13 @@ impl SimpleComponent for TextEditorModel {
 
     fn update(&mut self, message: TextEditorMessage, sender: ComponentSender<Self>) {
         match message {
-            TextEditorMessage::ContentAdded(new_text, line) => {
+            TextEditorMessage::ContentAdded(mut doc_info) => {
                 if !self.content_changed_manually {
                     return;
                 }
-
-                let _ = sender.output(TextEditorOutputMessage::ContentAdded(new_text, line));
+                doc_info.file = self.file_name.clone();
+                doc_info.parse_text();
+                let _ = sender.output(TextEditorOutputMessage::ContentAdded(doc_info));
             }
 
             TextEditorMessage::UpdateFile(file_name, contributors, content) => {

@@ -1,9 +1,10 @@
 extern crate relm4;
 use self::relm4::Sender;
 use crate::app::AppMsg;
+use crate::components::structs::document_value_info::DocumentValueInfo;
 use commands::redis_parser::{format_resp_command, format_resp_publish};
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufReader, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::{channel, Receiver, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
@@ -118,7 +119,8 @@ pub fn client_run(
                 format_resp_command(&parts)
             } else if parts[0].contains("WRITE") {
                 let splited_command: Vec<&str> = command.split("|").collect();
-                format_resp_publish(splited_command[3], &command)
+                let client_command = format_resp_command(&splited_command).clone().to_string();
+                format_resp_publish(splited_command[4], &client_command)
             } else {
                 format_resp_publish(parts[1], &command)
             };
@@ -161,21 +163,21 @@ fn listen_to_redis_response(
         }
     };
 
-    let mut reader = BufReader::new(client_socket);
+    let mut reader: BufReader<TcpStream> = BufReader::new(client_socket);
 
     loop {
-        let mut line = String::new();
-        let bytes_read = match reader.read_line(&mut line) {
-            Ok(bytes) => bytes,
+        let (response, _) = match redis_parser::parse_resp_command(&mut reader) {
+            Ok((parts, s)) => (parts, s),
             Err(e) => {
                 eprintln!("Error al leer línea desde el socket: {}", e);
-                return Err(e);
+                break;
             }
         };
 
-        if bytes_read == 0 {
+        if response.is_empty() {
             break;
         }
+
         let local_addr = match client_socket_cloned.local_addr() {
             Ok(addr) => addr,
             Err(e) => {
@@ -184,14 +186,11 @@ fn listen_to_redis_response(
             }
         };
 
-        println!("Respuesta de redis: {}", line);
+        println!("Respuesta de redis: {}", response.join(" "));
 
-        let response: Vec<&str> = line.split_whitespace().collect();
+        let first_response = response[0].to_uppercase();
 
-        let first = response[0].to_uppercase();
-        let first_response = first.as_str();
-
-        match first_response {
+        match first_response.as_str() {
             s if s.starts_with("-ERR") => {
                 let error_message = if response.len() > 1 {
                     response[1..].join(" ")
@@ -210,7 +209,6 @@ fn listen_to_redis_response(
                     println!("Nodo de redireccion no disponible");
                 } else {
                     let _ = send_command_to_nodes(
-                        ui_sender.clone(),
                         connect_node_sender.clone(),
                         node_streams.clone(),
                         last_command_sent.clone(),
@@ -219,46 +217,60 @@ fn listen_to_redis_response(
                 }
             }
             "STATUS" => {
-                let response_status: Vec<&str> = response[1].split('|').collect();
-                let socket = response_status[0];
-
+                let socket = response[2].clone();
+                let doc = response[1].clone();
+                let content = response[3].clone();
+                println!("socket {} vs local_addr {}", socket, local_addr);
                 if socket != local_addr.to_string() {
                     continue;
                 }
 
                 if let Some(sender) = &ui_sender {
                     let _ = sender.send(AppMsg::ManageSubscribeResponse(
-                        response_status[2].to_string(),
-                        response_status[1].to_string(),
-                        response_status[3].to_string(),
+                        doc.to_string(),
+                        "1".to_string(),
+                        content.to_string(),
                     ));
                 }
             }
 
-            s if s.starts_with("UPDATE-CLIENT") => {
+            "WRITE" => {
                 if let Some(sender) = &ui_sender {
-                    let parts: Vec<&str> = if response.len() > 1 {
-                        line.trim_end_matches('\n').split('|').collect()
-                    } else {
-                        response[0]
-                            .trim_end_matches('\n')
-                            .split('|')
-                            .map(|s| s.trim_end_matches('\r'))
-                            .collect()
+                    let index = match response[1].parse::<i32>() {
+                        Ok(i) => i,
+                        Err(_) => {
+                            eprintln!("Error parsing index from response: {:?}", response[1]);
+                            break;
+                        }
                     };
-                    let file = parts[1].to_string();
-                    let index = parts[2].to_string();
-                    let text = parts[3].to_string();
-                    let _ = sender.send(AppMsg::RefreshData(file, index, text));
+
+                    let text = response[2].to_string();
+                    let file = response[4].to_string();
+
+                    let split_text = text.split("<enter>").collect::<Vec<_>>();
+
+                    if split_text.len() == 2 {
+                        let (before_newline, after_newline) = (split_text[0], split_text[1]);
+
+                        for (offset, content) in [(0, before_newline), (1, after_newline)] {
+                            let mut doc_info =
+                                DocumentValueInfo::new(content.to_string(), index + offset);
+                            doc_info.file = file.clone();
+                            doc_info.decode_text();
+                            let _ = sender.send(AppMsg::RefreshData(doc_info));
+                        }
+                    } else {
+                        let mut doc_info = DocumentValueInfo::new(text, index);
+                        doc_info.file = file.clone();
+                        doc_info.decode_text();
+                        let _ = sender.send(AppMsg::RefreshData(doc_info));
+                    }
                 }
             }
-            s if s.starts_with("FILES") => {
-                let parts: Vec<&str> = line.trim().split('|').collect();
-                let archivos = if parts.len() > 1 {
-                    parts[1]
-                        .split(',')
-                        .map(|s| s.to_string())
-                        .collect::<Vec<_>>()
+
+            "FILES" => {
+                let archivos = if response.len() > 1 {
+                    response[1..].to_vec()
                 } else {
                     vec![]
                 };
@@ -266,9 +278,24 @@ fn listen_to_redis_response(
                     let _ = sender.send(AppMsg::UpdateFilesList(archivos));
                 }
             }
+            "RELOAD-FILE" => {
+                if response.len() >= 3 {
+                    let file_id = response[1].clone();
+                    let content = response[2].clone();
+                    println!(
+                        "Recibido RELOAD-FILE para {} con contenido: {}",
+                        file_id, content
+                    );
+                    if let Some(sender) = &ui_sender {
+                        let _ = sender.send(AppMsg::ReloadFile(file_id, content));
+                    }
+                } else {
+                    eprintln!("Mensaje RELOAD-FILE mal formado: {:?}", response);
+                }
+            }
             _ => {
                 if let Some(sender) = &ui_sender {
-                    let _ = sender.send(AppMsg::ManageResponse(first));
+                    let _ = sender.send(AppMsg::ManageResponse(response[0].clone()));
                 }
             }
         }
@@ -277,11 +304,10 @@ fn listen_to_redis_response(
 }
 
 fn send_command_to_nodes(
-    _ui_sender: Option<Sender<AppMsg>>,
     connect_node_sender: MpscSender<TcpStream>,
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     last_command_sent: Arc<Mutex<String>>,
-    response: Vec<&str>,
+    response: Vec<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let last_line_cloned = match last_command_sent.lock() {
         Ok(locked) => locked.clone(),
