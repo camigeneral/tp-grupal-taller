@@ -28,6 +28,14 @@ impl Cell {
             dependents: HashSet::new(),
         }
     }
+
+    fn clear_dependencies(&mut self) {
+        self.dependencies.clear();
+    }
+
+    fn add_dependency(&mut self, row: usize, col: usize) {
+        self.dependencies.insert((row, col));
+    }
 }
 
 #[derive(Debug)]
@@ -165,6 +173,20 @@ impl SpreadsheetModel {
         references
     }
 
+    fn update_dependencies(&mut self, cell_row: usize, cell_col: usize, new_dependencies: HashSet<(usize, usize)>) {
+        
+        let old_dependencies = self.cells[cell_row][cell_col].dependencies.clone();
+        for &(dep_row, dep_col) in &old_dependencies {
+            self.cells[dep_row][dep_col].dependents.remove(&(cell_row, cell_col));
+        }
+                
+        self.cells[cell_row][cell_col].clear_dependencies();
+
+        for &(dep_row, dep_col) in &new_dependencies {
+            self.cells[cell_row][cell_col].add_dependency(dep_row, dep_col);
+            self.cells[dep_row][dep_col].dependents.insert((cell_row, cell_col));
+        }
+    }
 
     fn update_cell(&mut self, row: usize, col: usize, content: String) {
         self.cells[row][col].raw_content = content.clone();
@@ -174,7 +196,9 @@ impl SpreadsheetModel {
             let formula = &content[1..];
 
             let new_dependencies = self.extract_cell_references(formula);
-            println!("debug: {:#?}", new_dependencies); 
+            
+            self.update_dependencies(row, col, new_dependencies);
+            println!("celda dependencias y dependentes: {:#?}, {:#?}",self.cells[row][col].dependencies, self.cells[row][col].dependents);
             match self.evaluate_expression(formula) {
                 Ok(value) => {
                     self.cells[row][col].calculated_value = value;
