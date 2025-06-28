@@ -277,6 +277,18 @@ fn listen_to_redis_response(
                     let _ = sender.send(AppMsg::UpdateFilesList(archivos));
                 }
             }
+            "RELOAD-FILE" => {
+                if response.len() >= 3 {
+                    let file_id = response[1].clone();
+                    let content = response[2].clone();
+                    println!("Recibido RELOAD-FILE para {} con contenido: {}", file_id, content);
+                    if let Some(sender) = &ui_sender {
+                        let _ = sender.send(AppMsg::ReloadFile(file_id, content));
+                    }
+                } else {
+                    eprintln!("Mensaje RELOAD-FILE mal formado: {:?}", response);
+                }
+            }
             _ => {
                 if let Some(sender) = &ui_sender {
                     let _ = sender.send(AppMsg::ManageResponse(response[0].clone()));
