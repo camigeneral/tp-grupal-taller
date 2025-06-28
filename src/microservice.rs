@@ -318,8 +318,8 @@ impl Microservice {
     /// * `Err(std::io::Error)` si ocurre un error de IO.
     fn listen_to_redis_response(
         mut microservice_socket: TcpStream,
-        connect_node_sender: MpscSender<TcpStream>,
-        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+        _connect_node_sender: MpscSender<TcpStream>,
+        _node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
         documents: Arc<Mutex<HashMap<String, Documento>>>,
         log_clone: Logger,
     ) -> std::io::Result<()> {
@@ -333,7 +333,6 @@ impl Microservice {
             if parts.is_empty() {
                 break;
             }
-            println!("partes: {:#?}", parts);
             let message = MicroserviceMessage::from_parts(&parts);
             println!("message: {:#?}", message);
             match message {
