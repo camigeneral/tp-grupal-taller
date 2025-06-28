@@ -1,6 +1,7 @@
 use commands::redis;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fs::OpenOptions;
 use std::env::args;
 use std::fs::{File};
 use std::io::{BufRead, BufReader, Write};
@@ -504,7 +505,7 @@ fn execute_command_internal(
             let unparsed_command = command_request.unparsed_command.clone();
 
             let redis_response = redis::execute_command(
-                command_request,
+                command_request.clone(),
                 &ctx.shared_documents,
                 &ctx.document_subscribers,
                 &ctx.shared_sets,
@@ -513,6 +514,17 @@ fn execute_command_internal(
                 &ctx.logged_clients,
                 &ctx.internal_subscription_channel,
             );
+
+            // Si el comando es SET, persistir los documentos
+            if command_request.command.to_lowercase() == "set" {
+                if let Err(e) = persist_documents(&ctx.shared_documents, &ctx.local_node) {
+                    eprintln!("Error persistiendo documentos después de SET: {}", e);
+                    logger.log(&format!("Error persistiendo documentos después de SET: {}", e));
+                } else {
+                    println!("Documentos persistidos exitosamente después de comando SET");
+                    logger.log("Documentos persistidos exitosamente después de comando SET");
+                }
+            }
 
             if redis_response.publish {
                 if let Err(e) = publish_update(
@@ -816,7 +828,7 @@ fn cleanup_client_resources(
         logger.log("Mutex poisoned al limpiar document_subscribers");
     }
 }
-/* 
+
 /// Persiste el estado actual de los documentos en el archivo.
 ///
 /// # Errores
@@ -824,7 +836,8 @@ fn cleanup_client_resources(
 pub fn persist_documents(
     documents: &RedisDocumentsMap,
     local_node: &LocalNodeMap,
-) -> io::Result<()> {
+) -> std::io::Result<()> {
+
     let file_name = match local_node.lock() {
         Ok(locked_node) => {
             format!(
@@ -841,7 +854,6 @@ pub fn persist_documents(
         }
     };
 
-    // Abrimos archivo, si falla retornamos error
     let mut persistence_file = match OpenOptions::new()
         .create(true)
         .truncate(true)
@@ -857,43 +869,13 @@ pub fn persist_documents(
         Err(poisoned) => poisoned.into_inner(),
     };
 
-    for (document_id, doc) in documents_guard.iter() {
-        let is_calc = document_id.ends_with(".xslx");
-        let content = if is_calc {
-            let mut document_data = format!("{}/++/", document_id);
-                for linea in lineas {
-                    document_data.push_str(linea);
-                    document_data.push_str("/--/");
-                }
-        }
-        match doc {
-            Documento::Texto(lineas) => {
-                let mut document_data = format!("{}/++/", document_id);
-                for linea in lineas {
-                    document_data.push_str(linea);
-                    document_data.push_str("/--/");
-                }
-                // Escribimos en archivo, manejamos error si ocurre
-                if let Err(e) = writeln!(persistence_file, "{}", document_data) {
-                    return Err(e);
-                }
-            }
-            Documento::Calculo(filas) => {
-                let mut document_data = format!("{}/++/", document_id);
-                for i in 0..100 {
-                    let empty = String::new();
-                    let value = filas.get(i).unwrap_or(&empty);
-                    document_data.push_str(value);
-                    document_data.push_str("/--/");
-                }
-                writeln!(persistence_file, "{}", document_data)?;
-            }
-        }
+    for (_document_id, doc) in documents_guard.iter() {        
+        writeln!(persistence_file, "{}", doc)?;               
     }
 
     Ok(())
 }
- */
+
 /// Carga los documentos persistidos desde el archivo.
 ///
 /// # Retorna
