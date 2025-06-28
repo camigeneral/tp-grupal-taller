@@ -226,17 +226,6 @@ pub fn handle_append(
     )
 }
 
-pub fn handle_list_files() -> RedisResponse {
-    let notification = "NODEFILES".to_string();
-
-    RedisResponse::new(
-        CommandResponse::String(notification.clone()),
-        true,
-        notification,
-        "".to_string(),
-    )
-}
-
 // #[cfg(test)]
 // mod tests {
 //     use super::*;
