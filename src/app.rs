@@ -4,6 +4,7 @@ use self::gtk4::{
     prelude::{BoxExt, GtkWindowExt, OrientableExt, PopoverExt, WidgetExt},
     CssProvider,
 };
+use crate::components::structs::document_value_info::DocumentValueInfo;
 use crate::components::{
     error_modal::ErrorModal,
     login::{LoginForm, LoginMsg, LoginOutput},
@@ -16,7 +17,6 @@ use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
 use components::types::FileType;
 use std::collections::HashMap;
 use std::thread;
-use crate::components::structs::document_value_info::DocumentValueInfo;
 
 use std::sync::mpsc::{channel, Sender};
 
@@ -220,9 +220,7 @@ impl SimpleComponent for AppModel {
             |command: FileWorkspaceOutputMessage| match command {
                 FileWorkspaceOutputMessage::SubscribeFile(file) => AppMsg::SubscribeFile(file),
                 FileWorkspaceOutputMessage::UnsubscribeFile(file) => AppMsg::UnsubscribeFile(file),
-                FileWorkspaceOutputMessage::ContentAdded(doc_info) => {
-                    AppMsg::AddContent(doc_info)
-                }
+                FileWorkspaceOutputMessage::ContentAdded(doc_info) => AppMsg::AddContent(doc_info),
                 FileWorkspaceOutputMessage::ContentAddedSpreadSheet(file, col, row, text) => {
                     AppMsg::AddContentSpreadSheet(file, col, row, text)
                 }
@@ -368,12 +366,11 @@ impl SimpleComponent for AppModel {
                 sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::AddContent(doc_info) => {
-                println!("Doc info: {:#?}", doc_info);            
-                self.command = format!("WRITE|{}|{}|{}|{}",
-                 doc_info.index, 
-                 doc_info.value, 
-                 doc_info.timestamp,
-                 doc_info.file);
+                println!("Doc info: {:#?}", doc_info);
+                self.command = format!(
+                    "WRITE|{}|{}|{}|{}",
+                    doc_info.index, doc_info.value, doc_info.timestamp, doc_info.file
+                );
                 sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::AddContentSpreadSheet(file_id, col, row, text) => {

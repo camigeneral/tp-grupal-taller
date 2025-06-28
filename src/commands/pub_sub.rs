@@ -58,7 +58,6 @@ pub fn handle_subscribe(
         };
 
         let _ = handle_sadd(&request, shared_sets);
-        
 
         let notification = format!("subscribe");
         RedisResponse::new(

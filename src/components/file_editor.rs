@@ -9,13 +9,12 @@ use self::relm4::{
 };
 use components::spreadsheet::SpreadsheetOutput;
 
+use crate::components::structs::document_value_info::DocumentValueInfo;
 use components::spreadsheet::SpreadsheetModel;
 use components::spreadsheet::SpreadsheetMsg;
 use components::text_editor::TextEditorMessage;
 use components::text_editor::TextEditorModel;
 use components::types::FileType;
-use crate::components::structs::document_value_info::DocumentValueInfo;
-
 
 /// Estructura que representa el modelo del editor de archivos. Contiene información sobre el archivo
 /// que se está editando, el contenido del archivo y el estado de cambios manuales en el contenido.

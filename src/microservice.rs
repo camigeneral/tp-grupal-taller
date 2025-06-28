@@ -217,7 +217,6 @@ fn listen_to_redis_response(
         let first_response = parts[0].to_uppercase();
 
         match first_response.as_str() {
-
             "subscribe" => {
                 println!("alguien se suscribio");
             }
@@ -260,14 +259,18 @@ fn listen_to_redis_response(
             }
             "DOC" if parts.len() >= 2 => {
                 let doc_name = &parts[1];
-                let content = &parts[2..]; 
-                
+                let content = &parts[2..];
+
                 println!("Documento recibido: {} con ", doc_name);
                 logger::log_event(
                     log_path,
-                    &format!("Documento recibido: {} con {} líneas", doc_name, content.len()),
+                    &format!(
+                        "Documento recibido: {} con {} líneas",
+                        doc_name,
+                        content.len()
+                    ),
                 );
-                
+
                 // Aquí puedes procesar el contenido completo del documento
                 /* for (i, line) in content.iter().enumerate() {
                     if !line.is_empty() {
@@ -313,8 +316,6 @@ fn listen_to_redis_response(
             } */
             _ => {}
         }
-
-        
     }
     Ok(())
 }

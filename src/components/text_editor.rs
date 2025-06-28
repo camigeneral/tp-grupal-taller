@@ -4,9 +4,9 @@ use self::gtk4::prelude::{
     BoxExt, Cast, EventControllerExt, OrientableExt, TextBufferExt, TextViewExt, WidgetExt,
 };
 use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
+use crate::components::structs::document_value_info::DocumentValueInfo;
 use std::cell::RefCell;
 use std::rc::Rc;
-use crate::components::structs::document_value_info::DocumentValueInfo;
 
 /// Estructura que representa el modelo del editor de archivos. Contiene información sobre el archivo
 /// que se está editando, el contenido del archivo y el estado de cambios manuales en el contenido.
@@ -118,11 +118,10 @@ impl SimpleComponent for TextEditorModel {
                                 before_cursor.to_string()
                             } else {
                                 format!("{}\n{}", before_cursor, after_cursor)
-                            };                        
+                            };
                             let doc_info = DocumentValueInfo::new(final_string, line_number);
 
-                            sender_insert
-                                .input(TextEditorMessage::ContentAdded(doc_info));
+                            sender_insert.input(TextEditorMessage::ContentAdded(doc_info));
                         }
                     }
                 }

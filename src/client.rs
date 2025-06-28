@@ -121,10 +121,9 @@ pub fn client_run(
             {
                 format_resp_command(&parts)
             } else if parts[0].contains("WRITE") {
-                let splited_command: Vec<&str> = command.split("|").collect();            
+                let splited_command: Vec<&str> = command.split("|").collect();
                 let client_command = format!("{}", format_resp_command(&splited_command).clone());
                 format_resp_publish(splited_command[4], &client_command)
-                
             } else {
                 format_resp_publish(parts[1], &command)
             };
@@ -152,7 +151,7 @@ pub fn client_run(
     Ok(())
 }
 
-fn get_client_addr(socket: TcpStream) -> Result<std::string::String, std::io::Error>  {
+fn get_client_addr(socket: TcpStream) -> Result<std::string::String, std::io::Error> {
     let local_addr = match socket.local_addr() {
         Ok(addr) => addr,
         Err(e) => {
@@ -170,7 +169,6 @@ fn listen_to_redis_response(
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     last_command_sent: Arc<Mutex<String>>,
 ) -> std::io::Result<()> {
-
     let client_socket_cloned = match client_socket.try_clone() {
         Ok(clone) => clone,
         Err(e) => {
@@ -203,11 +201,10 @@ fn listen_to_redis_response(
                 return Err(e);
             }
         };
-        
+
         println!("Respuesta de redis: {}", response.join(" "));
 
         let first_response = response[0].to_uppercase();
-
 
         match first_response.as_str() {
             s if s.starts_with("-ERR") => {
@@ -253,7 +250,7 @@ fn listen_to_redis_response(
                 }
             }
 
-            /* s if s.contains("WRITE|") => { 
+            /* s if s.contains("WRITE|") => {
 
                 if let Some(sender) = &ui_sender {
                     let parts: Vec<&str> =
@@ -264,13 +261,13 @@ fn listen_to_redis_response(
                             .collect();
                     let index = parts[1].to_string().parse::<i32>().unwrap();
                     let text = parts[2].to_string();
-                    let file = parts[4].to_string();                                        
+                    let file = parts[4].to_string();
                     let mut doc_info = DocumentValueInfo::new(text, index);
                     doc_info.file = file.clone();
                     doc_info.decode_text();
-                    let _ = sender.send(AppMsg::RefreshData(doc_info));                    
+                    let _ = sender.send(AppMsg::RefreshData(doc_info));
                 }
-            }  */     
+            }  */
             "FILES" => {
                 let archivos = if response.len() > 1 {
                     response[1..].to_vec()

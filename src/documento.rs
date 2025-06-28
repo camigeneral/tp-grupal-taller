@@ -35,7 +35,7 @@ impl Documento {
     pub fn join(&self, sep: &str) -> String {
         match self {
             Documento::Texto(v) => v.join(sep),
-            Documento::Calculo(m) => m.join(sep)
+            Documento::Calculo(m) => m.join(sep),
         }
     }
     pub fn iter(&self) -> Option<std::slice::Iter<'_, String>> {

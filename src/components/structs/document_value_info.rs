@@ -11,17 +11,16 @@ pub struct DocumentValueInfo {
     pub file: String,
     pub value: String,
     pub index: i32,
-    pub timestamp: i64
+    pub timestamp: i64,
 }
 
-
-impl DocumentValueInfo{
-    pub fn new(value:String , index: i32) -> Self {        
+impl DocumentValueInfo {
+    pub fn new(value: String, index: i32) -> Self {
         DocumentValueInfo {
             file: String::new(),
             value: value,
             index,
-            timestamp: get_timestamp_millis()        
+            timestamp: get_timestamp_millis(),
         }
     }
 
@@ -35,10 +34,10 @@ impl DocumentValueInfo{
     }
 
     pub fn decode_text(&mut self) {
-        self.value = self.value
-        .replace("<space>", " ")
-        .replace("<enter>", "\n")
-        .replace("<delete>", "")
-        ;
+        self.value = self
+            .value
+            .replace("<space>", " ")
+            .replace("<enter>", "\n")
+            .replace("<delete>", "");
     }
 }

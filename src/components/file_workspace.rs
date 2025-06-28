@@ -9,13 +9,12 @@ use self::relm4::{
 use super::file_editor::FileEditorModel;
 use super::list_files::FileListView;
 use crate::components::file_editor::FileEditorOutputMessage;
+use crate::components::structs::document_value_info::DocumentValueInfo;
 use crate::documento::Documento;
 use components::file_editor::FileEditorMessage;
 use components::list_files::FileFilterAction;
 use components::types::FileType;
 use std::collections::HashMap;
-use crate::components::structs::document_value_info::DocumentValueInfo;
-
 
 #[derive(Debug)]
 /// Estructura principal que gestiona el espacio de trabajo de archivos, que incluye una lista de archivos
@@ -158,9 +157,7 @@ impl SimpleComponent for FileWorkspace {
                 ));
             }
             FileWorkspaceMsg::ContentAdded(doc_info) => {
-                let _ = sender.output(FileWorkspaceOutputMessage::ContentAdded(
-                    doc_info
-                ));
+                let _ = sender.output(FileWorkspaceOutputMessage::ContentAdded(doc_info));
             }
 
             FileWorkspaceMsg::SubscribeFile(file) => {
@@ -240,27 +237,29 @@ impl SimpleComponent for FileWorkspace {
                 let mut val = doc_info.value.trim_end_matches('\r').to_string();
                 let file_editor_sender = self.file_editor_ctrl.sender().clone();
 
-                if let Some(doc) = self.files.get_mut(&(doc_info.file.clone(), file_type.clone())) {
-
-                        if doc_info.index >= 0 {
-                            let parsed_index = doc_info.index as usize;
-                            match doc {
-                                Documento::Calculo(data) => {
-                                    if parsed_index < data.len() {
-                                        data[parsed_index] = val.clone();
-                                    }
-                                }
-                                Documento::Texto(lines) => {
-                                    if parsed_index < lines.len() {
-                                        lines[parsed_index] = val.clone();
-                                    } else {
-                                        lines.push(val.clone());
-                                    }
-                                    val = lines.join("\n");
+                if let Some(doc) = self
+                    .files
+                    .get_mut(&(doc_info.file.clone(), file_type.clone()))
+                {
+                    if doc_info.index >= 0 {
+                        let parsed_index = doc_info.index as usize;
+                        match doc {
+                            Documento::Calculo(data) => {
+                                if parsed_index < data.len() {
+                                    data[parsed_index] = val.clone();
                                 }
                             }
+                            Documento::Texto(lines) => {
+                                if parsed_index < lines.len() {
+                                    lines[parsed_index] = val.clone();
+                                } else {
+                                    lines.push(val.clone());
+                                }
+                                val = lines.join("\n");
+                            }
+                        }
 
-                            file_editor_sender
+                        file_editor_sender
                             .send(FileEditorMessage::UpdateFileContent(
                                 doc_info.file.clone(),
                                 doc_info.index,
@@ -268,7 +267,7 @@ impl SimpleComponent for FileWorkspace {
                                 file_type.clone(),
                             ))
                             .unwrap();
-                        }
+                    }
                 }
             }
 

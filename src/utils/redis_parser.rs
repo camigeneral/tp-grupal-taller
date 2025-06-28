@@ -70,13 +70,13 @@ pub enum CommandResponse {
 }
 
 impl CommandResponse {
-    pub fn get_resp(&self)-> String {
+    pub fn get_resp(&self) -> String {
         match self {
-            CommandResponse::Ok => "+OK\r\n".to_string(),  // Simple String
-            CommandResponse::String(s) => format!("${}\r\n{}\r\n", s.len(), s),  // Bulk String
-            CommandResponse::Integer(i) => format!(":{}\r\n", i),  // Integer
-            CommandResponse::Null => "$-1\r\n".to_string(),  // Null Bulk String
-            CommandResponse::Error(msg) => format!("-ERR {}\r\n", msg), 
+            CommandResponse::Ok => "+OK\r\n".to_string(), // Simple String
+            CommandResponse::String(s) => format!("${}\r\n{}\r\n", s.len(), s), // Bulk String
+            CommandResponse::Integer(i) => format!(":{}\r\n", i), // Integer
+            CommandResponse::Null => "$-1\r\n".to_string(), // Null Bulk String
+            CommandResponse::Error(msg) => format!("-ERR {}\r\n", msg),
             CommandResponse::Array(arr) => {
                 let mut resp = format!("*{}\r\n", arr.len());
                 for item in arr {
@@ -86,8 +86,7 @@ impl CommandResponse {
             }
         }
     }
-}   
-
+}
 
 /// Parsea un comando en formato RESP recibido desde un `BufReader<TcpStream>`.
 ///
@@ -135,7 +134,7 @@ pub fn parse_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<Comma
 /// Retorna `std::io::Error` si hay fallas al escribir en el stream.
 #[allow(dead_code)]
 pub fn write_response(mut stream: &TcpStream, response: &CommandResponse) -> std::io::Result<()> {
-       stream.write_all(response.get_resp().as_bytes())
+    stream.write_all(response.get_resp().as_bytes())
 }
 
 /// Formatea un comando en el protocolo RESP (Redis Serialization Protocol).
@@ -167,13 +166,18 @@ pub fn format_resp_publish(channel: &str, message: &str) -> String {
 /// # Errores
 /// Retorna `std::io::Error` si el formato RESP no es válido o si ocurre un error de lectura.
 
-pub fn parse_resp_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<(Vec<String>, String)> {
+pub fn parse_resp_command(
+    reader: &mut BufReader<TcpStream>,
+) -> std::io::Result<(Vec<String>, String)> {
     let mut line = String::new();
     reader.read_line(&mut line)?;
     let mut unparsed_command = line.clone();
 
     if line.is_empty() {
-        return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "Empty input"));
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::UnexpectedEof,
+            "Empty input",
+        ));
     }
 
     match line.chars().next() {
@@ -182,7 +186,10 @@ pub fn parse_resp_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<
         Some('-') => parse_error_string(&line, &unparsed_command),
         Some(':') => parse_integer_string(&line, &unparsed_command),
         Some('$') => parse_bulk_string(reader, &mut unparsed_command, &line),
-        _ => Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Unsupported RESP type")),
+        _ => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Unsupported RESP type",
+        )),
     }
 }
 
@@ -194,7 +201,11 @@ pub fn parse_resp_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<
 /// # Errores
 /// Retorna un error si el formato RESP es inválido, si las longitudes no coinciden,
 /// o si hay fallas en la lectura del socket.
-fn parse_array(reader: &mut BufReader<TcpStream>, unparsed_command: &mut String, first_line: &str) -> std::io::Result<(Vec<String>, String)> {
+fn parse_array(
+    reader: &mut BufReader<TcpStream>,
+    unparsed_command: &mut String,
+    first_line: &str,
+) -> std::io::Result<(Vec<String>, String)> {
     let num_elements: usize = first_line[1..].trim().parse().map_err(|_| {
         std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid array length")
     })?;
@@ -207,11 +218,17 @@ fn parse_array(reader: &mut BufReader<TcpStream>, unparsed_command: &mut String,
         unparsed_command.push_str(&line);
 
         if !line.starts_with('$') {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Expected bulk string"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Expected bulk string",
+            ));
         }
 
         let length: usize = line[1..].trim().parse().map_err(|_| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid bulk string length")
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Invalid bulk string length",
+            )
         })?;
 
         let mut buffer = vec![0u8; length];
@@ -239,7 +256,10 @@ fn parse_array(reader: &mut BufReader<TcpStream>, unparsed_command: &mut String,
 ///
 /// # Errores
 /// No retorna errores salvo problemas de entrada vacía o inesperada.
-fn parse_simple_string(line: &str, unparsed_command: &str) -> std::io::Result<(Vec<String>, String)> {
+fn parse_simple_string(
+    line: &str,
+    unparsed_command: &str,
+) -> std::io::Result<(Vec<String>, String)> {
     let simple_string = line[1..].trim_end().to_string();
     Ok((vec![simple_string], unparsed_command.to_string()))
 }
@@ -251,9 +271,15 @@ fn parse_simple_string(line: &str, unparsed_command: &str) -> std::io::Result<(V
 ///
 /// # Errores
 /// No retorna errores salvo problemas de entrada vacía o inesperada.
-fn parse_error_string(line: &str, unparsed_command: &str) -> std::io::Result<(Vec<String>, String)> {
+fn parse_error_string(
+    line: &str,
+    unparsed_command: &str,
+) -> std::io::Result<(Vec<String>, String)> {
     let error_string = line[1..].trim_end().to_string();
-    Ok((vec![format!("-{}", error_string)], unparsed_command.to_string()))
+    Ok((
+        vec![format!("-{}", error_string)],
+        unparsed_command.to_string(),
+    ))
 }
 
 /// Parsea una respuesta RESP de tipo Integer (':').
@@ -263,7 +289,10 @@ fn parse_error_string(line: &str, unparsed_command: &str) -> std::io::Result<(Ve
 ///
 /// # Errores
 /// No retorna errores salvo problemas de entrada vacía o inesperada.
-fn parse_integer_string(line: &str, unparsed_command: &str) -> std::io::Result<(Vec<String>, String)> {
+fn parse_integer_string(
+    line: &str,
+    unparsed_command: &str,
+) -> std::io::Result<(Vec<String>, String)> {
     let integer_string = line[1..].trim_end().to_string();
     Ok((vec![integer_string], unparsed_command.to_string()))
 }
@@ -276,9 +305,16 @@ fn parse_integer_string(line: &str, unparsed_command: &str) -> std::io::Result<(
 /// # Errores
 /// Retorna un error si la longitud es inválida, si la lectura falla,
 /// o si el contenido no es una cadena UTF-8 válida.
-fn parse_bulk_string(reader: &mut BufReader<TcpStream>, unparsed_command: &mut String, line: &str) -> std::io::Result<(Vec<String>, String)> {
+fn parse_bulk_string(
+    reader: &mut BufReader<TcpStream>,
+    unparsed_command: &mut String,
+    line: &str,
+) -> std::io::Result<(Vec<String>, String)> {
     let length: usize = line[1..].trim().parse().map_err(|_| {
-        std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid bulk string length")
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Invalid bulk string length",
+        )
     })?;
 
     let mut buffer = vec![0u8; length];
@@ -295,7 +331,6 @@ fn parse_bulk_string(reader: &mut BufReader<TcpStream>, unparsed_command: &mut S
 
     Ok((vec![string_value], unparsed_command.clone()))
 }
-
 
 /* /// Escribe una cadena como bulk string en formato RESP (`$<len>\r\n<value>\r\n`).
 ///

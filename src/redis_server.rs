@@ -221,8 +221,8 @@ fn initialize_datasets(
     for document_id in document_keys {
         subscriber_map.insert(document_id.clone(), Vec::new());
         doc_set.insert(document_id, HashSet::new());
-    }    
-    
+    }
+
     (
         Arc::new(Mutex::new(subscriber_map)),
         Arc::new(Mutex::new(doc_set)),
@@ -266,7 +266,7 @@ fn handle_new_client_connection(
 
     let client_type = if command_request.command == "microservicio" {
         let client_stream_clone = match client_stream.try_clone() {
-        Ok(clone) => clone,
+            Ok(clone) => clone,
             Err(e) => {
                 eprintln!("Error clonando stream para cliente: {}", e);
                 return Err(e);
@@ -386,9 +386,9 @@ fn handle_client(
         if command_request.arguments.len() > 1 {
             doc = match &command_request.arguments[0] {
                 ValueType::String(doc) => doc.clone(),
-                _ => {"".to_string()}
+                _ => "".to_string(),
             };
-        }    
+        }
 
         println!("Comando recibido: {:?}", command_request);
         logger::log_event(
@@ -578,25 +578,21 @@ pub fn resolve_key_location(
         }) {
             let response_string =
                 format!("ASK {} 127.0.0.1:{}", hashed_key, peer_node.port - 10000);
-            let redis_redirect_response = CommandResponse::Array(
-                vec![
-                    CommandResponse::String("ASK".to_string()), 
-                    CommandResponse::String(hashed_key.clone().to_string()),
-                    CommandResponse::String(format!("127.0.0.1:{}", peer_node.port - 10000))
-                    ]
-            );
-            
+            let redis_redirect_response = CommandResponse::Array(vec![
+                CommandResponse::String("ASK".to_string()),
+                CommandResponse::String(hashed_key.clone().to_string()),
+                CommandResponse::String(format!("127.0.0.1:{}", peer_node.port - 10000)),
+            ]);
+
             println!("Hashing para otro nodo: {:?}", response_string.clone());
 
             return Err(redis_redirect_response);
         } else {
             let response_string = format!("ASK {}", hashed_key);
-            let redis_redirect_response = CommandResponse::Array(
-                vec![
-                    CommandResponse::String("ASK".to_string()), 
-                    CommandResponse::String(hashed_key.clone().to_string()),
-                    ]
-            );
+            let redis_redirect_response = CommandResponse::Array(vec![
+                CommandResponse::String("ASK".to_string()),
+                CommandResponse::String(hashed_key.clone().to_string()),
+            ]);
 
             println!(
                 "Hashing para nodo indefinido: {:?}",
@@ -835,11 +831,9 @@ pub fn subscribe_microservice_to_all_docs(
             let message = format_resp_command(&command_parts);
             if let Err(e) = client_stream.write_all(message.as_bytes()) {
                 eprintln!("Error enviando notificación DOC al microservicio: {}", e);
-            }                   
-            
+            }
         }
     }
-    
 
     if let Err(e) = client_stream.flush() {
         eprintln!("Error al hacer flush del stream: {}", e);

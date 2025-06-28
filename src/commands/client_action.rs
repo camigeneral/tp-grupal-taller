@@ -1,17 +1,14 @@
-use super::redis;
+
 use super::redis_response::RedisResponse;
-use crate::client_info;
 use crate::commands::list::{handle_llen, handle_lset, handle_rpush};
-use crate::commands::set::handle_scard;
-use crate::commands::string::handle_get;
-use commands::redis_parser::{CommandRequest, CommandResponse, ValueType, format_resp_command};
+use commands::redis_parser::{format_resp_command, CommandRequest, CommandResponse, ValueType};
 use documento::Documento;
 #[allow(unused_imports)]
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
 use std::sync::{Arc, Mutex};
-/* 
+/*
 pub fn handle_welcome(
     request: &CommandRequest,
     _active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
@@ -64,7 +61,7 @@ pub fn handle_welcome(
                         qty_subs.to_string(),
                         doc,
                         lines.join(",")
-                    ]];                    
+                    ]];
                 }
                 CommandResponse::Null => {
                     notification =
