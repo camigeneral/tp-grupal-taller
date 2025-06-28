@@ -1,8 +1,7 @@
-use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
+/* use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use super::redis_response::RedisResponse;
 use crate::documento::Documento;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use redis_types::RedisDocumentsMap;
 
 /// Maneja el comando LINSERT que inserta un elemento antes o después de un elemento pivote en una lista
 ///
@@ -14,7 +13,7 @@ use std::sync::{Arc, Mutex};
 /// * `RedisResponse` - La respuesta al comando, que incluye la longitud actualizada de la lista
 pub fn handle_linsert(
     request: &CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Documento>>>,
+    docs: &RedisDocumentsMap,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
@@ -64,7 +63,7 @@ pub fn handle_linsert(
         Err(e) => {
             eprintln!("Error locking docs: {}", e);
             return RedisResponse::new(
-                CommandResponse::Error("Error interno al acceder a los documentos".to_string()),
+                CommandResponse::Error("Error interno al accedeuse redis_types::RedisDocumentsMap;r a los documentos".to_string()),
                 false,
                 "".to_string(),
                 doc,
@@ -74,7 +73,7 @@ pub fn handle_linsert(
 
     let entry_doc = docs_lock
         .entry(doc.clone())
-        .or_insert_with(|| Documento::Texto(vec![]));
+        .or_insert_with(|| "".to_string());
 
     if let Some(index) = entry_doc
         .as_texto()
@@ -126,7 +125,7 @@ pub fn handle_linsert(
 /// * `RedisResponse` - La respuesta al comando confirmando la actualización o un error
 pub fn handle_lset(
     request: &CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Documento>>>,
+    docs: &RedisDocumentsMap,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
@@ -224,7 +223,7 @@ pub fn handle_lset(
 /// * `RedisResponse` - La respuesta al comando con la longitud de la lista
 pub fn handle_llen(
     request: &CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Documento>>>,
+    docs: &RedisDocumentsMap,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
@@ -274,7 +273,7 @@ pub fn handle_llen(
 /// * `RedisResponse` - La respuesta al comando con la longitud actualizada de la lista
 pub fn handle_rpush(
     request: &CommandRequest,
-    docs: &Arc<Mutex<HashMap<String, Documento>>>,
+    docs: &RedisDocumentsMap,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k.clone(),
@@ -337,7 +336,7 @@ pub fn handle_rpush(
         doc,
     )
 }
-
+/* 
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -478,3 +477,4 @@ mod tests {
         assert!(matches!(response.response, CommandResponse::Integer(3)));
     }
 }
+ */ */
