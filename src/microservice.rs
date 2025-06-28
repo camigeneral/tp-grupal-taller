@@ -21,21 +21,49 @@ mod logger;
 #[path = "utils/redis_parser.rs"]
 mod redis_parser;
 
-//
+/// Microservicio que actúa como intermediario entre clientes y nodos Redis.
+/// 
+/// Esta estructura maneja las conexiones TCP con múltiples nodos Redis,
+/// procesa comandos RESP (Redis Serialization Protocol), y almacena documentos
+/// recibidos de los nodos. Proporciona funcionalidad para:
+/// - Conectar a múltiples nodos Redis (principal y réplicas)
+/// - Escuchar y procesar respuestas de los nodos
+/// - Almacenar documentos recibidos en memoria
+/// - Registrar eventos en un archivo de log
 pub struct Microservice {
+    /// Mapa de conexiones TCP activas con los nodos Redis.
+    /// La clave es la dirección del nodo (ej: "127.0.0.1:4000") y el valor es el stream TCP.
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+    
+    /// El último comando enviado a los nodos Redis.
+    /// Se mantiene para referencia y debugging.
     last_command_sent: Arc<Mutex<String>>,
+    
+    /// Documentos almacenados en memoria recibidos de los nodos Redis.
+    /// La clave es el nombre del documento y el valor es el contenido.
     documents: Arc<Mutex<HashMap<String, Documento>>>,
+    
+    /// Ruta al archivo de log donde se registran los eventos del microservicio.
     log_path: String,
-
 }
 
-impl Microservice {
+impl Microservice {    
+    /// Crea una nueva instancia del microservicio.
+    /// 
+    /// # Argumentos
+    /// 
+    /// * `config_path` - Ruta al archivo de configuración que contiene la configuración del log.
+    /// 
+    /// # Retorna
+    /// 
+    /// * `Ok(Microservice)` - Una nueva instancia del microservicio inicializada.
+    /// * `Err(Box<dyn std::error::Error>)` - Error si no se puede leer la configuración o crear el archivo de log.
+    /// 
     pub fn new(config_path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let log_path = logger::get_log_path_from_config(config_path);
         if let Ok(metadata) = fs::metadata(&log_path) {
             if metadata.len() > 0 {
-                if let Ok(mut file) = std::fs::OpenOptions::new()
+                if let Ok(mut file) = std::fs::OpenOptions::new()(puertos 4001 y 4002)
                     .create(true)
                     .append(true)
                     .open(&log_path)
@@ -52,6 +80,24 @@ impl Microservice {
         })
     }
 
+    /// Inicia el microservicio y establece las conexiones con los nodos Redis.
+    ///
+    /// Este método realiza las siguientes operaciones:
+    /// 1. Se conecta al nodo Redis principal en el puerto especificado.
+    /// 2. Envía el comando de identificación "Microservicio" al nodo.
+    /// 3. Inicia el manejador de conexiones de nodos en un hilo separado.
+    /// 4. Se conecta a nodos réplica.
+    /// 5. Inicia el procesamiento automático de comandos.
+    /// 6. Entra en un bucle infinito para mantener el microservicio activo.
+    ///
+    /// # Argumentos
+    ///
+    /// * `redis_port` - Puerto del nodo Redis principal al cual conectarse.
+    ///
+    /// # Retorna
+    ///
+    /// * `Ok(())` - El microservicio se inició correctamente.
+    /// * `Err(Box<dyn std::error::Error>)` - Error si no se puede conectar al nodo Redis o establecer las conexiones.
     pub fn start(&self, redis_port: u16) -> Result<(), Box<dyn std::error::Error>> {
         let main_address = format!("127.0.0.1:{}", redis_port);
 
@@ -94,6 +140,25 @@ impl Microservice {
         }
     }
 
+    /// Conecta el microservicio a nodos Redis réplica adicionales.
+    /// 
+    /// Este método intenta conectarse a nodos Redis en los puertos 4001 y 4002.
+    /// Para cada conexión exitosa:
+    /// - Envía el comando de identificación "Microservicio"
+    /// - Agrega el stream TCP al mapa de conexiones
+    /// - Envía el stream al manejador de conexiones
+    /// 
+    /// Si una conexión falla, se registra el error pero el proceso continúa
+    /// con los demás nodos.
+    /// 
+    /// # Argumentos
+    /// 
+    /// * `connect_node_sender` - Sender para enviar streams TCP al manejador de conexiones.
+    /// 
+    /// # Retorna
+    /// 
+    /// * `Ok(())` - Las conexiones se establecieron correctamente (aunque algunas puedan haber fallado).
+    /// * `Err(Box<dyn std::error::Error>)` - Error si no se puede escribir en algún stream TCP.
     fn connect_to_replica_nodes(&self,
         connect_node_sender: &MpscSender<TcpStream>,) -> Result<(), Box<dyn std::error::Error>> {
             let otros_puertos = vec![4001, 4002];
@@ -118,6 +183,15 @@ impl Microservice {
             Ok(())
         }
 
+    /// Inicia el procesamiento automático de comandos en un hilo separado.
+    /// 
+    /// Este método crea un hilo que se ejecuta en segundo plano y realiza
+    /// verificaciones periódicas de las conexiones de nodos. Actualmente
+    /// solo verifica que se pueda obtener el lock de node_streams, pero
+    /// está diseñado para expandirse con funcionalidad adicional.
+    /// 
+    /// El hilo se ejecuta indefinidamente con un intervalo de sueño muy largo
+    /// (aproximadamente 2 años) para mantener la funcionalidad activa.
     fn start_automatic_commands(&self) {
         let node_streams_clone = Arc::clone(&self.node_streams);
         let _last_command_sent_clone = Arc::clone(&self.last_command_sent);
@@ -158,6 +232,16 @@ impl Microservice {
         });
     }
     
+    /// Inicia el manejador de conexiones de nodos en un hilo separado.
+    /// 
+    /// Este método crea un hilo que se encarga de procesar las conexiones
+    /// entrantes de los nodos Redis. Utiliza un canal de comunicación
+    /// para recibir streams TCP de nuevos nodos y los procesa en paralelo.
+    /// 
+    /// # Argumentos
+    /// 
+    /// * `connect_node_sender` - Sender para enviar streams TCP al manejador.
+    /// * `connect_nodes_receiver` - Receiver para recibir streams TCP de nuevos nodos.
     fn add_node_stream(
         &self,
         address: &str,
@@ -178,6 +262,24 @@ impl Microservice {
         }
     }
 
+    /// Procesa las conexiones entrantes de los nodos Redis.
+    ///
+    /// Esta función recibe streams TCP de nuevos nodos a través de un canal y
+    /// lanza un hilo por cada conexión para escuchar las respuestas de cada nodo.
+    ///
+    /// # Argumentos
+    ///
+    /// * `sender` - Canal para enviar streams TCP a otros manejadores si es necesario.
+    /// * `reciever` - Canal para recibir streams TCP de nuevos nodos.
+    /// * `node_streams` - Referencia compartida al mapa de streams de nodos.
+    /// * `last_command_sent` - Referencia compartida al último comando enviado.
+    /// * `documents` - Referencia compartida a los documentos almacenados.
+    /// * `log_path` - Ruta al archivo de log.
+    ///
+    /// # Retorna
+    ///
+    /// * `Ok(())` si todas las conexiones se procesaron correctamente.
+    /// * `Err(std::io::Error)` si ocurre un error en algún hilo.
     fn connect_to_nodes(
         sender: MpscSender<TcpStream>,
         reciever: Receiver<TcpStream>,
@@ -209,6 +311,24 @@ impl Microservice {
 
         Ok(())
     }
+    /// Escucha y procesa las respuestas recibidas de un nodo Redis.
+    ///
+    /// Esta función se ejecuta en un hilo separado para cada conexión de nodo.
+    /// Lee comandos RESP del nodo, procesa documentos recibidos y registra eventos.
+    ///
+    /// # Argumentos
+    ///
+    /// * `microservice_socket` - Stream TCP con el nodo Redis.
+    /// * `connect_node_sender` - Canal para enviar streams TCP a otros manejadores si es necesario.
+    /// * `node_streams` - Referencia compartida al mapa de streams de nodos.
+    /// * `last_command_sent` - Referencia compartida al último comando enviado.
+    /// * `documents` - Referencia compartida a los documentos almacenados.
+    /// * `log_path` - Ruta al archivo de log.
+    ///
+    /// # Retorna
+    ///
+    /// * `Ok(())` si la escucha y el procesamiento fueron exitosos.
+    /// * `Err(std::io::Error)` si ocurre un error de IO.
     fn listen_to_redis_response(
         mut microservice_socket: TcpStream,
         connect_node_sender: MpscSender<TcpStream>,
@@ -227,7 +347,7 @@ impl Microservice {
             if parts.is_empty() {
                 break;
             }
-            println!("partes: {:#?}", parts);
+            //println!("partes: {:#?}", parts);
             let first_response = parts[0].to_uppercase();
 
             match first_response.as_str() {
@@ -261,6 +381,8 @@ impl Microservice {
                         };
                         docs.insert(doc_name.to_string(), documento);
                         println!("Documento '{}' guardado en el microservicio", doc_name);
+
+                        println!("docs: {:#?}", docs);
                     } else {
                         eprintln!("Error obteniendo lock de documents");
                     }
