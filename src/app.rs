@@ -396,8 +396,9 @@ impl SimpleComponent for AppModel {
                     }
                 };
 
-                let cell_name = format!("{}{}", (b'A' + row_index as u8) as char, col_index + 1);
-                self.command = format!("WRITE|{}|{}|{}", cell_name, clean_text, file_id);
+                let total_columns = 10;
+                let index = row_index * total_columns + col_index;
+                self.command = format!("WRITE|{}|{}|{}", index, clean_text, file_id);
                 sender.input(AppMsg::ExecuteCommand);
             }
 
