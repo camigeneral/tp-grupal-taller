@@ -1,4 +1,3 @@
-
 use super::redis_response::RedisResponse;
 use crate::commands::list::{handle_llen, handle_lset, handle_rpush};
 use commands::redis_parser::{format_resp_command, CommandRequest, CommandResponse, ValueType};
