@@ -2,6 +2,7 @@ use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use super::redis_response::RedisResponse;
 use commands::set::handle_sadd;
 use commands::set::handle_srem;
+use redis_types::{ClientsMap, SubscribersMap, WriteClient};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::Write;
@@ -54,26 +55,25 @@ pub fn handle_subscribe(
             command: "sadd".to_string(),
             key: Some(doc.clone()),
             arguments: vec![ValueType::String(client_addr.clone())],
-            unparsed_command: "".to_string(),
+            unparsed_command: String::new(),
         };
 
         let _ = handle_sadd(&request, shared_sets);
 
-        let notification = format!("CLIENT {}|{}", client_addr, doc);
-        RedisResponse::new(
-            CommandResponse::String(notification.clone()),
-            true,
-            notification,
-            doc.to_string(),
-        )
-    } else {
-        RedisResponse::new(
-            CommandResponse::Error("Document not found".to_string()),
+        return RedisResponse::new(
+            CommandResponse::String("subscribe".to_string()),
             false,
-            "".to_string(),
-            "".to_string(),
-        )
+            "subscribe".to_string(),
+            doc.to_string(),
+        );
     }
+
+    RedisResponse::new(
+        CommandResponse::Error("Document not found".to_string()),
+        false,
+        String::new(),
+        String::new(),
+    )
 }
 
 /// Maneja el comando UNSUBSCRIBE que permite a un cliente cancelar su suscripción a un documento
@@ -144,10 +144,54 @@ pub fn handle_unsubscribe(
     }
 }
 
+fn publish_to_internal_channel(message: &str, subscription_channel: &ClientsMap) -> i64 {
+    let channels_guard = subscription_channel.lock().unwrap();
+    if let Some(microservice) = channels_guard.get("subscriptions") {
+        if let Ok(mut stream_guard) = microservice.stream.lock() {
+            if let Some(stream) = stream_guard.as_mut() {
+                if let Err(e) = write!(stream, "{}", message) {
+                    eprintln!("Error enviando mensaje al microservicio: {}", e);
+                    return 0;
+                } else {
+                    println!(
+                        "Mensaje enviado al microservicio del canal interno: {}",
+                        message
+                    );
+                    return 1;
+                }
+            }
+        }
+    }
+    0
+}
+
+fn publish_to_subscribers<T: Write>(
+    doc: &str,
+    message: &str,
+    document_subscribers: &SubscribersMap,
+    active_clients: &WriteClient<T>,
+) -> i64 {
+    let mut sent_count = 0;
+    let subscribers_guard = document_subscribers.lock().unwrap();
+    let mut clients_guard = active_clients.lock().unwrap();
+
+    if let Some(subscribers) = subscribers_guard.get(doc) {
+        for subscriber_id in subscribers {
+            if let Some(client) = clients_guard.get_mut(subscriber_id) {
+                let _ = write!(client, "{}", message);
+                sent_count += 1;
+            }
+        }
+    }
+
+    sent_count
+}
+
 pub fn handle_publish<T: Write>(
     request: &CommandRequest,
-    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
-    active_clients: &Arc<Mutex<HashMap<String, T>>>,
+    document_subscribers: &SubscribersMap,
+    active_clients: &WriteClient<T>,
+    subscription_channel: &ClientsMap,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k,
@@ -155,9 +199,9 @@ pub fn handle_publish<T: Write>(
             return RedisResponse::new(
                 CommandResponse::Error("Usage: PUBLISH <document> <message>".to_string()),
                 false,
-                "".to_string(),
-                "".to_string(),
-            )
+                String::new(),
+                String::new(),
+            );
         }
     };
 
@@ -165,7 +209,7 @@ pub fn handle_publish<T: Write>(
         return RedisResponse::new(
             CommandResponse::Error("Usage: PUBLISH <document> <message>".to_string()),
             false,
-            "".to_string(),
+            String::new(),
             doc.to_string(),
         );
     }
@@ -176,24 +220,18 @@ pub fn handle_publish<T: Write>(
             return RedisResponse::new(
                 CommandResponse::Error("Tiene que ser un string".to_string()),
                 false,
-                "".to_string(),
+                String::new(),
                 doc.to_string(),
-            )
+            );
         }
     };
 
-    let mut sent_count = 0;
-    let subscribers_guard = document_subscribers.lock().unwrap();
+    let sent_count = if doc == "subscriptions" {
+        publish_to_internal_channel(&message, subscription_channel)
+    } else {
+        publish_to_subscribers(doc, &message, document_subscribers, active_clients)
+    };
 
-    let mut clients_guard = active_clients.lock().unwrap();
-    if let Some(subscribers) = subscribers_guard.get(doc) {
-        for subscriber_id in subscribers {
-            if let Some(client) = clients_guard.get_mut(subscriber_id) {
-                let _ = writeln!(client, "{}", message);
-                sent_count += 1;
-            }
-        }
-    }
     RedisResponse::new(
         CommandResponse::Integer(sent_count),
         false,

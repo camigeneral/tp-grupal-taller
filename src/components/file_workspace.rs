@@ -9,7 +9,8 @@ use self::relm4::{
 use super::file_editor::FileEditorModel;
 use super::list_files::FileListView;
 use crate::components::file_editor::FileEditorOutputMessage;
-use crate::documento::Documento;
+use crate::components::structs::document_value_info::DocumentValueInfo;
+use crate::document::Documento;
 use components::file_editor::FileEditorMessage;
 use components::list_files::FileFilterAction;
 use components::types::FileType;
@@ -45,10 +46,10 @@ pub enum FileWorkspaceMsg {
     CloseEditor,
     SubscribeFile(String),
     ReloadFiles,
-    ContentAdded(String, i32),
+    ContentAdded(DocumentValueInfo),
 
-    UpdateFile(String, String, String),
-    ContentAddedSpreadSheet(String, String, String),
+    UpdateFile(DocumentValueInfo),
+    ContentAddedSpreadSheet(DocumentValueInfo),
     UpdateFilesList(Vec<(String, FileType)>),
 }
 
@@ -56,8 +57,8 @@ pub enum FileWorkspaceMsg {
 pub enum FileWorkspaceOutputMessage {
     SubscribeFile(String),
     UnsubscribeFile(String),
-    ContentAdded(String, String, i32),
-    ContentAddedSpreadSheet(String, String, String, String),
+    ContentAdded(DocumentValueInfo),
+    ContentAddedSpreadSheet(DocumentValueInfo),
     FilesLoaded,
 }
 
@@ -120,11 +121,11 @@ impl SimpleComponent for FileWorkspace {
                 sender.input_sender(),
                 |msg: FileEditorOutputMessage| match msg {
                     FileEditorOutputMessage::GoBack => FileWorkspaceMsg::CloseEditor,
-                    FileEditorOutputMessage::ContentAdded(new_text, offset) => {
-                        FileWorkspaceMsg::ContentAdded(new_text, offset)
+                    FileEditorOutputMessage::ContentAdded(doc_info) => {
+                        FileWorkspaceMsg::ContentAdded(doc_info)
                     }
-                    FileEditorOutputMessage::ContentAddedSpreadSheet(row, col, text) => {
-                        FileWorkspaceMsg::ContentAddedSpreadSheet(row, col, text)
+                    FileEditorOutputMessage::ContentAddedSpreadSheet(doc_info) => {
+                        FileWorkspaceMsg::ContentAddedSpreadSheet(doc_info)
                     }
                 },
             );
@@ -147,20 +148,14 @@ impl SimpleComponent for FileWorkspace {
 
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
-            FileWorkspaceMsg::ContentAddedSpreadSheet(row, col, text) => {
+            FileWorkspaceMsg::ContentAddedSpreadSheet(mut doc_info) => {
+                doc_info.file = self.current_file.clone();
                 let _ = sender.output(FileWorkspaceOutputMessage::ContentAddedSpreadSheet(
-                    self.current_file.clone(),
-                    row,
-                    col,
-                    text,
+                    doc_info,
                 ));
             }
-            FileWorkspaceMsg::ContentAdded(text, offset) => {
-                let _ = sender.output(FileWorkspaceOutputMessage::ContentAdded(
-                    self.current_file.clone(),
-                    text,
-                    offset,
-                ));
+            FileWorkspaceMsg::ContentAdded(doc_info) => {
+                let _ = sender.output(FileWorkspaceOutputMessage::ContentAdded(doc_info));
             }
 
             FileWorkspaceMsg::SubscribeFile(file) => {
@@ -231,20 +226,29 @@ impl SimpleComponent for FileWorkspace {
                 self.editor_visible = false;
             }
 
-            FileWorkspaceMsg::UpdateFile(file, index, value) => {
-                let file_type = if file.ends_with(".xlsx") {
+            FileWorkspaceMsg::UpdateFile(doc_info) => {
+                let file_type = if doc_info.file.ends_with(".xlsx") {
                     FileType::Sheet
                 } else {
                     FileType::Text
                 };
-                let mut val = value.trim_end_matches('\r').to_string();
+                let mut val = doc_info.value.trim_end_matches('\r').to_string();
                 let file_editor_sender = self.file_editor_ctrl.sender().clone();
 
-                if let Some(doc) = self.files.get_mut(&(file.clone(), file_type.clone())) {
-                    if let Ok(parsed_index) = index.parse::<usize>() {
+                if let Some(doc) = self
+                    .files
+                    .get_mut(&(doc_info.file.clone(), file_type.clone()))
+                {
+                    if doc_info.index >= 0 {
+                        let parsed_index = doc_info.index as usize;
                         match doc {
                             Documento::Calculo(data) => {
                                 if parsed_index < data.len() {
+                                    data[parsed_index] = val.clone();
+                                } else {
+                                    while data.len() <= parsed_index {
+                                        data.push(String::new());
+                                    }
                                     data[parsed_index] = val.clone();
                                 }
                             }
@@ -252,7 +256,10 @@ impl SimpleComponent for FileWorkspace {
                                 if parsed_index < lines.len() {
                                     lines[parsed_index] = val.clone();
                                 } else {
-                                    lines.push(val.clone());
+                                    while lines.len() < parsed_index {
+                                        lines.push(String::new());
+                                    }
+                                    lines.insert(parsed_index, val.clone());
                                 }
                                 val = lines.join("\n");
                             }
@@ -260,8 +267,8 @@ impl SimpleComponent for FileWorkspace {
 
                         file_editor_sender
                             .send(FileEditorMessage::UpdateFileContent(
-                                file.clone(),
-                                parsed_index as i32,
+                                doc_info.file.clone(),
+                                doc_info.index,
                                 val,
                                 file_type.clone(),
                             ))

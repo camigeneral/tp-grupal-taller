@@ -96,7 +96,7 @@ pub fn handle_auth(
 
     logged_clients_lock.insert(client_addr.clone(), true);
 
-    RedisResponse::new(CommandResponse::Ok, false, "".to_string(), "".to_string())
+    RedisResponse::new(CommandResponse::Ok, true, "".to_string(), "".to_string())
 }
 
 fn valid_credentials(username: String, password: String) -> bool {

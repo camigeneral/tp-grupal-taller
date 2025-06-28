@@ -9,6 +9,7 @@ use self::relm4::{
 };
 use components::spreadsheet::SpreadsheetOutput;
 
+use crate::components::structs::document_value_info::DocumentValueInfo;
 use components::spreadsheet::SpreadsheetModel;
 use components::spreadsheet::SpreadsheetMsg;
 use components::text_editor::TextEditorMessage;
@@ -42,8 +43,8 @@ pub struct FileEditorModel {
 /// Enum que define los posibles mensajes que el editor de archivos puede recibir.
 #[derive(Debug)]
 pub enum FileEditorMessage {
-    ContentAdded(String, i32),
-    ContentAddedSpreadSheet(String, String, String),
+    ContentAdded(DocumentValueInfo),
+    ContentAddedSpreadSheet(DocumentValueInfo),
     UpdateFile(String, i32, String, FileType),
     UpdateFileContent(String, i32, String, FileType),
     ResetEditor,
@@ -52,8 +53,8 @@ pub enum FileEditorMessage {
 /// Enum que define los posibles mensajes de salida del editor de archivos.
 #[derive(Debug)]
 pub enum FileEditorOutputMessage {
-    ContentAdded(String, i32),
-    ContentAddedSpreadSheet(String, String, String),
+    ContentAdded(DocumentValueInfo),
+    ContentAddedSpreadSheet(DocumentValueInfo),
     /// Mensaje que indica que se debe volver a la vista anterior.
     GoBack,
 }
@@ -115,8 +116,8 @@ impl SimpleComponent for FileEditorModel {
             sender.input_sender(),
             |msg| match msg {
                 SpreadsheetOutput::GoBack => FileEditorMessage::ResetEditor,
-                SpreadsheetOutput::ContentChanged(row, col, text) => {
-                    FileEditorMessage::ContentAddedSpreadSheet(row, col, text)
+                SpreadsheetOutput::ContentChanged(content) => {
+                    FileEditorMessage::ContentAddedSpreadSheet(content)
                 }
             },
         );
@@ -125,8 +126,8 @@ impl SimpleComponent for FileEditorModel {
             .launch((file_name.clone(), num_contributors, content.clone()))
             .forward(sender.input_sender(), |msg| match msg {
                 TextEditorOutputMessage::GoBack => FileEditorMessage::ResetEditor,
-                TextEditorOutputMessage::ContentAdded(text, line_number) => {
-                    FileEditorMessage::ContentAdded(text, line_number)
+                TextEditorOutputMessage::ContentAdded(doc_info) => {
+                    FileEditorMessage::ContentAdded(doc_info)
                 }
             });
 
@@ -148,14 +149,12 @@ impl SimpleComponent for FileEditorModel {
 
     fn update(&mut self, message: FileEditorMessage, sender: ComponentSender<Self>) {
         match message {
-            FileEditorMessage::ContentAddedSpreadSheet(row, col, text) => {
-                let _ = sender.output(FileEditorOutputMessage::ContentAddedSpreadSheet(
-                    row, col, text,
-                ));
+            FileEditorMessage::ContentAddedSpreadSheet(doc_info) => {
+                let _ = sender.output(FileEditorOutputMessage::ContentAddedSpreadSheet(doc_info));
             }
 
-            FileEditorMessage::ContentAdded(new_text, line_number) => {
-                let _ = sender.output(FileEditorOutputMessage::ContentAdded(new_text, line_number));
+            FileEditorMessage::ContentAdded(doc_info) => {
+                let _ = sender.output(FileEditorOutputMessage::ContentAdded(doc_info));
             }
             FileEditorMessage::UpdateFile(file_name, contributors, content, file_type) => {
                 self.file_name = file_name.clone();
