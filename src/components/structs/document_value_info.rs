@@ -18,7 +18,7 @@ impl DocumentValueInfo {
     pub fn new(value: String, index: i32) -> Self {
         DocumentValueInfo {
             file: String::new(),
-            value: value,
+            value,
             index,
             timestamp: get_timestamp_millis(),
         }

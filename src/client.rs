@@ -1,10 +1,9 @@
 extern crate relm4;
 use self::relm4::Sender;
 use crate::app::AppMsg;
-use crate::components::structs::document_value_info::DocumentValueInfo;
 use commands::redis_parser::{format_resp_command, format_resp_publish};
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::{channel, Receiver, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
@@ -122,7 +121,7 @@ pub fn client_run(
                 format_resp_command(&parts)
             } else if parts[0].contains("WRITE") {
                 let splited_command: Vec<&str> = command.split("|").collect();
-                let client_command = format!("{}", format_resp_command(&splited_command).clone());
+                let client_command = format_resp_command(&splited_command).clone().to_string();
                 format_resp_publish(splited_command[4], &client_command)
             } else {
                 format_resp_publish(parts[1], &command)
@@ -235,7 +234,7 @@ fn listen_to_redis_response(
                 let socket = response[2].clone();
                 let doc = response[1].clone();
                 let content = response[3].clone();
-                println!("socket {} vs local_addr {}", socket, local_addr.to_string());
+                println!("socket {} vs local_addr {}", socket, local_addr);
                 if socket != local_addr.to_string() {
                     continue;
                 }

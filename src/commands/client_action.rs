@@ -1,6 +1,6 @@
 use super::redis_response::RedisResponse;
 use crate::commands::list::{handle_llen, handle_lset, handle_rpush};
-use commands::redis_parser::{format_resp_command, CommandRequest, CommandResponse, ValueType};
+use commands::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use documento::Documento;
 #[allow(unused_imports)]
 use std::collections::HashMap;
