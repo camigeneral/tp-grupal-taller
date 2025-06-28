@@ -21,7 +21,7 @@ use std::thread;
 /// - `Null`: representa un valor nulo (`$-1`)
 /// - `Error`: mensaje de error
 /// - `Array`: lista de valores anidados
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum ValueType {
     Integer(i64),
@@ -40,7 +40,7 @@ pub enum ValueType {
 /// - command: "set"
 /// - key: Some("mykey")
 /// - arguments: ["myvalue"]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct CommandRequest {
     pub command: String,
