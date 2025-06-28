@@ -2,6 +2,7 @@ use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use super::redis_response::RedisResponse;
 use commands::set::handle_sadd;
 use commands::set::handle_srem;
+use crate::client_info;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::Write;
@@ -58,12 +59,13 @@ pub fn handle_subscribe(
         };
 
         let _ = handle_sadd(&request, shared_sets);
+        
 
-        let notification = format!("CLIENT {}|{}", client_addr, doc);
+        let notification = format!("subscribe");
         RedisResponse::new(
             CommandResponse::String(notification.clone()),
-            true,
-            notification,
+            false,
+            notification.to_string(),
             doc.to_string(),
         )
     } else {
@@ -189,7 +191,7 @@ pub fn handle_publish<T: Write>(
     if let Some(subscribers) = subscribers_guard.get(doc) {
         for subscriber_id in subscribers {
             if let Some(client) = clients_guard.get_mut(subscriber_id) {
-                let _ = writeln!(client, "{}", message);
+                let _ = write!(client, "{}", message);
                 sent_count += 1;
             }
         }
