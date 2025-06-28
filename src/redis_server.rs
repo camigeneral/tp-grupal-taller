@@ -278,10 +278,10 @@ fn handle_new_client_connection(
             Arc::clone(&ctx.shared_documents),
             Arc::clone(&ctx.document_subscribers),
         );
-        ClientType::Microservicio
+        ClientType::Microservice
     } else {
         println!("Cliente conectado: {}", client_addr);
-        ClientType::Cliente
+        ClientType::Client
     };
 
     logger::log_event(
@@ -365,7 +365,7 @@ fn handle_client(
             Ok(req) => req,
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::UnexpectedEof {
-                    break; // EOF: termina el loop
+                    break;
                 }
                 println!("Error al parsear comando: {}", e);
 

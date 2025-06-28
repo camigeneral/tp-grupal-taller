@@ -131,7 +131,7 @@ pub fn handle_set(
         let subscribers = subs_lock.entry(doc_name.clone()).or_default();
 
         for (addr, client) in clients_lock.iter() {
-            if client.client_type == ClientType::Microservicio && !subscribers.contains(addr) {
+            if client.client_type == ClientType::Microservice && !subscribers.contains(addr) {
                 subscribers.push(addr.clone());
                 println!(
                     "Microservicio {} suscripto automáticamente a {}",
