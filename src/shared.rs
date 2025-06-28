@@ -11,6 +11,7 @@ pub enum MicroserviceMessage {
     Doc {
         document: String,
         content: String,
+        stream_id: String,
     },
 
     Write {
@@ -36,9 +37,10 @@ impl MicroserviceMessage {
                 document: parts[1].clone(),
                 client_id: parts[2].clone(),
             },
-            "DOC" if parts.len() >= 2 => MicroserviceMessage::Doc {
+            "DOC" if parts.len() >= 4 => MicroserviceMessage::Doc {
                 document: parts[1].clone(),
                 content: parts[2].clone(),
+                stream_id: parts[3].clone(),
             },
             "WRITE" if parts.len() >= 2 => {  
                 let index = parts[1].to_string();
