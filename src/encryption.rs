@@ -5,7 +5,7 @@ use self::aes::cipher::{BlockEncrypt, generic_array::GenericArray};
 use self::base64::{engine::general_purpose, Engine as _};
 
 pub const KEY: [u8; 16] = *b"clavesecreta1234";
-pub const ENCRYPTION: bool = false;
+pub const ENCRYPTION: bool = true;
 
 /// Encripta un mensaje utilizando AES-128, codificando
 /// el resultado en base64 y agregando un salto de línea al final.

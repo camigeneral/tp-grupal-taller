@@ -109,13 +109,6 @@ pub fn start_node_connection(
         );
     });
 
-    // let cloned_local_node_for_ping_pong = Arc::clone(local_node);
-    // let cloned_peer_nodes = Arc::clone(peer_nodes);
-
-    // thread::spawn(move || {
-    //     let _ = ping_to_master(cloned_local_node_for_ping_pong, cloned_peer_nodes);
-    // });
-
     let cloned_local_node_for_ping_pong_node = Arc::clone(local_node);
     let cloned_peer_nodes_for_ping_pong = Arc::clone(peer_nodes);
 
@@ -169,7 +162,6 @@ pub fn start_node_connection(
 
 
                     let encrypted_b64 = encrypt_message(&cipher, &message);
-
                     if let Err(e) = cloned_stream.write_all(encrypted_b64.as_bytes()) {
                         return Err(e);
                     }
@@ -486,7 +478,10 @@ fn handle_node(
                         let replica_address = format!("127.0.0.1:{}", replica);
                         if let Some(replica_node) = locked_peer_nodes.get_mut(&replica_address) {
                             let message = format!("update_epoch {} {}\n", locked_local_node.port, updated_epoch);
-                            let _ = replica_node.stream.write_all(message.as_bytes());
+                            let encrypted_b64 = encrypt_message(&cipher, &message);
+                            if let Err(e) = replica_node.stream.write_all(encrypted_b64.as_bytes()) {
+                                return Err(e);
+                            }
                         }
                     }
                 }
@@ -835,7 +830,11 @@ fn ping_to_node(
                             Ok(mut peer_stream) => {
                                 peer_stream.set_read_timeout(Some(error_interval))?;
                                 let mut reader = BufReader::new(peer_stream.try_clone()?);
-                                peer_stream.write_all("ping\n".to_string().as_bytes())?;
+                                let message = "ping\n";
+                                let encrypted_b64 = encrypt_message(&cipher, &message);
+                                if let Err(e) = peer_stream.write_all(encrypted_b64.as_bytes()) {
+                                    return Err(e);
+                                }
                                 now = Instant::now();
     
                                 let mut line = String::new();
@@ -886,6 +885,8 @@ fn ping_to_node(
 
 
 fn detect_failed_node(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>, inactive_port: usize) -> bool {
+    let key = GenericArray::from_slice(&KEY);
+    let cipher = Aes128::new(&key);
     let mut locked_peer_nodes = peer_nodes.lock().unwrap();
     let locked_local_node = local_node.lock().unwrap();
     let mut peer_state = NodeState::Fail;
@@ -924,7 +925,9 @@ fn detect_failed_node(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex
     for (_, peer) in locked_peer_nodes.iter_mut() {
         if peer.port != inactive_port {
             let message = format!("node_status {} {:?}\n", inactive_port, peer_state);
-            let _ = peer.stream.write_all(message.as_bytes());
+            let encrypted_b64 = encrypt_message(&cipher, &message);
+            let _ = peer.stream.write_all(encrypted_b64.as_bytes());
+            // to do: log error
         }
     }
 
@@ -933,6 +936,8 @@ fn detect_failed_node(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex
 
 
 fn set_failed_node(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>, inactive_port: usize, inactive_state: NodeState) -> bool {
+    let key = GenericArray::from_slice(&KEY);
+    let cipher = Aes128::new(&key);
     let mut locked_peer_nodes = peer_nodes.lock().unwrap();
     let locked_local_node = local_node.lock().unwrap();
     let mut promote_replica = false;
@@ -987,7 +992,9 @@ fn set_failed_node(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex<Ha
                     for (_, peer) in locked_peer_nodes.iter_mut() {
                         if peer.port != inactive_port {
                             let message = format!("node_status {} {:?}\n", inactive_port, NodeState::Fail);
-                            let _ = peer.stream.write_all(message.as_bytes());
+                            let encrypted_b64 = encrypt_message(&cipher, &message);
+                            let _ = peer.stream.write_all(encrypted_b64.as_bytes());
+                            // to do: log error
                         }
                     }
                 }
@@ -1004,6 +1011,8 @@ fn initialize_replica_promotion(
     local_node: &Arc<Mutex<LocalNode>>,
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>
 ) {
+    let key = GenericArray::from_slice(&KEY);
+    let cipher = Aes128::new(&key);
     let (mut locked_local_node, locked_peer_nodes) = match (local_node.lock(), peer_nodes.lock()) {
         (Ok(local), Ok(peers)) => (local, peers),
         _ => {
@@ -1026,12 +1035,14 @@ fn initialize_replica_promotion(
         locked_local_node.priority,
     );
 
+    let encrypted_b64 = encrypt_message(&cipher, &node_info_message);
+
     for (_, peer) in locked_peer_nodes.iter() {
         if peer.state == NodeState::Active {
             println!("sending promotion info to: {}", peer.port);
             match peer.stream.try_clone() {
                 Ok(mut peer_stream) => {
-                    if let Err(e) = peer_stream.write_all(node_info_message.as_bytes()) {
+                    if let Err(e) = peer_stream.write_all(encrypted_b64.as_bytes()) {
                         eprintln!("Error writing node_info_message: {}", e);
                     }
                 }
