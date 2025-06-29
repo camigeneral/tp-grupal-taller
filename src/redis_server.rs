@@ -1,3 +1,4 @@
+extern crate aes;
 use commands::redis;
 use std::collections::HashMap;
 use std::collections::HashSet;

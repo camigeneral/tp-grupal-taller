@@ -3,6 +3,7 @@ use crate::redis_node_handler::redis_types::SetsMap;
 use commands::redis;
 use local_node::{LocalNode, NodeRole, NodeState};
 use peer_node;
+use encryption::{encrypt_message, KEY};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::File;
@@ -14,6 +15,13 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+extern crate base64;
+use aes::Aes128;
+use aes::cipher::{
+    BlockDecrypt, KeyInit,
+    generic_array::GenericArray,
+};
+use self::base64::{engine::general_purpose, Engine as _};
 #[path = "redis_types.rs"]
 mod redis_types;
 use redis_types::*;
@@ -65,6 +73,9 @@ pub fn start_node_connection(
     shared_documents: &RedisDocumentsMap,
     shared_sets: &SetsMap,
 ) -> Result<(), std::io::Error> {
+    let key = GenericArray::from_slice(&KEY);
+    let cipher = Aes128::new(&key);
+    
     let cloned_nodes = Arc::clone(peer_nodes);
 
     let config_path = match get_config_path(port) {
@@ -100,7 +111,6 @@ pub fn start_node_connection(
         let _ = ping_to_master(cloned_local_node_for_ping_pong, cloned_peer_nodes);
     });
 
-    // Bloque para conexión con otros nodos
     let locked_local_node = match local_node.lock() {
         Ok(node) => node,
         Err(_) => {
@@ -142,7 +152,12 @@ pub fn start_node_connection(
                         locked_local_node.hash_range.1
                     );
 
-                    if let Err(e) = cloned_stream.write_all(message.as_bytes()) {
+                    println!("Recibido comando: {}", message);
+
+
+                    let encrypted_b64 = encrypt_message(&cipher, &message);
+
+                    if let Err(e) = cloned_stream.write_all(encrypted_b64.as_bytes()) {
                         return Err(e);
                     }
 
@@ -158,7 +173,6 @@ pub fn start_node_connection(
                     );
                 }
                 Err(_) => {
-                    // Podés loguear que no se pudo conectar, pero no cortamos toda la ejecución
                     continue;
                 }
             }
@@ -237,6 +251,9 @@ fn handle_node(
     shared_documents: RedisDocumentsMap,
     shared_sets: SetsMap,
 ) -> std::io::Result<()> {
+    let key = GenericArray::from_slice(&KEY);
+    let cipher = Aes128::new(&key);
+
     let reader = match stream.try_clone() {
         Ok(s) => BufReader::new(s),
         Err(e) => return Err(e),
@@ -246,9 +263,44 @@ fn handle_node(
     let mut command_string = String::new();
     let mut serialized_hashmap = Vec::new();
     let mut serialized_vec = Vec::new();
-
+        
     for command in reader.lines().map_while(Result::ok) {
-        let input: Vec<String> = command
+        let message;
+
+        // Decodifica base64
+        let encoded_bytes = match general_purpose::STANDARD.decode(&command) {
+            Ok(bytes) => bytes,
+            Err(_) => {
+                eprintln!("Error decodificando base64");
+                continue;
+            }
+        };
+
+        // Descifra como antes
+        let mut decrypted = Vec::new();
+        for chunk in encoded_bytes.chunks(16) {
+            let mut block = GenericArray::clone_from_slice(chunk);
+            cipher.decrypt_block(&mut block);
+            decrypted.extend_from_slice(&block);
+        }
+
+        // Padding seguro
+        if !decrypted.is_empty() {
+            let pad = *decrypted.last().unwrap() as usize;
+            if pad > 0 && pad <= decrypted.len() {
+                decrypted.truncate(decrypted.len() - pad);
+            } else {
+                eprintln!("Padding inválido al descifrar mensaje de nodo");
+                continue;
+            }
+        } else {
+            continue;
+        }
+
+        message = String::from_utf8(decrypted).expect("UTF-8 inválido");
+        
+
+        let input: Vec<String> = message
             .split_whitespace()
             .map(|s| s.to_string().to_lowercase())
             .collect();
@@ -323,7 +375,10 @@ fn handle_node(
                             } else {
                                 local_node_locked.master_node = Some(parsed_port);
                                 let message = format!("sync_request {}\n", local_node_locked.port);
-                                let _ = stream_to_respond.write_all(message.as_bytes());
+
+                                let encrypted_b64 = encrypt_message(&cipher, &message);
+                                
+                                let _ = stream_to_respond.write_all(encrypted_b64.as_bytes());
                             }
                         } else {
                             local_node_locked.replica_nodes.push(parsed_port);
@@ -340,8 +395,9 @@ fn handle_node(
                         local_node_locked.hash_range.0,
                         local_node_locked.hash_range.1
                     );
+                    let encrypted_b64 = encrypt_message(&cipher, &message);
 
-                    let _ = stream_to_respond.write_all(message.as_bytes());
+                    let _ = stream_to_respond.write_all(encrypted_b64.as_bytes());
                 } else if let Some(peer_node_to_update) = lock_nodes.get_mut(&node_address) {
                     peer_node_to_update.role = node_role.clone();
                     peer_node_to_update.hash_range = (hash_range_start, hash_range_end);
@@ -353,7 +409,9 @@ fn handle_node(
                             } else {
                                 local_node_locked.master_node = Some(parsed_port);
                                 let message = format!("sync_request {}\n", local_node_locked.port);
-                                let _ = peer_node_to_update.stream.write_all(message.as_bytes());
+
+                                let encrypted_b64 = encrypt_message(&cipher, &message);
+                                let _ = peer_node_to_update.stream.write_all(encrypted_b64.as_bytes());
                             }
                         } else {
                             local_node_locked.replica_nodes.push(parsed_port);
@@ -416,22 +474,19 @@ fn handle_node(
             }
             "ping" => {
                 let message = "pong\n";
-                let _ = stream.write_all(message.as_bytes());
+                let encrypted_b64 = encrypt_message(&cipher, &message);
+                let _ = stream.write_all(encrypted_b64.as_bytes());
             }
             "confirm_master_down" => {
                 match confirm_master_state(local_node, &nodes) {
                     Ok(master_state) => {
-                        println!("master state: {:?}", master_state);
                         if master_state == NodeState::Inactive {
-                            println!("01");
 
                             let locked_nodes = match nodes.lock() {
                                 Ok(n) => n,
                                 Err(_) => continue,
                             };
                             let hash_range;
-
-                            println!("02");
 
                             {
                                 let locked_local_node = local_node.lock().unwrap();
@@ -442,13 +497,12 @@ fn handle_node(
                                 hash_range = locked_local_node.hash_range;
                             }
 
-                            println!("03");
                             for (_, peer) in locked_nodes.iter() {
                                 if peer.role == NodeRole::Replica && peer.hash_range == hash_range {
                                     if let Ok(mut peer_stream) = peer.stream.try_clone() {
                                         let message = format!("initialize_replica_promotion\n");
-                                        let _ = peer_stream.write_all(message.as_bytes());
-                                        println!("04");
+                                        let encrypted_b64 = encrypt_message(&cipher, &message);
+                                        let _ = peer_stream.write_all(encrypted_b64.as_bytes());
                                     }
                                 }
                             }
@@ -456,11 +510,8 @@ fn handle_node(
                     }
                     Err(_) => eprintln!("Error confirmando estado del master"),
                 };
-                println!("05");
             }
-            "initialize_replica_promotion" => {
-                println!("here");
-                initialize_replica_promotion(local_node, &nodes);
+            "initialize_replica_promotion" => {                initialize_replica_promotion(local_node, &nodes);
             }
             "inactive_node" => {
                 if input.len() > 1 {
@@ -477,7 +528,8 @@ fn handle_node(
                     command_string.push_str(&format!("{}\r\n", command));
                 } else {
                     let message = "Comando no reconocido\n";
-                    let _ = stream.write_all(message.as_bytes());
+                    let encrypted_b64 = encrypt_message(&cipher, &message);
+                    let _ = stream.write_all(encrypted_b64.as_bytes());
                 }
             }
         }
@@ -513,6 +565,9 @@ pub fn broadcast_to_replicas(
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
     unparsed_command: String,
 ) -> std::io::Result<()> {
+    let key = GenericArray::from_slice(&KEY);
+    let cipher = Aes128::new(key);
+
     let locked_local_node = match local_node.lock() {
         Ok(n) => n,
         Err(_) => {
@@ -541,21 +596,20 @@ pub fn broadcast_to_replicas(
         if let Some(peer_node) = locked_peer_nodes.get_mut(&key) {
             let stream = &mut peer_node.stream;
 
-            if stream
-                .write_all("start_replica_command\n".as_bytes())
-                .is_err()
-            {
+            let start_cmd = encrypt_message(&cipher, "start_replica_command\n");
+            if stream.write_all(start_cmd.as_bytes()).is_err() {
                 eprintln!("Error escribiendo start_replica_command a {}", key);
                 continue;
             }
-            if stream.write_all(unparsed_command.as_bytes()).is_err() {
+
+            let encrypted_cmd = encrypt_message(&cipher, &unparsed_command);
+            if stream.write_all(encrypted_cmd.as_bytes()).is_err() {
                 eprintln!("Error enviando comando a {}", key);
                 continue;
             }
-            if stream
-                .write_all("end_replica_command\n".as_bytes())
-                .is_err()
-            {
+
+            let end_cmd = encrypt_message(&cipher, "end_replica_command\n");
+            if stream.write_all(end_cmd.as_bytes()).is_err() {
                 eprintln!("Error escribiendo end_replica_command a {}", key);
                 continue;
             }
@@ -644,12 +698,19 @@ fn serialize_vec_hashmap(
     map: &HashMap<String, String>,
     mut stream: TcpStream,
 ) -> std::io::Result<()> {
+    let key = GenericArray::from_slice(&KEY);
+    let cipher = Aes128::new(key);
+
     for (key, line) in map {
         let message = format!("serialize_vec {}:{}\n", key, line);
-        stream.write_all(message.as_bytes())?;
+        let encrypted_b64 = encrypt_message(&cipher, &message);
+        stream.write_all(encrypted_b64.as_bytes())?;
     }
+
     let message = "end_serialize_vec\n";
-    stream.write_all(message.as_bytes())?;
+    let encrypted_b64 = encrypt_message(&cipher, &message);
+
+    stream.write_all(encrypted_b64.as_bytes())?;
     Ok(())
 }
 
@@ -657,14 +718,19 @@ fn serialize_hashset_hashmap(
     map: &HashMap<String, HashSet<String>>,
     mut stream: TcpStream,
 ) -> std::io::Result<()> {
+    let key = GenericArray::from_slice(&KEY);
+    let cipher = Aes128::new(key);
+
     for (key, set) in map {
         let values: Vec<String> = set.iter().cloned().collect();
         let line = format!("serialize_hashmap {}:{}\n", key, values.join(","));
-        stream.write_all(line.as_bytes())?;
+        let encrypted_b64 = encrypt_message(&cipher, &line);
+        stream.write_all(encrypted_b64.as_bytes())?;
         println!("se mando start");
     }
     let message = "end_serialize_hashmap\n";
-    stream.write_all(message.as_bytes())?;
+    let encrypted_b64 = encrypt_message(&cipher, &message);
+    stream.write_all(encrypted_b64.as_bytes())?;
     println!("se mando end");
     Ok(())
 }
@@ -704,12 +770,14 @@ fn ping_to_master(
     local_node: Arc<Mutex<LocalNode>>,
     peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
 ) -> std::io::Result<()> {
+    let key = GenericArray::from_slice(&KEY);
+    let cipher = Aes128::new(key);
     let ping_interval = Duration::from_secs(5);
     let error_interval = Duration::from_secs(50);
     let mut last_sent = Instant::now();
 
     let mut stream_to_ping = None;
-
+    println!("PING TO MASTER");
     loop {
         let mut now = Instant::now();
         if now.duration_since(last_sent) >= ping_interval {
@@ -731,13 +799,24 @@ fn ping_to_master(
 
             match stream_to_ping.as_ref() {
                 Some(mut stream) => {
+
                     stream.set_read_timeout(Some(error_interval))?;
                     let mut reader = BufReader::new(stream.try_clone()?);
-                    stream.write_all("ping\n".to_string().as_bytes())?;
+
+                    let mut encrypted_b64 = encrypt_message(&cipher, "ping\n");
+                    encrypted_b64.push('\n');
+                    stream.write_all(encrypted_b64.as_bytes())?;
+                    println!("escibo salto de linea");
+                    stream.flush()?;
+
                     now = Instant::now();
 
                     let mut line = String::new();
-                    match reader.read_line(&mut line) {
+                    let read_result = reader.read_line(&mut line);
+
+                    println!("LEO: {:?} | line: {:?}", read_result, line.trim());
+
+                    match read_result {
                         Ok(0) => {
                             println!("Connection closed by peer");
                             request_master_state_confirmation(&local_node, &peer_nodes);
@@ -776,6 +855,8 @@ fn request_master_state_confirmation(
     local_node: &Arc<Mutex<LocalNode>>,
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
 ) {
+    let key = GenericArray::from_slice(&KEY);
+    let cipher = Aes128::new(key);
     let master_port_option;
     let master_port;
     let hash_range;
@@ -833,9 +914,14 @@ fn request_master_state_confirmation(
                 && peer.port != master_port
             {
                 let message = format!("confirm_master_down {}\n", master_port);
+                let encrypted_b64 = encrypt_message(&cipher, &message);
                 match peer.stream.try_clone() {
                     Ok(mut peer_stream) => {
-                        if peer_stream.write_all(message.as_bytes()).is_ok() {
+                        println!("Enviando confirm_master_down a {}", peer.port);
+                        // let res = peer_stream.write_all(encrypted_b64.as_bytes());
+                        // println!("Resultado write_all: {:?}", res);
+                        
+                        if peer_stream.write_all(encrypted_b64.as_bytes()).is_ok() {
                             contacted_replica = true;
                         } else {
                             eprintln!("Error escribiendo a la réplica");
@@ -908,6 +994,8 @@ fn initialize_replica_promotion(
     local_node: &Arc<Mutex<LocalNode>>,
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
 ) {
+    let key = GenericArray::from_slice(&KEY);
+    let cipher = Aes128::new(key);
     println!("initializing replica promotion");
 
     let (mut locked_local_node, locked_peer_nodes) = match (local_node.lock(), peer_nodes.lock()) {
@@ -942,18 +1030,22 @@ fn initialize_replica_promotion(
 
     let inactive_node_message = format!("inactive_node {}\n", inactive_port);
 
+    let encrypted_b64_node_info = encrypt_message(&cipher, &node_info_message);
+    let encrypted_b64_inactive_node = encrypt_message(&cipher, &inactive_node_message);
+
+
+
     for (_, peer) in locked_peer_nodes.iter() {
         if peer.state == NodeState::Active {
             println!("sending to: {}", peer.port);
             match peer.stream.try_clone() {
                 Ok(mut peer_stream) => {
-                    if let Err(e) = peer_stream.write_all(node_info_message.as_bytes()) {
+                    if let Err(e) = peer_stream.write_all(encrypted_b64_node_info.as_bytes()) {
                         eprintln!("Error writing node_info_message: {}", e);
                     }
-                    if let Err(e) = peer_stream.write_all(inactive_node_message.as_bytes()) {
+                    if let Err(e) = peer_stream.write_all(encrypted_b64_inactive_node.as_bytes()) {
                         eprintln!("Error writing inactive_node_message: {}", e);
                     }
-                    println!("sent");
                 }
                 Err(_) => {
                     eprintln!("Error cloning stream");
