@@ -1,6 +1,5 @@
 use crate::commands::redis_parser::{parse_replica_command, write_response, CommandResponse};
 use crate::documento::Documento;
-use crate::peer_node::PeerNode;
 use commands::redis;
 use local_node::{LocalNode, NodeRole, NodeState};
 use peer_node;
@@ -11,7 +10,7 @@ use std::io::Cursor;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -467,7 +466,7 @@ fn handle_node(
                 };
                 let promote_replica = set_failed_node(local_node, &nodes, inactive_port, inactive_state);
                 if promote_replica {
-                    initialize_replica_promotion(local_node, &nodes, inactive_port);
+                    initialize_replica_promotion(local_node, &nodes);
                 }
             }
             "update_epoch" => {
@@ -800,7 +799,7 @@ fn ping_to_node(
             if failed_port != 0 {
                 let promote_replica: bool = detect_failed_node(&local_node, &peer_nodes, failed_port);
                 if promote_replica {
-                    initialize_replica_promotion(&local_node, &peer_nodes, failed_port);
+                    initialize_replica_promotion(&local_node, &peer_nodes);
                 }
             }
 
@@ -933,8 +932,7 @@ fn set_failed_node(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex<Ha
 
 fn initialize_replica_promotion(
     local_node: &Arc<Mutex<LocalNode>>,
-    peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
-    inactive_port: usize
+    peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>
 ) {
     let (mut locked_local_node, locked_peer_nodes) = match (local_node.lock(), peer_nodes.lock()) {
         (Ok(local), Ok(peers)) => (local, peers),
