@@ -220,16 +220,17 @@ fn listen_to_redis_response(
                 let socket = response[2].clone();
                 let doc = response[1].clone();
                 let content = response[3].clone();
-                println!("socket {} vs local_addr {}", socket, local_addr);
                 if socket != local_addr.to_string() {
                     continue;
                 }
 
                 if let Some(sender) = &ui_sender {
+                    let mut document = DocumentValueInfo::new(content, 0);
+                    document.decode_text();
                     let _ = sender.send(AppMsg::ManageSubscribeResponse(
                         doc.to_string(),
                         "1".to_string(),
-                        content.to_string(),
+                        document.value.to_string(),
                     ));
                 }
             }
