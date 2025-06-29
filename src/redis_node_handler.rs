@@ -22,7 +22,7 @@ use aes::cipher::{
 };
 use self::base64::{engine::general_purpose, Engine as _};
 
-const KEY: [u8; 16] = *b"mi_clave_secreta";
+const KEY: [u8; 16] = *b"clavesecreta1234";
 
 #[derive(Debug)]
 pub enum RedisMessage {
@@ -164,9 +164,6 @@ pub fn start_node_connection(
                     if let Err(e) = cloned_stream.write_all(encrypted_b64.as_bytes()) {
                         return Err(e);
                     }
-                    if let Err(e) = cloned_stream.write_all(b"\n") {
-                        return Err(e);
-                    }
 
                     lock_peer_nodes.insert(
                         peer_addr,
@@ -273,9 +270,11 @@ fn handle_node(
     let mut serialized_vec = Vec::new();
         
     for command in reader.lines().map_while(Result::ok) {
+        println!("07");
+        let message;
+
         // Decodifica base64
-        // println!("Recibido comando: {}", command);
-        let encrypted_bytes = match general_purpose::STANDARD.decode(&command) {
+        let encoded_bytes = match general_purpose::STANDARD.decode(&command) {
             Ok(bytes) => bytes,
             Err(_) => {
                 eprintln!("Error decodificando base64");
@@ -285,7 +284,7 @@ fn handle_node(
 
         // Descifra como antes
         let mut decrypted = Vec::new();
-        for chunk in encrypted_bytes.chunks(16) {
+        for chunk in encoded_bytes.chunks(16) {
             let mut block = GenericArray::clone_from_slice(chunk);
             cipher.decrypt_block(&mut block);
             decrypted.extend_from_slice(&block);
@@ -304,8 +303,8 @@ fn handle_node(
             continue;
         }
 
-        let message = String::from_utf8(decrypted).expect("UTF-8 inválido");
-        println!("Recibido comando: {}", message);
+        message = String::from_utf8(decrypted).expect("UTF-8 inválido");
+        
 
         let input: Vec<String> = message
             .split_whitespace()
@@ -386,7 +385,6 @@ fn handle_node(
                                 let encrypted_b64 = encrypt_message(&cipher, &message);
                                 
                                 let _ = stream_to_respond.write_all(encrypted_b64.as_bytes());
-                                let _ = stream_to_respond.write_all(b"\n");
                             }
                         } else {
                             local_node_locked.replica_nodes.push(parsed_port);
@@ -406,7 +404,6 @@ fn handle_node(
                     let encrypted_b64 = encrypt_message(&cipher, &message);
 
                     let _ = stream_to_respond.write_all(encrypted_b64.as_bytes());
-                    let _ = stream_to_respond.write_all(b"\n");
                 } else if let Some(peer_node_to_update) = lock_nodes.get_mut(&node_address) {
                     peer_node_to_update.role = node_role.clone();
                     peer_node_to_update.hash_range = (hash_range_start, hash_range_end);
@@ -421,7 +418,6 @@ fn handle_node(
 
                                 let encrypted_b64 = encrypt_message(&cipher, &message);
                                 let _ = peer_node_to_update.stream.write_all(encrypted_b64.as_bytes());
-                                let _ = peer_node_to_update.stream.write_all(b"\n");   
                             }
                         } else {
                             local_node_locked.replica_nodes.push(parsed_port);
@@ -486,7 +482,6 @@ fn handle_node(
                 let message = "pong\n";
                 let encrypted_b64 = encrypt_message(&cipher, &message);
                 let _ = stream.write_all(encrypted_b64.as_bytes());
-                let _ = stream.write_all(b"\n");
             }
             "confirm_master_down" => {
                 match confirm_master_state(local_node, &nodes) {
@@ -519,7 +514,6 @@ fn handle_node(
                                         let message = format!("initialize_replica_promotion\n");
                                         let encrypted_b64 = encrypt_message(&cipher, &message);
                                         let _ = peer_stream.write_all(encrypted_b64.as_bytes());
-                                        let _ = peer_stream.write_all(b"\n");
                                         // println!("04");
                                     }
                                 }
@@ -551,7 +545,6 @@ fn handle_node(
                     let message = "Comando no reconocido\n";
                     let encrypted_b64 = encrypt_message(&cipher, &message);
                     let _ = stream.write_all(encrypted_b64.as_bytes());
-                    let _ = stream.write_all(b"\n");
                 }
             }
         }
@@ -623,28 +616,16 @@ pub fn broadcast_to_replicas(
                 eprintln!("Error escribiendo start_replica_command a {}", key);
                 continue;
             }
-            if stream.write_all(b"\n").is_err() {
-                eprintln!("Error enviando salto de línea a {}", key);
-                continue;
-            }
 
             let encrypted_cmd = encrypt_message(&cipher, &unparsed_command);
             if stream.write_all(encrypted_cmd.as_bytes()).is_err() {
                 eprintln!("Error enviando comando a {}", key);
                 continue;
             }
-            if stream.write_all(b"\n").is_err() {
-                eprintln!("Error enviando salto de línea a {}", key);
-                continue;
-            }
 
             let end_cmd = encrypt_message(&cipher, "end_replica_command\n");
             if stream.write_all(end_cmd.as_bytes()).is_err() {
                 eprintln!("Error escribiendo end_replica_command a {}", key);
-                continue;
-            }
-            if stream.write_all(b"\n").is_err() {
-                eprintln!("Error enviando salto de línea a {}", key);
                 continue;
             }
         } else {
@@ -745,13 +726,11 @@ fn serialize_vec_hashmap(
         };
         let encrypted_b64 = encrypt_message(&cipher, &line);
         stream.write_all(encrypted_b64.as_bytes())?;
-        stream.write_all(b"\n")?;
     }
     let message = "end_serialize_vec\n";
     let encrypted_b64 = encrypt_message(&cipher, &message);
 
     stream.write_all(encrypted_b64.as_bytes())?;
-    stream.write_all(b"\n")?;
     Ok(())
 }
 
@@ -767,13 +746,11 @@ fn serialize_hashset_hashmap(
         let line = format!("serialize_hashmap {}:{}\n", key, values.join(","));
         let encrypted_b64 = encrypt_message(&cipher, &line);
         stream.write_all(encrypted_b64.as_bytes())?;
-        stream.write_all(b"\n")?;
         println!("se mando start");
     }
     let message = "end_serialize_hashmap\n";
     let encrypted_b64 = encrypt_message(&cipher, &message);
     stream.write_all(encrypted_b64.as_bytes())?;
-    stream.write_all(b"\n")?;
     println!("se mando end");
     Ok(())
 }
@@ -972,18 +949,14 @@ fn request_master_state_confirmation(
                 match peer.stream.try_clone() {
                     Ok(mut peer_stream) => {
                         println!("Enviando confirm_master_down a {}", peer.port);
-                        let res = peer_stream.write_all(encrypted_b64.as_bytes());
-                        println!("Resultado write_all: {:?}", res);
-                        let res_nl = peer_stream.write_all(b"\n");
-                        println!("Resultado write_all salto de línea: {:?}", res_nl);
-
+                        // let res = peer_stream.write_all(encrypted_b64.as_bytes());
+                        // println!("Resultado write_all: {:?}", res);
                         
-                        // if peer_stream.write_all(encrypted_b64.as_bytes()).is_ok() {
-                        //     peer_stream.write_all(b"\n").ok();
-                        //     contacted_replica = true;
-                        // } else {
-                        //     eprintln!("Error escribiendo a la réplica");
-                        // }
+                        if peer_stream.write_all(encrypted_b64.as_bytes()).is_ok() {
+                            contacted_replica = true;
+                        } else {
+                            eprintln!("Error escribiendo a la réplica");
+                        }
                     }
                     Err(_) => {
                         eprintln!("Error clonando stream para réplica");
@@ -1101,16 +1074,9 @@ fn initialize_replica_promotion(
                     if let Err(e) = peer_stream.write_all(encrypted_b64_node_info.as_bytes()) {
                         eprintln!("Error writing node_info_message: {}", e);
                     }
-                    if let Err(e) = peer_stream.write_all(b"\n") {
-                        eprintln!("Error writing node_info_message: {}", e);
-                    }
                     if let Err(e) = peer_stream.write_all(encrypted_b64_inactive_node.as_bytes()) {
                         eprintln!("Error writing inactive_node_message: {}", e);
                     }
-                    if let Err(e) = peer_stream.write_all(b"\n") {
-                        eprintln!("Error writing inactive_node_message: {}", e);
-                    }
-                    println!("sent");
                 }
                 Err(_) => {
                     eprintln!("Error cloning stream");
@@ -1124,6 +1090,7 @@ pub fn encrypt_message(
     cipher: &Aes128,
     message: &str,
 ) -> String {
+
     let mut message_bytes = message.as_bytes().to_vec();
     let padding = 16 - (message_bytes.len() % 16);
     message_bytes.extend(vec![padding as u8; padding]);
@@ -1135,5 +1102,7 @@ pub fn encrypt_message(
         encrypted.extend_from_slice(&block);
     }
 
-    general_purpose::STANDARD.encode(&encrypted)
+    let mut encoded_message = general_purpose::STANDARD.encode(&encrypted);
+    encoded_message.push('\n');
+    encoded_message
 }
