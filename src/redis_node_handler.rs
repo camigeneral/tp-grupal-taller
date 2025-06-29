@@ -108,7 +108,6 @@ pub fn start_node_connection(
         let _ = ping_to_master(cloned_local_node_for_ping_pong, cloned_peer_nodes);
     });
 
-    // Bloque para conexión con otros nodos
     let locked_local_node = match local_node.lock() {
         Ok(node) => node,
         Err(_) => {
@@ -155,11 +154,6 @@ pub fn start_node_connection(
 
                     let encrypted_b64 = encrypt_message(&cipher, &message);
 
-                    // println!(
-                    //     "Enviando mensaje a {}: {}",
-                    //     peer_addr, encrypted_b64
-                    // );
-
                     if let Err(e) = cloned_stream.write_all(encrypted_b64.as_bytes()) {
                         return Err(e);
                     }
@@ -176,7 +170,6 @@ pub fn start_node_connection(
                     );
                 }
                 Err(_) => {
-                    // Podés loguear que no se pudo conectar, pero no cortamos toda la ejecución
                     continue;
                 }
             }
@@ -269,7 +262,6 @@ fn handle_node(
     let mut serialized_vec = Vec::new();
         
     for command in reader.lines().map_while(Result::ok) {
-        println!("07");
         let message;
 
         // Decodifica base64
@@ -485,17 +477,13 @@ fn handle_node(
             "confirm_master_down" => {
                 match confirm_master_state(local_node, &nodes) {
                     Ok(master_state) => {
-                        println!("master state: {:?}", master_state);
                         if master_state == NodeState::Inactive {
-                            println!("01");
 
                             let locked_nodes = match nodes.lock() {
                                 Ok(n) => n,
                                 Err(_) => continue,
                             };
                             let hash_range;
-
-                            println!("02");
 
                             {
                                 let locked_local_node = local_node.lock().unwrap();
@@ -506,14 +494,12 @@ fn handle_node(
                                 hash_range = locked_local_node.hash_range;
                             }
 
-                            // println!("03");
                             for (_, peer) in locked_nodes.iter() {
                                 if peer.role == NodeRole::Replica && peer.hash_range == hash_range {
                                     if let Ok(mut peer_stream) = peer.stream.try_clone() {
                                         let message = format!("initialize_replica_promotion\n");
                                         let encrypted_b64 = encrypt_message(&cipher, &message);
                                         let _ = peer_stream.write_all(encrypted_b64.as_bytes());
-                                        // println!("04");
                                     }
                                 }
                             }
@@ -521,11 +507,8 @@ fn handle_node(
                     }
                     Err(_) => eprintln!("Error confirmando estado del master"),
                 };
-                println!("05");
             }
-            "initialize_replica_promotion" => {
-                println!("here");
-                initialize_replica_promotion(local_node, &nodes);
+            "initialize_replica_promotion" => {                initialize_replica_promotion(local_node, &nodes);
             }
             "inactive_node" => {
                 if input.len() > 1 {
