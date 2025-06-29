@@ -703,10 +703,10 @@ fn serialize_vec_hashmap(
 
     for (key, line) in map {
         let message = format!("serialize_vec {}:{}\n", key, line);
-        let encrypted_b64 = encrypt_message(&cipher, &line);
+        let encrypted_b64 = encrypt_message(&cipher, &message);
         stream.write_all(encrypted_b64.as_bytes())?;
     }
-    
+
     let message = "end_serialize_vec\n";
     let encrypted_b64 = encrypt_message(&cipher, &message);
 
