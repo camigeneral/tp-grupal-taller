@@ -3,6 +3,7 @@ use crate::documento::Documento;
 use commands::redis;
 use local_node::{LocalNode, NodeRole, NodeState};
 use peer_node;
+use encryption::{encrypt_message, KEY};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::File;
@@ -17,12 +18,10 @@ use std::time::{Duration, Instant};
 extern crate base64;
 use aes::Aes128;
 use aes::cipher::{
-    BlockEncrypt, BlockDecrypt, KeyInit,
+    BlockDecrypt, KeyInit,
     generic_array::GenericArray,
 };
 use self::base64::{engine::general_purpose, Engine as _};
-
-const KEY: [u8; 16] = *b"clavesecreta1234";
 
 #[derive(Debug)]
 pub enum RedisMessage {
@@ -829,9 +828,6 @@ fn ping_to_master(
 
                     stream.set_read_timeout(Some(error_interval))?;
                     let mut reader = BufReader::new(stream.try_clone()?);
-                    let encrypted_b64 = encrypt_message(&cipher, "ping\n");
-
-                    println!("escribo encriptado");
 
                     let mut encrypted_b64 = encrypt_message(&cipher, "ping\n");
                     encrypted_b64.push('\n');
@@ -855,7 +851,6 @@ fn ping_to_master(
                         }
                         Ok(_) => {
                             println!("Received response: {}", line.trim());
-                            // Aquí podrías intentar decodificar y descifrar la respuesta si esperas un pong cifrado
                         }
                         Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
                             println!("Timeout: no response within {:?}", error_interval);
@@ -1084,25 +1079,4 @@ fn initialize_replica_promotion(
             }
         }
     }
-}
-
-pub fn encrypt_message(
-    cipher: &Aes128,
-    message: &str,
-) -> String {
-
-    let mut message_bytes = message.as_bytes().to_vec();
-    let padding = 16 - (message_bytes.len() % 16);
-    message_bytes.extend(vec![padding as u8; padding]);
-
-    let mut encrypted = Vec::new();
-    for chunk in message_bytes.chunks_mut(16) {
-        let mut block = GenericArray::clone_from_slice(chunk);
-        cipher.encrypt_block(&mut block);
-        encrypted.extend_from_slice(&block);
-    }
-
-    let mut encoded_message = general_purpose::STANDARD.encode(&encrypted);
-    encoded_message.push('\n');
-    encoded_message
 }
