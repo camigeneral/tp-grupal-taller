@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-const PRINT_PINGS: bool = true;
+const PRINT_PINGS: bool = false;
 
 extern crate base64;
 use aes::Aes128;
@@ -323,9 +323,9 @@ fn handle_node(
 
         let command = &input[0];
         
-        if command != "pong"  && command != "ping" || PRINT_PINGS {
-            println!("Recibido: {:?}", input);
-        }
+        // if command != "pong"  && command != "ping" || PRINT_PINGS {
+        //     println!("Recibido: {:?}", input);
+        // }
 
         match command.as_str() {
             "node" => {
@@ -466,8 +466,12 @@ fn handle_node(
                 deserialize_vec_hashmap(&serialized_vec, &shared_documents);
                 serialized_vec.clear();
             }
-            "start_replica_command" => saving_command = true,
+            "start_replica_command" => {
+                saving_command = true;
+                println!("Llego un start replica");
+            },
             "end_replica_command" => {
+                println!("Llego un end replica");
                 saving_command = false;
                 {
                     let mut locked_local_node = local_node.lock().unwrap();
@@ -485,6 +489,7 @@ fn handle_node(
                         }
                     }
                 }
+                println!("{:?}", command_string.clone());
                 let cursor = Cursor::new(command_string.clone());
                 let mut reader_for_command = BufReader::new(cursor);
 
@@ -497,6 +502,7 @@ fn handle_node(
                             &shared_sets,
                         );
                         println!("Replica response: {:?}", response.response);
+                        println!("\nshared documents after replication: {:?}\n", shared_documents);
                     }
                     Err(e) => {
                         if e.kind() == std::io::ErrorKind::UnexpectedEof {
@@ -557,7 +563,11 @@ fn handle_node(
             }
             _ => {
                 if saving_command {
-                    command_string.push_str(&format!("{}\r\n", command));
+                    let string_to_push = input.join("\r\n");
+                    command_string.push_str(&string_to_push);
+                    command_string.push_str("\r\n");
+                    command_string.push_str("\r\n");
+                    println!("Llego un saving command {:?}",command_string.clone());
                 } else {
                     let message = "Comando no reconocido\n";
                     let encrypted_b64 = encrypt_message(&cipher, &message);
@@ -790,6 +800,8 @@ fn deserialize_hashset_hashmap(
     } else {
         eprintln!("No se pudo bloquear shared_sets en deserialize_hashset_hashmap");
     }
+
+    println!("\nfinished hashset sync request: {:?}\n", shared_sets);
 }
 
 fn deserialize_vec_hashmap(lines: &Vec<String>, shared_documents: &RedisDocumentsMap) {
@@ -802,6 +814,8 @@ fn deserialize_vec_hashmap(lines: &Vec<String>, shared_documents: &RedisDocument
     } else {
         eprintln!("No se pudo bloquear shared_documents en deserialize_vec_hashmap");
     }
+
+    println!("\nfinished vec sync request: {:?}\n", shared_documents);
 }
 
 
