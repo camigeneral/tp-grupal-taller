@@ -4,6 +4,7 @@ use self::gtk4::{
     prelude::{BoxExt, GtkWindowExt, OrientableExt, PopoverExt, WidgetExt},
     CssProvider,
 };
+use crate::components::structs::document_value_info::DocumentValueInfo;
 use crate::components::{
     error_modal::ErrorModal,
     login::{LoginForm, LoginMsg, LoginOutput},
@@ -58,7 +59,7 @@ pub enum AppMsg {
     ExecuteCommand,
     CloseApplication,
     GetFiles,
-    RefreshData(String, String, String),
+    RefreshData(DocumentValueInfo),
     CreateFile(String, String),
     SubscribeFile(String),
     UnsubscribeFile(String),
@@ -75,10 +76,11 @@ pub enum AppMsg {
     CreateTextDocument,
     /// Mensaje para crear un documento de tipo hoja de cálculo.
     CreateSpreadsheetDocument,
-    AddContent(String, String, i32),
-    AddContentSpreadSheet(String, String, String, String),
+    AddContent(DocumentValueInfo),
+    AddContentSpreadSheet(DocumentValueInfo),
     UpdateFilesList(Vec<String>),
     FilesLoaded,
+    ReloadFile(String, String),
 }
 
 #[relm4::component(pub)]
@@ -219,11 +221,9 @@ impl SimpleComponent for AppModel {
             |command: FileWorkspaceOutputMessage| match command {
                 FileWorkspaceOutputMessage::SubscribeFile(file) => AppMsg::SubscribeFile(file),
                 FileWorkspaceOutputMessage::UnsubscribeFile(file) => AppMsg::UnsubscribeFile(file),
-                FileWorkspaceOutputMessage::ContentAdded(file, text, line_number) => {
-                    AppMsg::AddContent(file, text, line_number)
-                }
-                FileWorkspaceOutputMessage::ContentAddedSpreadSheet(file, col, row, text) => {
-                    AppMsg::AddContentSpreadSheet(file, col, row, text)
+                FileWorkspaceOutputMessage::ContentAdded(doc_info) => AppMsg::AddContent(doc_info),
+                FileWorkspaceOutputMessage::ContentAddedSpreadSheet(doc_info) => {
+                    AppMsg::AddContentSpreadSheet(doc_info)
                 }
                 FileWorkspaceOutputMessage::FilesLoaded => AppMsg::FilesLoaded,
             },
@@ -366,40 +366,19 @@ impl SimpleComponent for AppModel {
                 self.command = format!("SET {} \"{}\"", file_id, content);
                 sender.input(AppMsg::ExecuteCommand);
             }
-            AppMsg::AddContent(file_id, text, line_number) => {
-                let clean_text = if text.trim_end_matches('\n').is_empty() {
-                    "<delete>".to_string()
-                } else {
-                    text
-                };
-                self.command = format!("WRITE|{}|{}|{}", line_number, clean_text, file_id);
+            AppMsg::AddContent(doc_info) => {
+                println!("Doc info: {:#?}", doc_info);
+                self.command = format!(
+                    "WRITE|{}|{}|{}|{}",
+                    doc_info.index, doc_info.value, doc_info.timestamp, doc_info.file
+                );
                 sender.input(AppMsg::ExecuteCommand);
             }
-            AppMsg::AddContentSpreadSheet(file_id, col, row, text) => {
-                let clean_text = if text.is_empty() {
-                    "<delete>".to_string()
-                } else {
-                    text
-                };
-
-                let col_index = match col.parse::<usize>() {
-                    Ok(val) => val,
-                    Err(_) => {
-                        println!("Error: col no es un número válido: {}", col);
-                        return;
-                    }
-                };
-
-                let row_index = match row.parse::<usize>() {
-                    Ok(val) => val,
-                    Err(_) => {
-                        println!("Error: row no es un número válido: {}", row);
-                        return;
-                    }
-                };
-
-                let cell_name = format!("{}{}", (b'A' + row_index as u8) as char, col_index + 1);
-                self.command = format!("WRITE|{}|{}|{}", cell_name, clean_text, file_id);
+            AppMsg::AddContentSpreadSheet(doc_info) => {
+                self.command = format!(
+                    "WRITE|{}|{}|{}|{}",
+                    doc_info.index, doc_info.value, doc_info.index, doc_info.file
+                );
                 sender.input(AppMsg::ExecuteCommand);
             }
 
@@ -442,9 +421,10 @@ impl SimpleComponent for AppModel {
                     println!("No hay un canal de comando disponible.");
                 }
             }
-            AppMsg::RefreshData(file, index, value) => {
+            AppMsg::RefreshData(doc_info) => {
+                println!("doc a actualizar: {:#?}", doc_info);
                 self.files_manager_cont
-                    .emit(FileWorkspaceMsg::UpdateFile(file, index, value));
+                    .emit(FileWorkspaceMsg::UpdateFile(doc_info));
             }
 
             AppMsg::CloseApplication => {
@@ -504,6 +484,23 @@ impl SimpleComponent for AppModel {
                     .collect();
                 self.files_manager_cont
                     .emit(FileWorkspaceMsg::UpdateFilesList(archivos_tipos));
+            }
+
+            AppMsg::ReloadFile(file_id, content) => {
+                // Determinar el tipo de archivo basado en la extensión
+                let file_type = if file_id.ends_with(".xlsx") {
+                    FileType::Sheet
+                } else {
+                    FileType::Text
+                };
+
+                // Actualizar directamente el FileWorkspace con el nuevo contenido
+                self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(
+                    file_id.clone(),
+                    "1".to_string(), // qty_subs
+                    file_type,
+                    content,
+                ));
             }
         }
     }

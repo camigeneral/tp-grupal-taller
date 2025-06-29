@@ -32,10 +32,10 @@ impl Documento {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
-    pub fn join(&self, sep: &str) -> Option<String> {
+    pub fn join(&self, sep: &str) -> String {
         match self {
-            Documento::Texto(v) => Some(v.join(sep)),
-            _ => None,
+            Documento::Texto(v) => v.join(sep),
+            Documento::Calculo(m) => m.join(sep),
         }
     }
     pub fn iter(&self) -> Option<std::slice::Iter<'_, String>> {
