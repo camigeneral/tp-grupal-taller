@@ -159,8 +159,8 @@ impl Microservice {
         &self,
         connect_node_sender: &MpscSender<TcpStream>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let otros_puertos = vec![4001, 4002];
-        for port in otros_puertos {
+        let other_ports = vec![4001, 4002, 4003, 4004, 4005, 4006, 4007, 4008];
+        for port in other_ports {
             let addr = format!("127.0.0.1:{}", port);
             match TcpStream::connect(&addr) {
                 Ok(mut extra_socket) => {
