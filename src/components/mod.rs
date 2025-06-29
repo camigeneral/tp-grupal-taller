@@ -59,3 +59,5 @@ pub mod login;
 
 // Modulo que maneja el modal de error
 pub mod error_modal;
+
+pub mod structs;

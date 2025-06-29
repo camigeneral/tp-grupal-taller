@@ -3,20 +3,23 @@ use commands::redis;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env::args;
-use std::fs;
-use std::fs::{File, OpenOptions};
-use std::io::{self, BufRead, BufReader, Write};
+use std::fs::File;
+use std::fs::OpenOptions;
+use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::str;
 use std::sync::{Arc, Mutex};
 use std::thread;
-
+#[path = "utils/redis_parser.rs"]
+mod redis_parser;
+use crate::commands::redis_parser::CommandRequest;
+use crate::commands::redis_parser::ValueType;
 use crate::hashing::get_hash_slots;
 use crate::local_node::NodeRole;
 use crate::local_node::NodeState;
+use commands::redis_parser::format_resp_command;
 mod client_info;
 mod commands;
-mod documento;
 mod encryption;
 mod hashing;
 mod local_node;
@@ -26,13 +29,15 @@ mod server_context;
 mod utils;
 use crate::server_context::ServerContext;
 use client_info::ClientType;
-use documento::Documento;
+#[path = "redis_types.rs"]
+mod redis_types;
+use redis_types::*;
 #[path = "utils/logger.rs"]
 mod logger;
+use self::logger::*;
 use crate::commands::redis_parser::{parse_command, write_response, CommandResponse};
-
-type SubscribersMap = Arc<Mutex<HashMap<String, Vec<String>>>>;
-type SetsMap = Arc<Mutex<HashMap<String, HashSet<String>>>>;
+#[path = "shared.rs"]
+mod shared;
 
 /// Número de argumentos esperados para iniciar el servidor
 static REQUIRED_ARGS: usize = 2;
@@ -58,8 +63,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let node_address = format!("127.0.0.1:{}", port + 10000);
     let client_address = format!("127.0.0.1:{}", port);
-    let peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>> =
-        Arc::new(Mutex::new(HashMap::new()));
+    let peer_nodes: PeerNodeMap = Arc::new(Mutex::new(HashMap::new()));
 
     start_server(&client_address, port, node_address, peer_nodes)?;
 
@@ -84,23 +88,10 @@ fn start_server(
     bind_address: &str,
     port: usize,
     node_address: String,
-    peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
+    peer_nodes: PeerNodeMap,
 ) -> std::io::Result<()> {
     let config_path = "redis.conf";
-    let log_path = logger::get_log_path_from_config(config_path);
-
-    let log_file_exists_and_not_empty = match fs::metadata(&log_path) {
-        Ok(metadata) => metadata.len() > 0,
-        Err(_) => false,
-    };
-
-    if log_file_exists_and_not_empty {
-        let _ = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&log_path)
-            .and_then(|mut file| writeln!(file));
-    }
+    let logger = logger::Logger::init(logger::Logger::get_log_path_from_config(config_path), port);
 
     let local_node = redis_node_handler::create_local_node(port)?;
 
@@ -131,7 +122,7 @@ fn start_server(
         stored_documents = match load_persisted_data(&file_name) {
             Ok(docs) => docs,
             Err(_) => {
-                logger::log_event(&log_path, "Iniciando con base de datos vacía");
+                logger.log("Iniciando con base de datos vacía");
                 HashMap::new()
             }
         };
@@ -139,12 +130,10 @@ fn start_server(
 
     // Inicializar estructuras de datos compartidas
 
-    let shared_documents: Arc<Mutex<HashMap<String, Documento>>> =
-        Arc::new(Mutex::new(stored_documents));
+    let shared_documents: RedisDocumentsMap = Arc::new(Mutex::new(stored_documents));
     let (document_subscribers, shared_sets) = initialize_datasets(&shared_documents);
     let active_clients = Arc::new(Mutex::new(HashMap::new()));
-    let logged_clients: Arc<Mutex<HashMap<String, bool>>> = Arc::new(Mutex::new(HashMap::new()));
-
+    let logged_clients: LoggedClientsMap = Arc::new(Mutex::new(HashMap::new()));
     redis_node_handler::start_node_connection(
         port,
         node_address,
@@ -157,7 +146,7 @@ fn start_server(
 
     // Iniciar servidor TCP
     let tcp_listener = TcpListener::bind(bind_address)?;
-    logger::log_event(&log_path, &format!("Servidor iniciado en {}", bind_address));
+    logger.log(&format!("Servidor iniciado en {}", bind_address));
 
     let ctx = Arc::new(ServerContext {
         active_clients: Arc::clone(&active_clients),
@@ -167,21 +156,21 @@ fn start_server(
         local_node: Arc::clone(&local_node),
         peer_nodes: Arc::clone(&peer_nodes),
         logged_clients: Arc::clone(&logged_clients),
-        log_path: log_path.clone(),
+        internal_subscription_channel: initialize_subscription_channel(),
+        main_addrs: bind_address.to_string(),
     });
 
     for incoming_connection in tcp_listener.incoming() {
         match incoming_connection {
             Ok(client_stream) => {
-                if let Err(e) = handle_new_client_connection(client_stream, Arc::clone(&ctx)) {
-                    logger::log_event(
-                        &log_path,
-                        &format!("Error al manejar nueva conexión: {}", e),
-                    );
+                if let Err(e) =
+                    handle_new_client_connection(client_stream, Arc::clone(&ctx), logger.clone())
+                {
+                    logger.log(&format!("Error al manejar nueva conexión: {}", e));
                 }
             }
             Err(e) => {
-                logger::log_event(&log_path, &format!("Error al aceptar conexión: {}", e));
+                logger.log(&format!("Error al aceptar conexión: {}", e));
             }
         }
     }
@@ -200,9 +189,7 @@ fn start_server(
 /// # Retorna
 /// (Arc::new(Mutex::new(subscriber_map)), Arc::new(Mutex::new(doc_set))) con las listas de suscriptores
 /// inicializadas y los sets iniciales
-fn initialize_datasets(
-    documents: &Arc<Mutex<HashMap<String, Documento>>>,
-) -> (SubscribersMap, SetsMap) {
+fn initialize_datasets(documents: &RedisDocumentsMap) -> (SubscribersMap, SetsMap) {
     // Intentamos obtener la lista de keys; si falla el lock, devolvemos vectores vacíos
     let document_keys: Vec<String> = match documents.lock() {
         Ok(locked_documents) => locked_documents.keys().cloned().collect(),
@@ -215,6 +202,7 @@ fn initialize_datasets(
     let mut subscriber_map: HashMap<String, Vec<_>> = HashMap::new();
     let mut doc_set: HashMap<String, HashSet<String>> = HashMap::new();
 
+    // Inicializar suscriptores para cada documento existente
     for document_id in document_keys {
         subscriber_map.insert(document_id.clone(), Vec::new());
         doc_set.insert(document_id, HashSet::new());
@@ -229,6 +217,7 @@ fn initialize_datasets(
 fn handle_new_client_connection(
     mut client_stream: TcpStream,
     ctx: Arc<ServerContext>,
+    logger: logger::Logger,
 ) -> std::io::Result<()> {
     let client_addr = match client_stream.peer_addr() {
         Ok(addr) => addr,
@@ -257,32 +246,37 @@ fn handle_new_client_connection(
             ) {
                 eprintln!("Error al escribir respuesta: {}", write_err);
             }
-            return Ok(()); // Salir anticipadamente
+            return Ok(());
         }
     };
 
     let client_type = if command_request.command == "microservicio" {
+        let client_stream_clone = match client_stream.try_clone() {
+            Ok(clone) => clone,
+            Err(e) => {
+                eprintln!("Error clonando stream para cliente: {}", e);
+                return Err(e);
+            }
+        };
         subscribe_microservice_to_all_docs(
-            client_addr.to_string(),
+            client_stream_clone,
+            client_addr.to_string().clone(),
             Arc::clone(&ctx.shared_documents),
             Arc::clone(&ctx.document_subscribers),
+            logger.clone(),
+            ctx.main_addrs.clone(),
         );
-        println!("Microservicio conectado: {}", client_addr);
-        ClientType::Microservicio
+        ClientType::Microservice
     } else {
         println!("Cliente conectado: {}", client_addr);
-        ClientType::Cliente
+        ClientType::Client
     };
-
-    logger::log_event(
-        &ctx.log_path,
-        &format!("Cliente conectado: {}", client_addr),
-    );
 
     let client_stream_clone = match client_stream.try_clone() {
         Ok(clone) => clone,
         Err(e) => {
             eprintln!("Error clonando stream para cliente: {}", e);
+            logger.log(&format!("Error clonando stream para cliente: {}", e));
             return Err(e);
         }
     };
@@ -290,40 +284,59 @@ fn handle_new_client_connection(
     {
         let client_addr_str = client_addr.to_string();
         let client = client_info::Client {
-            stream: client_stream_clone,
-            client_type,
+            stream: Arc::new(Mutex::new(Some(client_stream_clone))),
+            client_type: client_type.clone(),
             username: "".to_string(),
         };
         let mut lock_clients = match ctx.active_clients.lock() {
             Ok(lock) => lock,
             Err(poisoned) => poisoned.into_inner(),
         };
-        lock_clients.insert(client_addr_str, client);
+        lock_clients.insert(client_addr_str, client.clone());
+        if client_type == ClientType::Microservice {
+            subscribe_to_internal_channel(Arc::clone(&ctx), client);
+        }
     }
 
     let client_addr_str = client_addr.to_string();
-    let log_path = ctx.log_path.clone();
+    let logger_clone = logger.clone();
     let ctx_clone = Arc::clone(&ctx);
 
     thread::spawn(move || {
-        match handle_client(&mut client_stream, ctx_clone, client_addr_str.clone()) {
+        match handle_client(
+            &mut client_stream,
+            ctx_clone,
+            client_addr_str.clone(),
+            logger_clone,
+        ) {
             Ok(_) => {
                 println!("Client {} disconnected.", client_addr);
-
-                logger::log_event(&log_path, &format!("Cliente desconectado: {}", client_addr));
+                logger.log(&format!("Cliente desconectado: {}", client_addr));
             }
             Err(e) => {
                 eprintln!("Error in connection with {}: {}", client_addr, e);
-
-                logger::log_event(
-                    &log_path,
-                    &format!("Error en conexión con: {}", client_addr),
-                );
+                logger.log(&format!("Error en conexión con: {}", client_addr));
             }
         }
     });
 
     Ok(())
+}
+
+/// Suscribe al microservicio al canal de suscripciones
+///
+/// # Argumentos
+/// * `ctx` - Contexto del servidor
+/// * `microservice` - Cliente microservicio a suscribir
+///
+pub fn subscribe_to_internal_channel(ctx: Arc<ServerContext>, microservice: client_info::Client) {
+    let mut channels_guard = match ctx.internal_subscription_channel.lock() {
+        Ok(lock) => lock,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+
+    channels_guard.insert("subscriptions".to_string(), microservice);
+    println!("Microservicio suscrito al canal interno subscriptions");
 }
 
 /// Maneja la comunicación con un cliente conectado.
@@ -338,12 +351,14 @@ fn handle_client(
     stream: &mut TcpStream,
     ctx: Arc<ServerContext>,
     client_id: String,
+    logger: logger::Logger,
 ) -> std::io::Result<()> {
     let stream_clone_result = stream.try_clone();
     let mut reader = match stream_clone_result {
         Ok(clone) => BufReader::new(clone),
         Err(e) => {
             eprintln!("Error clonando el stream para lectura: {}", e);
+            logger.log(&format!("Error clonando el stream para lectura: {}", e));
             return Err(e);
         }
     };
@@ -355,9 +370,10 @@ fn handle_client(
             Ok(req) => req,
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::UnexpectedEof {
-                    break; // EOF: termina el loop
+                    break;
                 }
                 println!("Error al parsear comando: {}", e);
+                logger.log(&format!("Error al parsear comando: {}", e));
 
                 if let Err(write_err) = write_response(
                     stream,
@@ -367,17 +383,28 @@ fn handle_client(
                         "Error al escribir respuesta de comando inválido: {}",
                         write_err
                     );
+                    logger.log(&format!(
+                        "Error al escribir respuesta de comando inválido: {}",
+                        write_err
+                    ));
+
                     break;
                 }
                 continue;
             }
         };
+        let doc = match &command_request.key {
+            Some(doc) => doc.clone(),
+            _ => "".to_string(),
+        };
+
+        let command = command_request.command.clone();
 
         println!("Comando recibido: {:?}", command_request);
-        logger::log_event(
-            &ctx.log_path,
-            &format!("Comando recibido de {}: {:?}", client_id, command_request),
-        );
+        logger.log(&format!(
+            "Comando recibido de {}: {:?}",
+            client_id, command_request
+        ));
 
         //TODO esto solo se puede resolver con la replicacion, ya que hay informacion que tienen algunos nodos y otros que no
         // Entonces el estado de las variables no es el mismo en cada instancia
@@ -392,99 +419,209 @@ fn handle_client(
                     stream,
                     &utils::CommandResponse::Error("Cliente sin autorizacion".to_string()),
                 )?;
-                logger::log_event(
-                    ctx.log_path,
-                    &format!("Cliente {} sin autorizacion ", client_id),
-                );
                 continue;
             }
         } */
 
-        let key = match &command_request.key {
-            Some(k) => k.clone(),
-            None => {
-                println!("No key found");
-                write_response(
-                    stream,
-                    &CommandResponse::Error("Comando inválido".to_string()),
-                )?;
-                logger::log_event(
-                    &ctx.log_path,
-                    &format!(
-                        "Error al parsear comando de {}: No se encontro la key",
-                        client_id
-                    ),
-                );
+        let response = match execute_command_internal(
+            command_request,
+            Arc::clone(&ctx),
+            client_id.clone(),
+            logger.clone(),
+        ) {
+            Ok(response) => response,
+            Err(e) => {
+                let error_msg = e.clone();
+                println!("Error ejecutando comando: {}", e);
+                write_response(stream, &CommandResponse::Error(error_msg))?;
+                logger.log(&format!(
+                    "Error al ejecutar comando de {}: {}",
+                    client_id, e
+                ));
                 continue;
             }
         };
-
-        let response = match resolve_key_location(key, &ctx.local_node, &ctx.peer_nodes) {
-            Ok(()) => {
-                let unparsed_command = command_request.unparsed_command.clone();
-
-                let redis_response = redis::execute_command(
-                    command_request,
-                    &ctx.shared_documents,
-                    &ctx.document_subscribers,
-                    &ctx.shared_sets,
-                    client_id.clone(),
-                    &ctx.active_clients,
-                    &ctx.logged_clients,
-                );
-
-                if redis_response.publish {
-                    if let Err(e) = publish_update(
-                        &ctx.active_clients,
-                        &ctx.document_subscribers,
-                        redis_response.message,
-                        redis_response.doc,
-                    ) {
-                        eprintln!("Error al publicar actualización: {}", e);
-                    }
-                }
-
-                if let Err(e) = redis_node_handler::broadcast_to_replicas(
-                    &ctx.local_node,
-                    &ctx.peer_nodes,
-                    unparsed_command,
-                ) {
-                    eprintln!("Error al propagar comando a réplicas: {}", e);
-                }
-
-                redis_response.response
-            }
-            Err(response) => response,
-        };
+        println!("response: {:#?}", response.get_resp());
 
         if let Err(e) = write_response(stream, &response) {
             println!("Error al escribir respuesta: {}", e);
-            logger::log_event(
-                &ctx.log_path,
-                &format!("Error al escribir respuesta a {}: {}", client_id, e),
-            );
+            logger.log(&format!(
+                "Error al escribir respuesta a {}: {}",
+                client_id, e
+            ));
             break;
         }
 
-        logger::log_event(
-            &ctx.log_path,
-            &format!("Respuesta enviada a {}: {:?}", client_id, response),
-        );
-
-        if let Err(e) = persist_documents(&ctx.shared_documents, &ctx.local_node) {
-            eprintln!("Error al persistir documentos: {}", e);
+        let is_subscribed_command = command == "subscribe";
+        if is_subscribed_command && !response.get_resp().contains("ASK") {
+            notify_subscriptions_channel(Arc::clone(&ctx), doc, client_id.to_string());
         }
+
+        logger.log(&format!(
+            "Respuesta enviada a {}: {:?}",
+            client_id, response
+        ));
     }
 
-    cleanup_client_resources(&client_id, &ctx.active_clients, &ctx.document_subscribers);
+    cleanup_client_resources(
+        &client_id,
+        &ctx.active_clients,
+        &ctx.document_subscribers,
+        logger.clone(),
+    );
 
     Ok(())
 }
 
-fn _is_authorized_client(
-    logged_clients: Arc<Mutex<HashMap<String, bool>>>,
+/// Ejecuta un comando internamente, manejando la resolución de ubicación de keys y la propagación a réplicas.
+///
+/// Esta función extrae la lógica de ejecución de comandos de handle_client para poder
+/// ser reutilizada por funciones internas como notify_subscriptions_channel.
+///
+/// # Argumentos
+/// * `command_request` - El comando a ejecutar
+/// * `ctx` - Contexto del servidor
+/// * `client_id` - ID del cliente que ejecuta el comando (puede ser interno)
+///
+/// # Retorna
+/// Result con la respuesta del comando o un error
+fn execute_command_internal(
+    command_request: CommandRequest,
+    ctx: Arc<ServerContext>,
     client_id: String,
-) -> bool {
+    logger: Logger,
+) -> Result<CommandResponse, String> {
+    let key = match &command_request.key {
+        Some(k) => k.clone(),
+        None => {
+            return Err("Comando inválido: No se encontró la key".to_string());
+        }
+    };
+
+    let response = match resolve_key_location(
+        key.clone(),
+        &ctx.local_node,
+        &ctx.peer_nodes,
+        logger.clone(),
+    ) {
+        Ok(()) => {
+            let unparsed_command = command_request.unparsed_command.clone();
+
+            let redis_response = redis::execute_command(
+                command_request.clone(),
+                &ctx.shared_documents,
+                &ctx.document_subscribers,
+                &ctx.shared_sets,
+                client_id.clone(),
+                &ctx.active_clients,
+                &ctx.logged_clients,
+                &ctx.internal_subscription_channel,
+            );
+
+            // Si el comando es SET, persistir los documentos
+            if command_request.command.to_lowercase() == "set" {
+                if let Err(e) = persist_documents(&ctx.shared_documents, &ctx.local_node) {
+                    eprintln!("Error persistiendo documentos después de SET: {}", e);
+                    logger.log(&format!(
+                        "Error persistiendo documentos después de SET: {}",
+                        e
+                    ));
+                } else {
+                    println!("Documentos persistidos exitosamente después de comando SET");
+                    logger.log("Documentos persistidos exitosamente después de comando SET");
+                }
+            }
+
+            if redis_response.publish {
+                if let Err(e) = publish_update(
+                    &ctx.active_clients,
+                    &ctx.document_subscribers,
+                    redis_response.response.get_resp(),
+                    redis_response.doc,
+                    logger.clone(),
+                ) {
+                    eprintln!("Error al publicar actualización: {}", e);
+                }
+            }
+
+            if let Err(e) = redis_node_handler::broadcast_to_replicas(
+                &ctx.local_node,
+                &ctx.peer_nodes,
+                unparsed_command,
+            ) {
+                eprintln!("Error al propagar comando a réplicas: {}", e);
+            }
+
+            redis_response.response
+        }
+        Err(response) => response,
+    };
+
+    Ok(response)
+}
+
+/// Obtiene el microservicio del canal interno de suscripciones y devuelve su dirección peer
+///
+/// # Argumentos
+/// * `ctx` - Contexto del servidor
+///
+/// # Retorna
+/// Option con la dirección peer del microservicio si existe
+fn get_microservice_peer_addr(ctx: &Arc<ServerContext>) -> Option<String> {
+    let channels_guard = match ctx.internal_subscription_channel.lock() {
+        Ok(lock) => lock,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+
+    if let Some(microservice) = channels_guard.get("subscriptions") {
+        if let Ok(stream_guard) = microservice.stream.lock() {
+            if let Some(stream) = stream_guard.as_ref() {
+                if let Ok(peer_addr) = stream.peer_addr() {
+                    return Some(peer_addr.to_string());
+                }
+            }
+        }
+    }
+
+    None
+}
+
+pub fn notify_subscriptions_channel(ctx: Arc<ServerContext>, doc: String, client_id: String) {
+    let microservice_addr = match get_microservice_peer_addr(&ctx) {
+        Some(addr) => addr,
+        None => {
+            eprintln!("No se pudo obtener la dirección del microservicio del canal interno");
+            return;
+        }
+    };
+
+    let message_enum = shared::MicroserviceMessage::ClientSubscribed {
+        document: doc.clone(),
+        client_id: client_id.clone(),
+    };
+
+    let message = message_enum.to_string();
+
+    let command_request = CommandRequest {
+        command: "publish".to_string(),
+        key: Some("subscriptions".to_string()),
+        arguments: vec![ValueType::String(message.to_string())],
+        unparsed_command: format!("publish subscriptions {}", message),
+    };
+
+    let _ = redis::execute_command(
+        command_request,
+        &ctx.shared_documents,
+        &ctx.document_subscribers,
+        &ctx.shared_sets,
+        microservice_addr.clone(),
+        &ctx.active_clients,
+        &ctx.logged_clients,
+        &ctx.internal_subscription_channel,
+    );
+}
+
+fn _is_authorized_client(logged_clients: LoggedClientsMap, client_id: String) -> bool {
     let locked = match logged_clients.lock() {
         Ok(lock) => lock,
         Err(poisoned) => {
@@ -518,8 +655,9 @@ fn _is_authorized_client(
 /// - "Err(CommandResponse)" con el mensaje "ASK" si corresponde a otro nodo
 pub fn resolve_key_location(
     key: String,
-    local_node: &Arc<Mutex<local_node::LocalNode>>,
-    peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
+    local_node: &LocalNodeMap,
+    peer_nodes: &PeerNodeMap,
+    logger: Logger,
 ) -> Result<(), CommandResponse> {
     let hashed_key = get_hash_slots(key);
 
@@ -547,6 +685,7 @@ pub fn resolve_key_location(
     };
 
     println!("Hash: {}", hashed_key);
+    logger.log(&format!("Hash: {}", hashed_key));
 
     if node_role != NodeRole::Master
         || hashed_key < lower_hash_bound
@@ -560,19 +699,34 @@ pub fn resolve_key_location(
         }) {
             let response_string =
                 format!("ASK {} 127.0.0.1:{}", hashed_key, peer_node.port - 10000);
-            let redis_redirect_response = CommandResponse::String(response_string.clone());
+            let redis_redirect_response = CommandResponse::Array(vec![
+                CommandResponse::String("ASK".to_string()),
+                CommandResponse::String(hashed_key.clone().to_string()),
+                CommandResponse::String(format!("127.0.0.1:{}", peer_node.port - 10000)),
+            ]);
 
             println!("Hashing para otro nodo: {:?}", response_string.clone());
+            logger.log(&format!(
+                "Hashing para otro nodo: {:?}",
+                response_string.clone()
+            ));
 
             return Err(redis_redirect_response);
         } else {
             let response_string = format!("ASK {}", hashed_key);
-            let redis_redirect_response = CommandResponse::String(response_string.clone());
+            let redis_redirect_response = CommandResponse::Array(vec![
+                CommandResponse::String("ASK".to_string()),
+                CommandResponse::String(hashed_key.clone().to_string()),
+            ]);
 
             println!(
                 "Hashing para nodo indefinido: {:?}",
                 response_string.clone()
             );
+            logger.log(&format!(
+                "Hashing para nodo indefinido: {:?}",
+                response_string.clone()
+            ));
 
             return Err(redis_redirect_response);
         }
@@ -586,10 +740,11 @@ pub fn resolve_key_location(
 /// # Errores
 /// Retorna un error si hay problemas al escribir en algún stream de cliente
 pub fn publish_update(
-    active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
-    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    active_clients: &ClientsMap,
+    document_subscribers: &SubscribersMap,
     update_message: String,
     document_id: String,
+    logger: logger::Logger,
 ) -> std::io::Result<()> {
     let mut clients_guard = match active_clients.lock() {
         Ok(lock) => lock,
@@ -603,16 +758,33 @@ pub fn publish_update(
     if let Some(document_subscribers) = subscribers_guard.get(&document_id) {
         for subscriber_id in document_subscribers {
             if let Some(client) = clients_guard.get_mut(subscriber_id) {
-                if let Err(e) = writeln!(client.stream, "{}", update_message.trim()) {
+                if let Err(e) = write!(client, "{}", update_message.trim()) {
                     eprintln!("Error enviando actualización a {}: {}", subscriber_id, e);
+                    logger.log(&format!(
+                        "Error enviando actualización a {}: {}",
+                        subscriber_id, e
+                    ));
                     return Err(e);
+                } else {
+                    logger.log(&format!(
+                        "Actualización enviada a {} sobre documento {}",
+                        subscriber_id, document_id
+                    ));
                 }
             } else {
                 println!("Cliente no encontrado: {}", subscriber_id);
+                logger.log(&format!(
+                    "Cliente {} no encontrado al intentar enviar actualización de {}",
+                    subscriber_id, document_id
+                ));
             }
         }
     } else {
         println!("Documento no encontrado: {}", document_id);
+        logger.log(&format!(
+            "Documento {} no encontrado al intentar publicar actualización",
+            document_id
+        ));
     }
 
     Ok(())
@@ -626,21 +798,40 @@ pub fn publish_update(
 ///
 fn cleanup_client_resources(
     client_id: &str,
-    active_clients: &Arc<Mutex<HashMap<String, client_info::Client>>>,
-    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
+    active_clients: &ClientsMap,
+    document_subscribers: &SubscribersMap,
+    logger: Logger,
 ) {
     if let Ok(mut lock) = active_clients.lock() {
-        lock.remove(client_id);
+        if lock.remove(client_id).is_some() {
+            logger.log(&format!(
+                "Cliente {} eliminado de la lista de activos",
+                client_id
+            ));
+        }
     } else {
         eprintln!("Mutex poisoned al limpiar active_clients");
+        logger.log("Mutex poisoned al limpiar active_clients");
     }
 
     if let Ok(mut subscribers_guard) = document_subscribers.lock() {
+        let mut eliminado = false;
         for subscriber_list in subscribers_guard.values_mut() {
+            let antes = subscriber_list.len();
             subscriber_list.retain(|id| id != client_id);
+            if subscriber_list.len() < antes {
+                eliminado = true;
+            }
+        }
+        if eliminado {
+            logger.log(&format!(
+                "Cliente {} eliminado de listas de suscriptores",
+                client_id
+            ));
         }
     } else {
         eprintln!("Mutex poisoned al limpiar document_subscribers");
+        logger.log("Mutex poisoned al limpiar document_subscribers");
     }
 }
 
@@ -649,9 +840,9 @@ fn cleanup_client_resources(
 /// # Errores
 /// Retorna un error si hay problemas al escribir en el archivo
 pub fn persist_documents(
-    documents: &Arc<Mutex<HashMap<String, Documento>>>,
-    local_node: &Arc<Mutex<local_node::LocalNode>>,
-) -> io::Result<()> {
+    documents: &RedisDocumentsMap,
+    local_node: &LocalNodeMap,
+) -> std::io::Result<()> {
     let file_name = match local_node.lock() {
         Ok(locked_node) => {
             format!(
@@ -668,7 +859,6 @@ pub fn persist_documents(
         }
     };
 
-    // Abrimos archivo, si falla retornamos error
     let mut persistence_file = match OpenOptions::new()
         .create(true)
         .truncate(true)
@@ -684,30 +874,8 @@ pub fn persist_documents(
         Err(poisoned) => poisoned.into_inner(),
     };
 
-    for (document_id, doc) in documents_guard.iter() {
-        match doc {
-            Documento::Texto(lineas) => {
-                let mut document_data = format!("{}/++/", document_id);
-                for linea in lineas {
-                    document_data.push_str(linea);
-                    document_data.push_str("/--/");
-                }
-                // Escribimos en archivo, manejamos error si ocurre
-                if let Err(e) = writeln!(persistence_file, "{}", document_data) {
-                    return Err(e);
-                }
-            }
-            Documento::Calculo(filas) => {
-                let mut document_data = format!("{}/++/", document_id);
-                for i in 0..100 {
-                    let empty = String::new();
-                    let value = filas.get(i).unwrap_or(&empty);
-                    document_data.push_str(value);
-                    document_data.push_str("/--/");
-                }
-                writeln!(persistence_file, "{}", document_data)?;
-            }
-        }
+    for (_document_id, doc) in documents_guard.iter() {
+        writeln!(persistence_file, "{}", doc)?;
     }
 
     Ok(())
@@ -718,7 +886,7 @@ pub fn persist_documents(
 /// # Retorna
 /// HashMap con los documentos y sus mensajes, o un error si hay problemas
 /// al leer el archivo
-pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Documento>, String> {
+pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, String>, String> {
     let mut documents = HashMap::new();
 
     let file = match File::open(file_path) {
@@ -742,63 +910,78 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, Documen
 
         let document_id = parts[0].to_string();
         let messages_data = parts[1];
-
-        if document_id.ends_with(".txt") {
-            let messages: Vec<String> = messages_data
-                .split("/--/")
-                .filter(|s| !s.is_empty())
-                .map(|s| s.to_string())
-                .collect();
-            documents.insert(document_id, Documento::Texto(messages));
-        } else {
-            let mut rows: Vec<String> =
-                messages_data.split("/--/").map(|s| s.to_string()).collect();
-
-            while rows.len() < 100 {
-                rows.push(String::new());
-            }
-
-            documents.insert(document_id, Documento::Calculo(rows));
-        }
+        documents.insert(document_id, messages_data.to_string());
     }
-
+    println!("documentos: {:#?}", documents);
     Ok(documents)
 }
 
 pub fn subscribe_microservice_to_all_docs(
+    mut client_stream: TcpStream,
     addr: String,
-    docs: Arc<Mutex<HashMap<String, Documento>>>,
-    clients_on_docs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    docs: RedisDocumentsMap,
+    clients_on_docs: SubscribersMap,
+    logger: Logger,
+    main_addrs: String,
 ) {
-    // Intentar bloquear el mutex de documentos
     let docs_lock = match docs.lock() {
         Ok(lock) => lock,
         Err(poisoned) => {
             eprintln!("Error al bloquear docs mutex: {:?}", poisoned);
+            logger.log(&format!("Error al bloquear docs mutex: {:?}", poisoned));
             return;
         }
     };
-
-    // Intentar bloquear el mutex de clientes suscritos
     let mut map = match clients_on_docs.lock() {
         Ok(lock) => lock,
         Err(poisoned) => {
             eprintln!("Error al bloquear clients_on_docs mutex: {:?}", poisoned);
+            logger.log(&format!(
+                "Error al bloquear clients_on_docs mutex: {:?}",
+                poisoned
+            ));
+
             return;
         }
     };
 
-    for doc_name in docs_lock.keys() {
-        // Insertar la lista de suscriptores si no existe
+    for (doc_name, document) in docs_lock.iter() {
         let subscribers = map.entry(doc_name.clone()).or_insert_with(Vec::new);
-
-        // Agregar el addr si no está aún
         if !subscribers.contains(&addr) {
             subscribers.push(addr.clone());
             println!(
                 "Microservicio {} suscripto automáticamente a {}",
                 addr, doc_name
             );
+            let document_data = document.to_string().clone();
+
+            let command_parts = vec!["DOC", doc_name, &document_data, &main_addrs];
+
+            let message = format_resp_command(&command_parts.clone());
+            if let Err(e) = client_stream.write_all(message.as_bytes()) {
+                eprintln!("Error enviando notificación DOC al microservicio: {}", e);
+            }
         }
     }
+
+    if let Err(e) = client_stream.flush() {
+        eprintln!("Error al hacer flush del stream: {}", e);
+    }
+}
+
+/// Inicializa los canales de comunicación internos del sistema
+///
+/// # Retorna
+/// InternalChannelsMap con los canales internos inicializados
+fn initialize_subscription_channel() -> ClientsMap {
+    let mut internal_channels: HashMap<String, client_info::Client> = HashMap::new();
+    internal_channels.insert(
+        "subscriptions".to_string(),
+        client_info::Client {
+            stream: Arc::new(Mutex::new(None)),
+            client_type: ClientType::Microservice,
+            username: "Microservice".to_string(),
+        },
+    );
+    Arc::new(Mutex::new(internal_channels))
 }

@@ -1,5 +1,5 @@
 use crate::commands::redis_parser::{parse_replica_command, write_response, CommandResponse};
-use crate::documento::Documento;
+use crate::redis_node_handler::redis_types::SetsMap;
 use commands::redis;
 use local_node::{LocalNode, NodeRole, NodeState};
 use peer_node;
@@ -22,6 +22,9 @@ use aes::cipher::{
     generic_array::GenericArray,
 };
 use self::base64::{engine::general_purpose, Engine as _};
+#[path = "redis_types.rs"]
+mod redis_types;
+use redis_types::*;
 
 #[derive(Debug)]
 pub enum RedisMessage {
@@ -64,11 +67,11 @@ pub fn create_local_node(port: usize) -> Result<Arc<Mutex<LocalNode>>, std::io::
 pub fn start_node_connection(
     port: usize,
     node_address: String,
-    local_node: &Arc<Mutex<LocalNode>>,
-    peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
-    document_subscribers: &Arc<Mutex<HashMap<String, Vec<String>>>>,
-    shared_documents: &Arc<Mutex<HashMap<String, Documento>>>,
-    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    local_node: &LocalNodeMap,
+    peer_nodes: &PeerNodeMap,
+    document_subscribers: &SubscribersMap,
+    shared_documents: &RedisDocumentsMap,
+    shared_sets: &SetsMap,
 ) -> Result<(), std::io::Error> {
     let key = GenericArray::from_slice(&KEY);
     let cipher = Aes128::new(&key);
@@ -189,11 +192,11 @@ pub fn start_node_connection(
 /// Retorna un error si no se puede crear el socket TCP
 fn connect_nodes(
     address: &str,
-    nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
-    local_node: Arc<Mutex<LocalNode>>,
-    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    shared_documents: Arc<Mutex<HashMap<String, Documento>>>,
-    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    nodes: PeerNodeMap,
+    local_node: LocalNodeMap,
+    document_subscribers: SubscribersMap,
+    shared_documents: RedisDocumentsMap,
+    shared_sets: SetsMap,
 ) -> std::io::Result<()> {
     let listener = TcpListener::bind(address)?;
     println!("\nServer listening to nodes on: {}", address);
@@ -242,11 +245,11 @@ fn connect_nodes(
 /// Por el momento solo lee el comando "node", y con eso se guarda la informacion del nodo.
 fn handle_node(
     stream: &mut TcpStream,
-    nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
-    local_node: &Arc<Mutex<LocalNode>>,
-    document_subscribers: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    shared_documents: Arc<Mutex<HashMap<String, Documento>>>,
-    shared_sets: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    nodes: PeerNodeMap,
+    local_node: &LocalNodeMap,
+    document_subscribers: SubscribersMap,
+    shared_documents: RedisDocumentsMap,
+    shared_sets: SetsMap,
 ) -> std::io::Result<()> {
     let key = GenericArray::from_slice(&KEY);
     let cipher = Aes128::new(&key);
@@ -620,9 +623,9 @@ pub fn broadcast_to_replicas(
 
 fn handle_replica_sync(
     replica_port: &String,
-    peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
-    shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
-    shared_documents: &Arc<Mutex<HashMap<String, Documento>>>,
+    peer_nodes: &PeerNodeMap,
+    shared_sets: &SetsMap,
+    shared_documents: &RedisDocumentsMap,
 ) -> std::io::Result<()> {
     let replica_addr = format!("127.0.0.1:{}", replica_port);
     // Clonar conjuntos
@@ -692,23 +695,18 @@ fn handle_replica_sync(
 }
 
 fn serialize_vec_hashmap(
-    map: &HashMap<String, Documento>,
+    map: &HashMap<String, String>,
     mut stream: TcpStream,
 ) -> std::io::Result<()> {
     let key = GenericArray::from_slice(&KEY);
     let cipher = Aes128::new(key);
-    for (key, doc) in map {
-        let line = match doc {
-            Documento::Texto(vec) => {
-                let joined = vec.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(",");
 
-                format!("serialize_vec {}:{}\n", key, joined)
-            }
-            _ => continue,
-        };
+    for (key, line) in map {
+        let message = format!("serialize_vec {}:{}\n", key, line);
         let encrypted_b64 = encrypt_message(&cipher, &line);
         stream.write_all(encrypted_b64.as_bytes())?;
     }
+    
     let message = "end_serialize_vec\n";
     let encrypted_b64 = encrypt_message(&cipher, &message);
 
@@ -756,18 +754,11 @@ fn deserialize_hashset_hashmap(
     }
 }
 
-fn deserialize_vec_hashmap(
-    lines: &Vec<String>,
-    shared_documents: &Arc<Mutex<HashMap<String, Documento>>>,
-) {
+fn deserialize_vec_hashmap(lines: &Vec<String>, shared_documents: &RedisDocumentsMap) {
     if let Ok(mut locked_documents) = shared_documents.lock() {
         for line in lines {
             if let Some((key, values_str)) = line.split_once(':') {
-                let values: Vec<String> = values_str
-                    .split(',')
-                    .map(|s| s.trim().to_string())
-                    .collect();
-                locked_documents.insert(key.to_string(), Documento::Texto(values));
+                locked_documents.insert(key.to_string(), values_str.to_string());
             }
         }
     } else {

@@ -1,6 +1,9 @@
 extern crate gtk4;
 extern crate relm4;
 
+use crate::components::structs::document_value_info::DocumentValueInfo;
+use std::collections::{HashMap, HashSet, VecDeque};
+
 use self::gtk4::prelude::{BoxExt, EditableExt, EntryExt, GridExt, OrientableExt, WidgetExt};
 use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
 
@@ -10,6 +13,8 @@ pub struct Cell {
     calculated_value: f64,
     display_text: String,
     is_formula: bool,
+    dependencies: HashSet<(usize, usize)>, //Seria las celdas de las que depende por ejemplo A3 = A1 + A2, depende de a1 y a2
+    dependents: HashSet<(usize, usize)>, //las que dependen de esta celda, si a1 cambia, hay que avisar a a3
 }
 
 impl Cell {
@@ -19,7 +24,17 @@ impl Cell {
             calculated_value: 0.0,
             display_text: String::new(),
             is_formula: false,
+            dependencies: HashSet::new(),
+            dependents: HashSet::new(),
         }
+    }
+
+    fn clear_dependencies(&mut self) {
+        self.dependencies.clear();
+    }
+
+    fn add_dependency(&mut self, row: usize, col: usize) {
+        self.dependencies.insert((row, col));
     }
 }
 
@@ -39,7 +54,7 @@ pub enum SpreadsheetMsg {
 
 #[derive(Debug)]
 pub enum SpreadsheetOutput {
-    ContentChanged(String, String, String),
+    ContentChanged(DocumentValueInfo),
     GoBack,
 }
 
@@ -94,7 +109,7 @@ impl SpreadsheetModel {
         }
         Self::simple_calculator(&processed_expr)
     }
-    // Evaluación recursiva con procedencia de operadores
+
     fn simple_calculator(expr: &str) -> Result<f64, String> {
         let expr = expr.replace(" ", "");
         if let Some(pos) = expr.rfind('+') {
@@ -104,7 +119,6 @@ impl SpreadsheetModel {
         }
 
         if let Some(pos) = expr.rfind('-') {
-            //TODO: arreglar manejo de negativos
             if pos > 0 {
                 let left = Self::simple_calculator(&expr[..pos])?;
                 let right = Self::simple_calculator(&expr[pos + 1..])?;
@@ -130,6 +144,55 @@ impl SpreadsheetModel {
             .map_err(|_| format!("Expresión inválida: {}", expr))
     }
 
+    fn extract_cell_references(&self, formula: &str) -> HashSet<(usize, usize)> {
+        let mut references = HashSet::new();
+        let mut current_ref = String::new();
+
+        for ch in formula.chars() {
+            if ch.is_ascii_alphabetic() || ch.is_ascii_digit() {
+                current_ref.push(ch);
+            } else {
+                if !current_ref.is_empty() {
+                    if let Some((row, col)) = self.parse_cell_reference(&current_ref) {
+                        references.insert((row, col));
+                    }
+                    current_ref.clear();
+                }
+            }
+        }
+
+        if !current_ref.is_empty() {
+            if let Some((row, col)) = self.parse_cell_reference(&current_ref) {
+                references.insert((row, col));
+            }
+        }
+
+        references
+    }
+
+    fn update_dependencies(
+        &mut self,
+        cell_row: usize,
+        cell_col: usize,
+        new_dependencies: HashSet<(usize, usize)>,
+    ) {
+        let old_dependencies = self.cells[cell_row][cell_col].dependencies.clone();
+        for &(dep_row, dep_col) in &old_dependencies {
+            self.cells[dep_row][dep_col]
+                .dependents
+                .remove(&(cell_row, cell_col));
+        }
+
+        self.cells[cell_row][cell_col].clear_dependencies();
+
+        for &(dep_row, dep_col) in &new_dependencies {
+            self.cells[cell_row][cell_col].add_dependency(dep_row, dep_col);
+            self.cells[dep_row][dep_col]
+                .dependents
+                .insert((cell_row, cell_col));
+        }
+    }
+
     fn update_cell(&mut self, row: usize, col: usize, content: String) {
         self.cells[row][col].raw_content = content.clone();
 
@@ -137,6 +200,13 @@ impl SpreadsheetModel {
             self.cells[row][col].is_formula = true;
             let formula = &content[1..];
 
+            let new_dependencies = self.extract_cell_references(formula);
+
+            self.update_dependencies(row, col, new_dependencies);
+            println!(
+                "celda dependencias y dependentes: {:#?}, {:#?}",
+                self.cells[row][col].dependencies, self.cells[row][col].dependents
+            );
             match self.evaluate_expression(formula) {
                 Ok(value) => {
                     self.cells[row][col].calculated_value = value;
@@ -272,16 +342,14 @@ impl SimpleComponent for SpreadsheetModel {
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
             SpreadsheetMsg::CellChanged(row, col, content) => {
-                self.update_cell(row, col, content);
-                self.recalculate_all();
+                self.update_cell(row, col, content.clone());
                 self.update_display();
 
+                let index = (row * 10 + col) as i32;
+                let doc_info = DocumentValueInfo::new(content.clone(), index);
+
                 sender
-                    .output(SpreadsheetOutput::ContentChanged(
-                        row.to_string(),
-                        col.to_string(),
-                        self.cells[row][col].display_text.clone(),
-                    ))
+                    .output(SpreadsheetOutput::ContentChanged(doc_info))
                     .unwrap();
             }
             SpreadsheetMsg::RecalculateAll => {
