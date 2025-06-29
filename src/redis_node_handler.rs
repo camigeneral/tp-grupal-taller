@@ -3,7 +3,7 @@ use crate::redis_node_handler::redis_types::SetsMap;
 use commands::redis;
 use local_node::{LocalNode, NodeRole, NodeState};
 use peer_node;
-use encryption::{encrypt_message, KEY};
+use encryption::{encrypt_message, KEY, ENCRYPTION};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::File;
@@ -16,6 +16,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 const PRINT_PINGS: bool = true;
+
 extern crate base64;
 use aes::Aes128;
 use aes::cipher::{
@@ -283,46 +284,53 @@ fn handle_node(
     for command in reader.lines().map_while(Result::ok) {
         let message;
 
-        // Decodifica base64
-        let encoded_bytes = match general_purpose::STANDARD.decode(&command) {
-            Ok(bytes) => bytes,
-            Err(_) => {
-                eprintln!("Error decodificando base64");
-                continue;
+        if ENCRYPTION {
+            
+
+            // Decodifica base64
+            let encoded_bytes = match general_purpose::STANDARD.decode(&command) {
+                Ok(bytes) => bytes,
+                Err(_) => {
+                    eprintln!("Error decodificando base64");
+                    continue;
+                }
+            };
+
+            // Descifra como antes
+            let mut decrypted = Vec::new();
+            for chunk in encoded_bytes.chunks(16) {
+                let mut block = GenericArray::clone_from_slice(chunk);
+                cipher.decrypt_block(&mut block);
+                decrypted.extend_from_slice(&block);
             }
-        };
 
-        // Descifra como antes
-        let mut decrypted = Vec::new();
-        for chunk in encoded_bytes.chunks(16) {
-            let mut block = GenericArray::clone_from_slice(chunk);
-            cipher.decrypt_block(&mut block);
-            decrypted.extend_from_slice(&block);
-        }
-
-        // Padding seguro
-        if !decrypted.is_empty() {
-            let pad = *decrypted.last().unwrap() as usize;
-            if pad > 0 && pad <= decrypted.len() {
-                decrypted.truncate(decrypted.len() - pad);
+            // Padding seguro
+            if !decrypted.is_empty() {
+                let pad = *decrypted.last().unwrap() as usize;
+                if pad > 0 && pad <= decrypted.len() {
+                    decrypted.truncate(decrypted.len() - pad);
+                } else {
+                    eprintln!("Padding inválido al descifrar mensaje de nodo");
+                    continue;
+                }
             } else {
-                eprintln!("Padding inválido al descifrar mensaje de nodo");
                 continue;
             }
+
+            message = String::from_utf8(decrypted).expect("UTF-8 inválido");
+            
         } else {
-            continue;
+            message = command;
         }
 
-        message = String::from_utf8(decrypted).expect("UTF-8 inválido");
-        
 
         let input: Vec<String> = message
-            .split_whitespace()
-            .map(|s| s.to_string().to_lowercase())
-            .collect();
+        .split_whitespace()
+        .map(|s| s.to_string().to_lowercase())
+        .collect();
 
         let command = &input[0];
-
+        
         if command != "pong"  && command != "ping" || PRINT_PINGS {
             println!("Recibido: {:?}", input);
         }
@@ -990,8 +998,6 @@ fn set_failed_node(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex<Ha
 
     promote_replica
 }
-
-
 
 
 fn initialize_replica_promotion(
