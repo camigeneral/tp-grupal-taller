@@ -7,7 +7,7 @@ use std::fs;
 pub fn get_files(_docs: &RedisDocumentsMap) -> RedisResponse {
     let mut doc_names = HashSet::new();
 
-    if let Ok(entries) = fs::read_dir(".") {
+    if let Ok(entries) = fs::read_dir("./rdb_files") {
         for entry in entries.map_while(Result::ok) {
             let path = entry.path();
             let fname = path

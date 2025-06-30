@@ -371,7 +371,7 @@ impl SimpleComponent for AppModel {
                 ));
             }
 
-            AppMsg::CreateFile(file_id, content, file_type) => {
+            AppMsg::CreateFile(file_id, content, _file_type) => {
                 self.command = format!("set {} {}", file_id, content);
                 sender.input(AppMsg::ExecuteCommand);
             }

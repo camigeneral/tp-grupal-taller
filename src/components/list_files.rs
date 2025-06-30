@@ -198,6 +198,7 @@ impl FactoryComponent for FileListItem {
                 },
                 gtk::Label {
                     set_label: &self.name,
+                    add_css_class: "list_file_names",
                 }
             }
         }
