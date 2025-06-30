@@ -411,7 +411,7 @@ impl Microservice {
     fn listen_to_redis_response(
         mut microservice_socket: TcpStream,
         _connect_node_sender: MpscSender<TcpStream>,
-        _node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
         documents: Arc<Mutex<HashMap<String, Documento>>>,
         document_streams: Arc<Mutex<HashMap<String, String>>>,
         last_command_sent: Arc<Mutex<String>>,
@@ -433,7 +433,7 @@ impl Microservice {
                     document,
                     client_id,
                 } => {
-                    if let Ok(docs) = documents.lock() {
+                    if let Ok(mut docs) = documents.lock() {
                         if let Some(documento) = docs.get(&document) {
                             let doc_content = match documento {
                                 Documento::Texto(lines) => lines.join(","),
@@ -467,8 +467,17 @@ impl Microservice {
                                 ));
                             }
                         } else {
-                            eprintln!("Documento no encontrado: {}", document);
-                            log_clone.log(&format!("Documento no encontrado: {}", document));
+                            let doc_type = match document.split('.').last() {
+                                Some(ext) => ext,
+                                None => "",
+                            };
+                            
+                            if doc_type == "txt" {
+                                docs.insert(document.clone(), Documento::Texto(vec!["".to_string()]));
+                            } else {
+                                
+                                docs.insert(document.clone(), Documento::Calculo(vec!["".to_string(); 100]));
+                            }                                                            
                         }
                     } else {
                         eprintln!("Error obteniendo lock de documents para client-subscribed");
@@ -488,20 +497,24 @@ impl Microservice {
                     ));
                     if let Ok(mut docs) = documents.lock() {
                         if document.ends_with(".txt") {
-                            let messages: Vec<String> = content
+                            let mut lines: Vec<String> = content
                                 .split("/--/")
                                 .filter(|s| !s.is_empty())
                                 .map(|s| s.to_string())
                                 .collect();
-                            docs.insert(document.clone(), Documento::Texto(messages));
+                            docs.insert(document.clone(), Documento::Texto(lines));
                         } else {
-                            let mut rows: Vec<String> =
-                                content.split("/--/").map(|s| s.to_string()).collect();
-
+                            let mut rows: Vec<String> = content
+                                .split("/--/")
+                                .filter(|_| true) 
+                                .map(|s| s.to_string())
+                                .collect();
+                            if rows.is_empty() {
+                                rows.push("".to_string());
+                            }
                             while rows.len() < 100 {
                                 rows.push(String::new());
                             }
-
                             docs.insert(document.clone(), Documento::Calculo(rows));
                         }
                     } else {
@@ -591,6 +604,27 @@ impl Microservice {
                         }
                     } else {
                         log_clone.log("Error obteniendo lock de documents para write");
+                    }
+                }
+                MicroserviceMessage::Set { document, doc_type } => {
+                    if let Ok(mut docs) = documents.lock() {
+                        if doc_type == "txt" {
+                            docs.insert(document.clone(), Documento::Texto(vec!["".to_string()]));
+                        } else {
+                            let mut rows = vec!["".to_string(); 100];
+                            docs.insert(document.clone(), Documento::Calculo(rows));
+                        }
+                        
+                        let document_data = Self::get_document_data(&document, docs.get(&document).unwrap());
+                        let set_parts = vec!["SET", &document, "\"\""];
+                        let set_command = redis_parser::format_resp_command(&set_parts);
+
+                        if let Ok(mut streams) = node_streams.lock() {
+                            // Usa el primer stream disponible
+                            if let Some((_addr, stream)) = streams.iter_mut().next() {
+                                let _ = stream.write_all(set_command.as_bytes());
+                            }
+                        }
                     }
                 }
                 MicroserviceMessage::Error(_) => {}
