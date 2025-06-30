@@ -1,7 +1,7 @@
 use crate::client_info::Client;
 #[path = "document.rs"]
 pub mod document;
-use self::document::Documento;
+use self::document::Document;
 use local_node::LocalNode;
 use peer_node::PeerNode;
 use std::collections::HashMap;
@@ -25,8 +25,8 @@ pub type SetsMap = Arc<Mutex<HashMap<String, HashSet<String>>>>;
 /// Mapa compartido de documentos.
 ///
 /// Almacena todos los documentos del sistema, donde la clave es el ID del documento (String)
-/// y el valor es el documento en sí (Documento). Este mapa es compartido entre múltiples hilos.
-pub type SharedDocumentsMap = Arc<Mutex<HashMap<String, Documento>>>;
+/// y el valor es el documento en sí (Document). Este mapa es compartido entre múltiples hilos.
+pub type SharedDocumentsMap = Arc<Mutex<HashMap<String, Document>>>;
 
 pub type RedisDocumentsMap = Arc<Mutex<HashMap<String, String>>>;
 
