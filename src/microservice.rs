@@ -444,7 +444,7 @@ impl Microservice {
                     document,
                     client_id,
                 } => {
-                    if let Ok(docs) = documents.lock() {
+                    if let Ok(mut docs) = documents.lock() {
                         if let Some(documento) = docs.get(&document) {
                             let doc_content = match documento {
                                 Documento::Texto(lines) => lines.join(","),
@@ -478,8 +478,71 @@ impl Microservice {
                                 ));
                             }
                         } else {
-                            eprintln!("Documento no encontrado: {}", document);
-                            log_clone.log(&format!("Documento no encontrado: {}", document));
+                            let doc_type = match document.split('.').last() {
+                                Some(ext) => ext,
+                                None => "",
+                            };
+                            
+                            if doc_type == "txt" {
+                                docs.insert(document.clone(), Documento::Texto(vec!["".to_string()]));
+                            } else {
+                                let mut rows = vec!["".to_string(); 100];
+                                docs.insert(document.clone(), Documento::Calculo(rows));
+                            }        
+                            
+
+                            let document_data = match docs.get(&document) {
+                                Some(doc) => Self::get_document_data(&document, doc),
+                                None => String::new(),
+                            };
+
+                            // let set_parts = vec!["SET", &document, &document_data];
+                            // let set_command = redis_parser::format_resp_command(&set_parts);
+
+                            // if let Ok(mut streams) = node_streams.lock() {
+                            //     for (addr, stream) in streams.iter_mut() {
+                            //         if let Err(e) = stream.write_all(set_command.as_bytes()) {
+                            //             eprintln!("Error enviando SET a nodo {}: {}", addr, e);
+                            //         }
+                            //     }
+                            // }
+
+                            // let default_stream = "127.0.0.1:4000".to_string();
+                            // let stream_id = if let Ok(doc_streams) = document_streams.lock() {
+                            //     doc_streams.get(&document).unwrap_or(&default_stream).clone()
+                            // } else {
+                            //     default_stream.clone()
+                            // };
+
+                            // if let Ok(mut streams) = node_streams.lock() {
+                            //     if let Some(stream) = streams.get_mut(&stream_id) {
+                            //         let reload_message_parts = vec!["RELOAD-FILE", &document, &document_data, &stream_id];
+                            //         let reload_message_resp = redis_parser::format_resp_command(&reload_message_parts);
+                            //         let publis_reload_command = redis_parser::format_resp_publish(
+                            //             &document,
+                            //             &reload_message_resp,
+                            //         );
+                            //         log_clone.log(&format!(
+                            //             "Enviando mensaje RELOAD-FILE para documento {}: {}",
+                            //             document, reload_message_resp
+                            //         ));
+                            //         if let Err(e) = stream.write_all(publis_reload_command.as_bytes()) {
+                            //             eprintln!(
+                            //                 "Error enviando mensaje RELOAD-FILE a nodo {}: {}",
+                            //                 stream_id, e
+                            //             );
+                            //             log_clone.log(&format!(
+                            //                 "Error enviando mensaje RELOAD-FILE a nodo {}: {}",
+                            //                 stream_id, e
+                            //             ));
+                            //         } else {
+                            //             log_clone.log(&format!(
+                            //                 "Mensaje RELOAD-FILE enviado exitosamente a nodo {}",
+                            //                 stream_id
+                            //             ));
+                            //         }
+                            //     }
+                            // }          
                         }
                     } else {
                         eprintln!("Error obteniendo lock de documents para client-subscribed");
@@ -504,18 +567,13 @@ impl Microservice {
                                 .filter(|s| !s.is_empty())
                                 .map(|s| s.to_string())
                                 .collect();
-                            // Si el contenido es vacío, agrega una línea vacía
-                            if lines.is_empty() {
-                                lines.push("".to_string());
-                            }
                             docs.insert(document.clone(), Documento::Texto(lines));
                         } else {
                             let mut rows: Vec<String> = content
                                 .split("/--/")
-                                .filter(|_| true) // para mantener al menos un elemento aunque esté vacío
+                                .filter(|_| true) 
                                 .map(|s| s.to_string())
                                 .collect();
-                            // Si el contenido es vacío, agrega una celda vacía
                             if rows.is_empty() {
                                 rows.push("".to_string());
                             }
@@ -637,7 +695,7 @@ impl Microservice {
                         }
                         
                         let document_data = Self::get_document_data(&document, docs.get(&document).unwrap());
-                        let set_parts = vec!["SET", &document, &document_data];
+                        let set_parts = vec!["SET", &document, "\"\""];
                         let set_command = redis_parser::format_resp_command(&set_parts);
 
                         if let Ok(mut streams) = node_streams.lock() {
