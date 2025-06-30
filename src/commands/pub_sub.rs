@@ -146,7 +146,7 @@ pub fn handle_unsubscribe(
 
 fn publish_to_internal_channel(message: &str, subscription_channel: &ClientsMap) -> i64 {
     let channels_guard = subscription_channel.lock().unwrap();
-    if let Some(microservice) = channels_guard.get("subscriptions") {
+    if let Some(microservice) = channels_guard.get("notifications") {
         if let Ok(mut stream_guard) = microservice.stream.lock() {
             if let Some(stream) = stream_guard.as_mut() {
                 if let Err(e) = write!(stream, "{}", message) {
@@ -226,7 +226,7 @@ pub fn handle_publish<T: Write>(
         }
     };
 
-    let sent_count = if doc == "subscriptions" {
+    let sent_count = if doc == "notifications" {
         publish_to_internal_channel(&message, subscription_channel)
     } else {
         publish_to_subscribers(doc, &message, document_subscribers, active_clients)
