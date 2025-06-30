@@ -1,7 +1,7 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::{
-    prelude::{BoxExt, GtkWindowExt, OrientableExt, PopoverExt, WidgetExt, ButtonExt, EditableExt},
+    prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, PopoverExt, WidgetExt},
     CssProvider,
 };
 use crate::components::structs::document_value_info::DocumentValueInfo;
@@ -81,7 +81,7 @@ pub enum AppMsg {
     UpdateFilesList(Vec<String>),
     FilesLoaded,
     ReloadFile(String, String),
-    AddFile(),
+    AddFile(String),
 }
 
 #[relm4::component(pub)]
@@ -143,7 +143,7 @@ impl SimpleComponent for AppModel {
                             add_css_class: "reload",
                             add_css_class: "button",
                             set_label: "Reload",
-                            connect_clicked => AppMsg::AddFile(),
+                            connect_clicked => AppMsg::GetFiles,
                         },
 
                         #[name="new_file_popover"]
@@ -174,7 +174,7 @@ impl SimpleComponent for AppModel {
                                 }
                             },
                         },
-                    } 
+                    }
                 },
 
                 append: model.files_manager_cont.widget(),
@@ -371,7 +371,7 @@ impl SimpleComponent for AppModel {
                 ));
             }
 
-            AppMsg::CreateFile(file_id, content,file_type) => {
+            AppMsg::CreateFile(file_id, content, file_type) => {
                 self.command = format!("set {} {}", file_id, content);
                 sender.input(AppMsg::ExecuteCommand);
             }
@@ -462,8 +462,15 @@ impl SimpleComponent for AppModel {
                     println!("El nombre del archivo es obligatorio.");
                     return;
                 }
-                let file_id = format!("{}.txt", self.file_name.trim());
-                sender.input(AppMsg::CreateFile(file_id, "\"\"".to_string(),"txt".to_string()));
+                let file_id = format!(
+                    "{}.txt",
+                    self.file_name.split(' ').collect::<Vec<&str>>().join("_")
+                );
+                sender.input(AppMsg::CreateFile(
+                    file_id,
+                    "\"\"".to_string(),
+                    "txt".to_string(),
+                ));
             }
 
             AppMsg::CreateSpreadsheetDocument => {
@@ -474,8 +481,15 @@ impl SimpleComponent for AppModel {
                     println!("El nombre del archivo es obligatorio.");
                     return;
                 }
-                let file_id = format!("{}.xlsx", self.file_name.trim());
-                sender.input(AppMsg::CreateFile(file_id, "\"\"".to_string(),"xlsx".to_string()));
+                let file_id = format!(
+                    "{}.xlsx",
+                    self.file_name.split(' ').collect::<Vec<&str>>().join("_")
+                );
+                sender.input(AppMsg::CreateFile(
+                    file_id,
+                    "\"\"".to_string(),
+                    "xlsx".to_string(),
+                ));
             }
 
             AppMsg::UpdateFilesList(archivos) => {
@@ -502,18 +516,24 @@ impl SimpleComponent for AppModel {
                 } else {
                     FileType::Text
                 };
-
+                let mut doc_file = DocumentValueInfo::new(content, 0);
+                doc_file.decode_text();
                 // Actualizar directamente el FileWorkspace con el nuevo contenido
                 self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(
                     file_id.clone(),
                     "1".to_string(), // qty_subs
                     file_type,
-                    content,
+                    doc_file.value,
                 ));
             }
-            AppMsg::AddFile() => {
-                // En vez de mantener la lista, simplemente refresca desde el servidor
-                sender.input(AppMsg::GetFiles);
+            AppMsg::AddFile(file_name) => {
+                let doc_type = if file_name.ends_with("txt") {
+                    FileType::Text
+                } else {
+                    FileType::Sheet
+                };
+                self.files_manager_cont
+                    .emit(FileWorkspaceMsg::AddFile(file_name, doc_type));
             }
         }
     }

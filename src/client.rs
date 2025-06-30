@@ -280,21 +280,6 @@ fn listen_to_redis_response(
                     let _ = sender.send(AppMsg::UpdateFilesList(archivos));
                 }
             }
-            "RELOAD-FILE" => {
-                if response.len() >= 3 {
-                    let file_id = response[1].clone();
-                    let content = response[2].clone();
-                    println!(
-                        "Recibido RELOAD-FILE para {} con contenido: {}",
-                        file_id, content
-                    );
-                    if let Some(sender) = &ui_sender {
-                        let _ = sender.send(AppMsg::ReloadFile(file_id, content));
-                    }
-                } else {
-                    eprintln!("Mensaje RELOAD-FILE mal formado: {:?}", response);
-                }
-            }
             _ => {
                 if let Some(sender) = &ui_sender {
                     let _ = sender.send(AppMsg::ManageResponse(response[0].clone()));
@@ -302,15 +287,11 @@ fn listen_to_redis_response(
                 if let Ok(last_command) = last_command_sent.lock() {
                     // Verifica si el comando fue SET y extrae el nombre del archivo
                     if last_command.to_uppercase().contains("SET") {
-                        // Ejemplo: *3\r\n$3\r\nSET\r\n$12\r\nprueba.txt\r\n$4\r\nhola\r\n
-                        // Extraer el nombre del archivo del comando RESP
                         let lines: Vec<&str> = last_command.split("\r\n").collect();
                         if lines.len() >= 5 {
                             let file_name = lines[4];
-                            // Aquí deberías mantener una lista de archivos (en memoria o en el estado de la app)
-                            // Por ejemplo, podrías enviar un mensaje especial para actualizar la lista:
                             if let Some(sender) = &ui_sender {
-                                let _ = sender.send(AppMsg::AddFile());
+                                let _ = sender.send(AppMsg::AddFile(file_name.to_string()));
                             }
                         }
                     }

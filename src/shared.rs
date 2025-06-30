@@ -1,6 +1,5 @@
 #[path = "utils/redis_parser.rs"]
 mod redis_parser;
-use document::Documento;
 
 /// Mensajes que procesa el microservicio
 #[derive(Debug)]
@@ -19,13 +18,6 @@ pub enum MicroserviceMessage {
         index: String,
         content: String,
         file: String,
-    },
-    Ask {
-        response: Vec<String>,
-    },
-    Set {
-        document: String,
-        doc_type: String,
     },
     Error(String),
     Unknown(String),
@@ -57,13 +49,7 @@ impl MicroserviceMessage {
                     file,
                 }
             }
-            "ASK" => MicroserviceMessage::Ask {
-                response: parts.to_vec(),
-            },
-            "set" if parts.len() >= 1 => MicroserviceMessage::Set {
-                document: parts[1].clone(),
-                doc_type: parts[2].clone(),
-            },
+
             cmd if cmd.starts_with("-ERR") => MicroserviceMessage::Error(cmd.to_string()),
             other => MicroserviceMessage::Unknown(other.to_string()),
         }
@@ -77,9 +63,11 @@ impl ToString for MicroserviceMessage {
                 document,
                 client_id,
             } => redis_parser::format_resp_command(&["client-subscribed", document, client_id]),
-            MicroserviceMessage::Set { document, doc_type } => {
-                redis_parser::format_resp_command(&["set", document, doc_type])
-            }
+            MicroserviceMessage::Doc {
+                document,
+                content,
+                stream_id,
+            } => redis_parser::format_resp_command(&["DOC", document, content, stream_id]),
             _ => "".to_string(),
         }
     }
