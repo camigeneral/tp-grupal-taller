@@ -346,9 +346,10 @@ impl SimpleComponent for SpreadsheetModel {
                 let index = (row * 10 + col) as i32;
                 let doc_info = DocumentValueInfo::new(content.clone(), index);
 
-                sender
-                    .output(SpreadsheetOutput::ContentChanged(doc_info))
-                    .unwrap();
+                if let Err(_e) = sender.output(SpreadsheetOutput::ContentChanged(doc_info)) {
+                    eprintln!("Error sending spreadsheet output");
+                }
+                
             }
             SpreadsheetMsg::RecalculateAll => {
                 self.recalculate_all();

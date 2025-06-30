@@ -80,7 +80,9 @@ impl SimpleComponent for FileEditorModel {
                 gtk::Button {
                     set_label: "Volver",
                     connect_clicked[sender] => move |_| {
-                        sender.output(FileEditorOutputMessage::GoBack).unwrap();
+                        if sender.output(FileEditorOutputMessage::GoBack).is_err() {
+                            eprintln!("Failed to send message");
+                        }
                     },
                     add_css_class: "back-button",
                     add_css_class: "button",
@@ -179,10 +181,9 @@ impl SimpleComponent for FileEditorModel {
                         let filas: Vec<String> =
                             content.split("\n").map(|s| s.to_string()).collect();
 
-                        self.spreadsheet_ctrl
-                            .sender()
-                            .send(SpreadsheetMsg::UpdateSheet(file_name.clone(), filas))
-                            .unwrap();
+                            if self.spreadsheet_ctrl.sender().send(SpreadsheetMsg::UpdateSheet(file_name.clone(), filas)).is_err() {
+                                eprintln!("Failed to send message");
+                            }
                     }
                     _ => {
                         self.text_editor_visible = true;
@@ -207,14 +208,16 @@ impl SimpleComponent for FileEditorModel {
                     FileType::Sheet => {
                         self.text_editor_visible = false;
                         self.spreadsheet_visible = true;
-                        self.spreadsheet_ctrl
+                        if self.spreadsheet_ctrl
                             .sender()
                             .send(SpreadsheetMsg::UpdateSheetContent(
                                 file_name.clone(),
                                 index,
                                 content,
-                            ))
-                            .unwrap();
+                            )).is_err()
+                        {
+                            eprintln!("Failed to send  message");
+                        }
                     }
                     _ => {
                         self.text_editor_visible = true;

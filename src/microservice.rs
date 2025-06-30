@@ -68,7 +68,7 @@ impl Microservice {
     pub fn new(config_path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let logger = logger::Logger::init(
             logger::Logger::get_log_path_from_config(config_path),
-            "0000".parse().unwrap(),
+            "0000".parse()?,
         );
         Ok(Microservice {
             node_streams: Arc::new(Mutex::new(HashMap::new())),

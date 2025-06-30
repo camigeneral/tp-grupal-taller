@@ -278,11 +278,15 @@ fn handle_node(
 
             // Padding seguro
             if !decrypted.is_empty() {
-                let pad = *decrypted.last().unwrap() as usize;
-                if pad > 0 && pad <= decrypted.len() {
-                    decrypted.truncate(decrypted.len() - pad);
+                if let Some(&last_byte) = decrypted.last() {
+                    let pad = last_byte as usize;
+                    if pad > 0 && pad <= decrypted.len() {
+                        decrypted.truncate(decrypted.len() - pad);
+                    } else {
+                        eprintln!("Padding inválido al descifrar mensaje de nodo");
+                        continue;
+                    }
                 } else {
-                    eprintln!("Padding inválido al descifrar mensaje de nodo");
                     continue;
                 }
             } else {
@@ -454,8 +458,20 @@ fn handle_node(
                 println!("Llego un end replica");
                 saving_command = false;
                 {
-                    let mut locked_local_node = local_node.lock().unwrap();
-                    let mut locked_peer_nodes = nodes.lock().unwrap();
+                    let mut locked_local_node = match local_node.lock() {
+                        Ok(guard) => guard,
+                        Err(poisoned) => {
+                            eprintln!("local_node mutex poisoned");
+                            poisoned.into_inner()
+                        }
+                    };
+                    let mut locked_peer_nodes = match nodes.lock() {
+                        Ok(guard) => guard,
+                        Err(poisoned) => {
+                            eprintln!("peer_nodes mutex poisoned");
+                            poisoned.into_inner()
+                        }
+                    };
                     let updated_epoch = locked_local_node.epoch + 1;
                     locked_local_node.epoch = updated_epoch;
                     for replica in locked_local_node.replica_nodes.clone() {
@@ -538,7 +554,13 @@ fn handle_node(
                 };
 
                 {
-                    let mut locked_peer_nodes = nodes.lock().unwrap();
+                    let mut locked_peer_nodes = match nodes.lock() {
+                        Ok(guard) => guard,
+                        Err(poisoned) => {
+                            eprintln!("peer_nodes mutex poisoned");
+                            poisoned.into_inner()
+                        }
+                    };
                     let address = format!("127.0.0.1:{}", port);
 
                     if let Some(replica_node) = locked_peer_nodes.get_mut(&address) {
@@ -813,7 +835,13 @@ fn ping_to_node(
             let mut failed_port = 0;
 
             {
-                let mut locked_peer_nodes = peer_nodes.lock().unwrap();
+                let mut locked_peer_nodes = match peer_nodes.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => {
+                        eprintln!("peer_nodes mutex poisoned");
+                        poisoned.into_inner()
+                    }
+                };
 
                 for (_, peer) in locked_peer_nodes.iter_mut() {
                     if peer.state != NodeState::Fail {
@@ -884,8 +912,20 @@ fn detect_failed_node(
 ) -> bool {
     let key = GenericArray::from_slice(&KEY);
     let cipher = Aes128::new(key);
-    let mut locked_peer_nodes = peer_nodes.lock().unwrap();
-    let locked_local_node = local_node.lock().unwrap();
+    let mut locked_peer_nodes = match peer_nodes.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            eprintln!("peer_nodes mutex poisoned");
+            poisoned.into_inner()
+        }
+    };
+    let locked_local_node = match local_node.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            eprintln!("local_node mutex poisoned");
+            poisoned.into_inner()
+        }
+    };
     let mut peer_state = NodeState::Fail;
     let mut promote_replica = false;
 
@@ -947,8 +987,20 @@ fn set_failed_node(
 ) -> bool {
     let key = GenericArray::from_slice(&KEY);
     let cipher = Aes128::new(key);
-    let mut locked_peer_nodes = peer_nodes.lock().unwrap();
-    let locked_local_node = local_node.lock().unwrap();
+    let mut locked_peer_nodes = match peer_nodes.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            eprintln!("peer_nodes mutex poisoned");
+            poisoned.into_inner()
+        }
+    };
+    let locked_local_node = match local_node.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            eprintln!("local_node mutex poisoned");
+            poisoned.into_inner()
+        }
+    };
     let mut promote_replica = false;
 
     let inactive_address = format!("127.0.0.1:{}", inactive_port);

@@ -142,10 +142,11 @@ impl SimpleComponent for FileListView {
                 self.selected_filter = FileType::Sheet;
                 self.update_file_list_based_on_filter();
             }
-            FileFilterAction::SelectFile(file_name, file_type) => sender
-                .output(FileFilterAction::SelectFile(file_name, file_type))
-                .unwrap(),
-
+            FileFilterAction::SelectFile(file_name, file_type) => {
+                if let Err(_e) = sender.output(FileFilterAction::SelectFile(file_name, file_type)) {
+                    eprintln!("Error sending selected file output");
+                }
+            }
             FileFilterAction::UpdateFiles(new_files) => {
                 self.all_filles = new_files;
                 self.update_file_list_based_on_filter();
@@ -183,7 +184,9 @@ impl FactoryComponent for FileListItem {
             set_halign: gtk::Align::Fill,
             set_valign: gtk::Align::Center,
             connect_clicked[sender, name = self.name.clone(), file_type = self.file_type.clone()] => move |_| {
-                sender.output(FileFilterAction::SelectFile(name.clone(), file_type.clone())).unwrap();
+                if let Err(_e) = sender.output(FileFilterAction::SelectFile(name.clone(), file_type.clone())) {
+                    eprintln!("Error sending file selection");
+                }
             },
             gtk::Box {
                 set_orientation: gtk::Orientation::Horizontal,
