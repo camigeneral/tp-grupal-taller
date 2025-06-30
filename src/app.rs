@@ -1,7 +1,7 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::{
-    prelude::{BoxExt, GtkWindowExt, OrientableExt, PopoverExt, WidgetExt, ButtonExt, EditableExt},
+    prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, PopoverExt, WidgetExt},
     CssProvider,
 };
 use crate::components::structs::document_value_info::DocumentValueInfo;
@@ -174,7 +174,7 @@ impl SimpleComponent for AppModel {
                                 }
                             },
                         },
-                    } 
+                    }
                 },
 
                 append: model.files_manager_cont.widget(),
@@ -371,7 +371,7 @@ impl SimpleComponent for AppModel {
                 ));
             }
 
-            AppMsg::CreateFile(file_id, content,file_type) => {
+            AppMsg::CreateFile(file_id, content, file_type) => {
                 self.command = format!("set {} {}", file_id, content);
                 sender.input(AppMsg::ExecuteCommand);
             }
@@ -462,8 +462,15 @@ impl SimpleComponent for AppModel {
                     println!("El nombre del archivo es obligatorio.");
                     return;
                 }
-                let file_id = format!("{}.txt", self.file_name.split(' ').collect::<Vec<&str>>().join("_"));
-                sender.input(AppMsg::CreateFile(file_id, "\"\"".to_string(),"txt".to_string()));
+                let file_id = format!(
+                    "{}.txt",
+                    self.file_name.split(' ').collect::<Vec<&str>>().join("_")
+                );
+                sender.input(AppMsg::CreateFile(
+                    file_id,
+                    "\"\"".to_string(),
+                    "txt".to_string(),
+                ));
             }
 
             AppMsg::CreateSpreadsheetDocument => {
@@ -474,8 +481,15 @@ impl SimpleComponent for AppModel {
                     println!("El nombre del archivo es obligatorio.");
                     return;
                 }
-                let file_id = format!("{}.xlsx", self.file_name.split(' ').collect::<Vec<&str>>().join("_"));
-                sender.input(AppMsg::CreateFile(file_id, "\"\"".to_string(),"xlsx".to_string()));
+                let file_id = format!(
+                    "{}.xlsx",
+                    self.file_name.split(' ').collect::<Vec<&str>>().join("_")
+                );
+                sender.input(AppMsg::CreateFile(
+                    file_id,
+                    "\"\"".to_string(),
+                    "xlsx".to_string(),
+                ));
             }
 
             AppMsg::UpdateFilesList(archivos) => {
@@ -518,9 +532,9 @@ impl SimpleComponent for AppModel {
                 } else {
                     FileType::Sheet
                 };
-                self.files_manager_cont.emit(FileWorkspaceMsg::AddFile(file_name, doc_type));
+                self.files_manager_cont
+                    .emit(FileWorkspaceMsg::AddFile(file_name, doc_type));
             }
-            
         }
     }
 }

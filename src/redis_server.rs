@@ -498,7 +498,6 @@ fn execute_command_internal(
         }
     };
 
-
     let response = match resolve_key_location(
         key.clone(),
         &ctx.local_node,
@@ -518,7 +517,7 @@ fn execute_command_internal(
                 &ctx.active_clients,
                 &ctx.logged_clients,
                 &ctx.internal_subscription_channel,
-            );           
+            );
 
             if redis_response.publish {
                 if let Err(e) = publish_update(
@@ -530,9 +529,12 @@ fn execute_command_internal(
                 ) {
                     eprintln!("Error al publicar actualización: {}", e);
                 }
-            }             
+            }
 
-            println!("Broadcast_replica: {:?}", command_request.command.to_lowercase());
+            println!(
+                "Broadcast_replica: {:?}",
+                command_request.command.to_lowercase()
+            );
             if let Err(e) = redis_node_handler::broadcast_to_replicas(
                 &ctx.local_node,
                 &ctx.peer_nodes,
@@ -576,10 +578,10 @@ fn get_microservice_peer_addr(ctx: &Arc<ServerContext>) -> Option<String> {
 }
 
 pub fn notify_microservice(
-    ctx: Arc<ServerContext>, 
-    doc: String, 
-    client_id: String, 
-    create_file: bool
+    ctx: Arc<ServerContext>,
+    doc: String,
+    client_id: String,
+    create_file: bool,
 ) {
     let microservice_addr = match get_microservice_peer_addr(&ctx) {
         Some(addr) => addr,
@@ -588,7 +590,6 @@ pub fn notify_microservice(
             return;
         }
     };
-
 
     let message_enum = if !create_file {
         shared::MicroserviceMessage::ClientSubscribed {
@@ -623,7 +624,6 @@ pub fn notify_microservice(
         &ctx.internal_subscription_channel,
     );
 }
-
 
 fn _is_authorized_client(logged_clients: LoggedClientsMap, client_id: String) -> bool {
     let locked = match logged_clients.lock() {

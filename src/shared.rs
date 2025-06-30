@@ -1,6 +1,5 @@
 #[path = "utils/redis_parser.rs"]
 mod redis_parser;
-use document::Documento;
 
 /// Mensajes que procesa el microservicio
 #[derive(Debug)]
@@ -63,10 +62,12 @@ impl ToString for MicroserviceMessage {
             MicroserviceMessage::ClientSubscribed {
                 document,
                 client_id,
-            } => redis_parser::format_resp_command(&["client-subscribed", document, client_id]),            
-            MicroserviceMessage::Doc { document, content, stream_id } => {                
-                redis_parser::format_resp_command(&["DOC", document, &content, &stream_id])
-            }        
+            } => redis_parser::format_resp_command(&["client-subscribed", document, client_id]),
+            MicroserviceMessage::Doc {
+                document,
+                content,
+                stream_id,
+            } => redis_parser::format_resp_command(&["DOC", document, content, stream_id]),
             _ => "".to_string(),
         }
     }

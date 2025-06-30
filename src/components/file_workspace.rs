@@ -233,9 +233,11 @@ impl SimpleComponent for FileWorkspace {
                 } else {
                     Documento::Texto(vec!["".to_string()])
                 };
-                self.files.insert((file_name.clone(), file_type.clone()), doc);
+                self.files
+                    .insert((file_name.clone(), file_type.clone()), doc);
 
-                let archivos_tipos: Vec<(String, FileType)> = self.files
+                let archivos_tipos: Vec<(String, FileType)> = self
+                    .files
                     .keys()
                     .map(|(name, tipo)| (name.clone(), tipo.clone()))
                     .collect();

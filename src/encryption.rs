@@ -1,7 +1,7 @@
-extern crate base64;
 extern crate aes;
+extern crate base64;
+use self::aes::cipher::{generic_array::GenericArray, BlockEncrypt};
 use self::aes::Aes128;
-use self::aes::cipher::{BlockEncrypt, generic_array::GenericArray};
 use self::base64::{engine::general_purpose, Engine as _};
 
 pub const KEY: [u8; 16] = *b"clavesecreta1234";
@@ -16,12 +16,9 @@ pub const ENCRYPTION: bool = true;
 ///
 /// # Retorna
 /// Un String en base64 con el mensaje encriptado y con un salto de línea.
-pub fn encrypt_message(
-    cipher: &Aes128,
-    message: &str,
-) -> String {
+pub fn encrypt_message(cipher: &Aes128, message: &str) -> String {
     if !ENCRYPTION {
-        return message.to_string()
+        return message.to_string();
     }
 
     let mut message_bytes = message.as_bytes().to_vec();
@@ -40,13 +37,12 @@ pub fn encrypt_message(
     encoded_message
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
     extern crate aes;
+    use self::aes::cipher::{generic_array::GenericArray, BlockDecrypt, KeyInit};
     use self::aes::Aes128;
-    use self::aes::cipher::{BlockDecrypt, KeyInit, generic_array::GenericArray};
 
     static KEY: &[u8; 16] = b"clavesecreta1234";
 
@@ -57,7 +53,7 @@ mod tests {
 
     fn decrypt_message(cipher: &Aes128, encrypted_b64: &str) -> String {
         let encrypted = general_purpose::STANDARD
-            .decode(encrypted_b64.trim_end()) 
+            .decode(encrypted_b64.trim_end())
             .expect("base64 decoding failed");
 
         let mut decrypted = Vec::new();
@@ -102,5 +98,4 @@ mod tests {
         let decrypted = decrypt_message(&cipher, &encrypted);
         assert_eq!(decrypted, message);
     }
-
 }

@@ -182,7 +182,7 @@ impl Microservice {
     }
 
     fn get_document_data(doc_name: &String, documento: &Documento) -> String {
-        let document_data = match documento {
+        match documento {
             Documento::Texto(lines) => {
                 let mut data = format!("{}/++/", doc_name);
                 for linea in lines {
@@ -199,10 +199,9 @@ impl Microservice {
                 }
                 data
             }
-        };
-        document_data
+        }
     }
-    
+
     /// Inicia el procesamiento automático de comandos en un hilo separado.
     ///
     /// Este método crea un hilo que se ejecuta en segundo plano y realiza
@@ -210,7 +209,7 @@ impl Microservice {
     fn start_automatic_commands(&self) {
         let node_streams_clone = Arc::clone(&self.node_streams);
         let last_command_sent_clone = Arc::clone(&self.last_command_sent);
-        let documents_clone = Arc::clone(&self.documents);    
+        let documents_clone = Arc::clone(&self.documents);
         let logger_clone = self.logger.clone();
 
         thread::spawn(move || loop {
@@ -223,83 +222,80 @@ impl Microservice {
             }
 
             if let Ok(docs) = documents_clone.lock() {
-                    if let Ok(mut streams) = node_streams_clone.lock() {
-                        logger_clone.log(&format!(
-                            "Enviando comandos SET para persistir {} documentos",
-                            docs.len()
-                        ));
+                if let Ok(mut streams) = node_streams_clone.lock() {
+                    logger_clone.log(&format!(
+                        "Enviando comandos SET para persistir {} documentos",
+                        docs.len()
+                    ));
 
-                        for (doc_name, documento) in docs.iter() {
-                            let document_data = Self::get_document_data(doc_name, documento);
+                    for (doc_name, documento) in docs.iter() {
+                        let document_data = Self::get_document_data(doc_name, documento);
 
-                            // Enviar a todos los nodos disponibles
-                            for (stream_id, stream) in streams.iter_mut() {
-                                let set_parts = vec!["SET", doc_name, &document_data];
-                                let set_command = redis_parser::format_resp_command(&set_parts);
+                        // Enviar a todos los nodos disponibles
+                        for (stream_id, stream) in streams.iter_mut() {
+                            let set_parts = vec!["SET", doc_name, &document_data];
+                            let set_command = redis_parser::format_resp_command(&set_parts);
 
+                            logger_clone.log(&format!(
+                                "Enviando comando SET para persistir documento {} en nodo {}: {}",
+                                doc_name, stream_id, set_command
+                            ));
+
+                            if let Err(e) = stream.write_all(set_command.as_bytes()) {
+                                println!("Error enviando comando SET a nodo {}: {}", stream_id, e);
                                 logger_clone.log(&format!(
-                                    "Enviando comando SET para persistir documento {} en nodo {}: {}",
-                                    doc_name, stream_id, set_command
+                                    "Error enviando comando SET a nodo {}: {}",
+                                    stream_id, e
                                 ));
+                                continue;
+                            } else {
+                                let _ = stream.flush();
+                                logger_clone.log(&format!(
+                                    "Comando SET enviado exitosamente a nodo {}",
+                                    stream_id
+                                ));
+                            }
 
-                                if let Err(e) = stream.write_all(set_command.as_bytes()) {
-                                    println!(
-                                        "Error enviando comando SET a nodo {}: {}",
-                                        stream_id, e
-                                    );
-                                    logger_clone.log(&format!(
-                                        "Error enviando comando SET a nodo {}: {}",
-                                        stream_id, e
-                                    ));
-                                    continue;
-                                } else {
-                                    let _ = stream.flush();
-                                    logger_clone.log(&format!(
-                                        "Comando SET enviado exitosamente a nodo {}",
-                                        stream_id
-                                    ));
-                                }
+                            if let Ok(mut last_command) = last_command_sent_clone.lock() {
+                                *last_command = set_command;
+                            }
 
-                                if let Ok(mut last_command) = last_command_sent_clone.lock() {
-                                    *last_command = set_command;
-                                }
+                            let doc_name_cloned = doc_name.clone();
+                            let reload_message_parts =
+                                vec!["RELOAD-FILE", &doc_name, &document_data, stream_id];
+                            let reload_message_resp =
+                                redis_parser::format_resp_command(&reload_message_parts);
+                            let publis_reload_command = redis_parser::format_resp_publish(
+                                &doc_name_cloned.clone(),
+                                &reload_message_resp,
+                            );
+                            logger_clone.log(&format!(
+                                "Enviando mensaje RELOAD-FILE para documento {}: {}",
+                                doc_name, reload_message_resp
+                            ));
 
-                                let doc_name_cloned = doc_name.clone();
-                                let reload_message_parts =
-                                    vec!["RELOAD-FILE", &doc_name, &document_data, stream_id];
-                                let reload_message_resp =
-                                    redis_parser::format_resp_command(&reload_message_parts);
-                                let publis_reload_command = redis_parser::format_resp_publish(
-                                    &doc_name_cloned.clone(),
-                                    &reload_message_resp,
+                            if let Err(e) = stream.write_all(publis_reload_command.as_bytes()) {
+                                println!(
+                                    "Error enviando mensaje RELOAD-FILE a nodo {}: {}",
+                                    stream_id, e
                                 );
                                 logger_clone.log(&format!(
-                                    "Enviando mensaje RELOAD-FILE para documento {}: {}",
-                                    doc_name, reload_message_resp
+                                    "Error enviando mensaje RELOAD-FILE a nodo {}: {}",
+                                    stream_id, e
                                 ));
-
-                                if let Err(e) = stream.write_all(publis_reload_command.as_bytes()) {
-                                    println!(
-                                        "Error enviando mensaje RELOAD-FILE a nodo {}: {}",
-                                        stream_id, e
-                                    );
-                                    logger_clone.log(&format!(
-                                        "Error enviando mensaje RELOAD-FILE a nodo {}: {}",
-                                        stream_id, e
-                                    ));
-                                } else {
-                                    let _ = stream.flush();
-                                    logger_clone.log(&format!(
-                                        "Mensaje RELOAD-FILE enviado exitosamente a nodo {}",
-                                        stream_id
-                                    ));
-                                }
+                            } else {
+                                let _ = stream.flush();
+                                logger_clone.log(&format!(
+                                    "Mensaje RELOAD-FILE enviado exitosamente a nodo {}",
+                                    stream_id
+                                ));
                             }
                         }
-                    } else {
-                        println!("Error obteniendo lock de node_streams para persistencia");
-                        logger_clone.log("Error obteniendo lock de node_streams para persistencia");
-                    }                
+                    }
+                } else {
+                    println!("Error obteniendo lock de node_streams para persistencia");
+                    logger_clone.log("Error obteniendo lock de node_streams para persistencia");
+                }
             } else {
                 println!("Error obteniendo lock de documents para persistencia");
                 logger_clone.log("Error obteniendo lock de documents para persistencia");
@@ -497,7 +493,7 @@ impl Microservice {
                         } else {
                             let mut rows: Vec<String> = content
                                 .split("/--/")
-                                .filter(|_| true) 
+                                .filter(|_| true)
                                 .map(|s| s.to_string())
                                 .collect();
                             if rows.is_empty() {
