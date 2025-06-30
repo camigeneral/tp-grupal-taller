@@ -81,7 +81,7 @@ pub enum AppMsg {
     UpdateFilesList(Vec<String>),
     FilesLoaded,
     ReloadFile(String, String),
-    AddFile(String),
+    AddFile(),
 }
 
 #[relm4::component(pub)]
@@ -136,6 +136,14 @@ impl SimpleComponent for AppModel {
                             add_css_class: "button",
                             set_label: "Nuevo Archivo",
                             connect_clicked => AppMsg::ToggleNewFilePopover,
+                        },
+
+                        #[name="reload_button"]
+                        gtk::Button {
+                            add_css_class: "reload",
+                            add_css_class: "button",
+                            set_label: "Reload",
+                            connect_clicked => AppMsg::AddFile(),
                         },
 
                         #[name="new_file_popover"]
@@ -503,7 +511,7 @@ impl SimpleComponent for AppModel {
                     content,
                 ));
             }
-            AppMsg::AddFile(_nombre) => {
+            AppMsg::AddFile() => {
                 // En vez de mantener la lista, simplemente refresca desde el servidor
                 sender.input(AppMsg::GetFiles);
             }

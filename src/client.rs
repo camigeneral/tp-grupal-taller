@@ -310,7 +310,7 @@ fn listen_to_redis_response(
                             // Aquí deberías mantener una lista de archivos (en memoria o en el estado de la app)
                             // Por ejemplo, podrías enviar un mensaje especial para actualizar la lista:
                             if let Some(sender) = &ui_sender {
-                                let _ = sender.send(AppMsg::AddFile(file_name.to_string()));
+                                let _ = sender.send(AppMsg::AddFile());
                             }
                         }
                     }

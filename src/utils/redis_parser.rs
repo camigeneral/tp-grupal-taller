@@ -98,6 +98,7 @@ impl CommandResponse {
 #[allow(dead_code)]
 pub fn parse_command(reader: &mut BufReader<TcpStream>) -> std::io::Result<CommandRequest> {
     let (command_parts, unparsed_command) = parse_resp_command(reader)?;
+    // println!("\ncommand parts: {:?}", command_parts);
 
     if command_parts.is_empty() {
         return Err(std::io::Error::new(
@@ -370,7 +371,9 @@ pub fn write_resp_error(mut stream: &TcpStream, msg: &str) -> std::io::Result<()
 pub fn parse_replica_command(
     reader: &mut BufReader<std::io::Cursor<String>>,
 ) -> std::io::Result<CommandRequest> {
+    println!("\nentrando a parse_replica_command");
     let (command_parts, unparsed_command) = parse_replica_resp(reader)?;
+    println!("\nreplica command parts: {:?}", command_parts);
 
     if command_parts.is_empty() {
         return Err(std::io::Error::new(

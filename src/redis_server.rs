@@ -400,7 +400,7 @@ fn handle_client(
 
         let command = command_request.command.clone();
 
-        println!("Comando recibido: {:?}", command_request);
+        // println!("Comando recibido: {:?}", command_request);
         logger.log(&format!(
             "Comando recibido de {}: {:?}",
             client_id, command_request
@@ -441,7 +441,7 @@ fn handle_client(
                 continue;
             }
         };
-        println!("response: {:#?}", response.get_resp());
+        // println!("response: {:#?}", response.get_resp());
 
         if let Err(e) = write_response(stream, &response) {
             println!("Error al escribir respuesta: {}", e);
@@ -506,6 +506,7 @@ fn execute_command_internal(
     ) {
         Ok(()) => {
             let unparsed_command = command_request.unparsed_command.clone();
+            // println!("\nunparsed command: {}", unparsed_command);
 
             let redis_response = redis::execute_command(
                 command_request.clone(),
@@ -527,7 +528,7 @@ fn execute_command_internal(
                         e
                     ));
                 } else {
-                    println!("Documentos persistidos exitosamente después de comando SET");
+                    // println!("Documentos persistidos exitosamente después de comando SET");
                     logger.log("Documentos persistidos exitosamente después de comando SET");
                 }
             }
@@ -544,6 +545,7 @@ fn execute_command_internal(
                 }
             }
 
+            println!("Broadcast_replica: {:?}", command_request.command.to_lowercase());
             if let Err(e) = redis_node_handler::broadcast_to_replicas(
                 &ctx.local_node,
                 &ctx.peer_nodes,
@@ -684,7 +686,7 @@ pub fn resolve_key_location(
         )
     };
 
-    println!("Hash: {}", hashed_key);
+    // println!("Hash: {}", hashed_key);
     logger.log(&format!("Hash: {}", hashed_key));
 
     if node_role != NodeRole::Master
@@ -705,7 +707,7 @@ pub fn resolve_key_location(
                 CommandResponse::String(format!("127.0.0.1:{}", peer_node.port - 10000)),
             ]);
 
-            println!("Hashing para otro nodo: {:?}", response_string.clone());
+            // println!("Hashing para otro nodo: {:?}", response_string.clone());
             logger.log(&format!(
                 "Hashing para otro nodo: {:?}",
                 response_string.clone()
@@ -719,10 +721,10 @@ pub fn resolve_key_location(
                 CommandResponse::String(hashed_key.clone().to_string()),
             ]);
 
-            println!(
-                "Hashing para nodo indefinido: {:?}",
-                response_string.clone()
-            );
+            // println!(
+            //     "Hashing para nodo indefinido: {:?}",
+            //     response_string.clone()
+            // );
             logger.log(&format!(
                 "Hashing para nodo indefinido: {:?}",
                 response_string.clone()
@@ -918,7 +920,7 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, String>
         let messages_data = parts[1];
         documents.insert(document_id, messages_data.to_string());
     }
-    println!("documentos: {:#?}", documents);
+    // println!("documentos: {:#?}", documents);
     Ok(documents)
 }
 

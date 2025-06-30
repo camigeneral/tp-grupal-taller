@@ -3,7 +3,7 @@ use crate::redis_node_handler::redis_types::SetsMap;
 use commands::redis;
 use local_node::{LocalNode, NodeRole, NodeState};
 use peer_node;
-use encryption::{encrypt_message, KEY};
+use encryption::{encrypt_message, KEY, ENCRYPTION};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::File;
@@ -14,6 +14,8 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
+
+const PRINT_PINGS: bool = false;
 
 extern crate base64;
 use aes::Aes128;
@@ -30,6 +32,7 @@ use redis_types::*;
 pub enum RedisMessage {
     Node,
 }
+
 
 pub fn get_config_path(port: usize) -> Result<String, std::io::Error> {
     let config_path = match port {
@@ -53,12 +56,14 @@ pub fn get_config_path(port: usize) -> Result<String, std::io::Error> {
     Ok(config_path.to_string())
 }
 
+
 pub fn create_local_node(port: usize) -> Result<Arc<Mutex<LocalNode>>, std::io::Error> {
     let config_path = get_config_path(port)?;
 
     let local_node = LocalNode::new_from_config(config_path)?;
     Ok(Arc::new(Mutex::new(local_node)))
 }
+
 
 /// Intenta establecer una primera conexion con los otros nodos del servidor
 ///
@@ -104,11 +109,11 @@ pub fn start_node_connection(
         );
     });
 
-    let cloned_local_node_for_ping_pong = Arc::clone(local_node);
-    let cloned_peer_nodes = Arc::clone(peer_nodes);
+    let cloned_local_node_for_ping_pong_node = Arc::clone(local_node);
+    let cloned_peer_nodes_for_ping_pong = Arc::clone(peer_nodes);
 
     thread::spawn(move || {
-        let _ = ping_to_master(cloned_local_node_for_ping_pong, cloned_peer_nodes);
+        let _ = ping_to_node(cloned_local_node_for_ping_pong_node, cloned_peer_nodes_for_ping_pong);
     });
 
     let locked_local_node = match local_node.lock() {
@@ -144,19 +149,19 @@ pub fn start_node_connection(
                     };
 
                     let message = format!(
-                        "{:?} {} {:?} {} {}\n",
+                        "{:?} {} {:?} {} {} {}\n",
                         RedisMessage::Node,
                         locked_local_node.port,
                         locked_local_node.role,
                         locked_local_node.hash_range.0,
-                        locked_local_node.hash_range.1
+                        locked_local_node.hash_range.1,
+                        locked_local_node.priority,
                     );
 
                     println!("Recibido comando: {}", message);
 
 
                     let encrypted_b64 = encrypt_message(&cipher, &message);
-
                     if let Err(e) = cloned_stream.write_all(encrypted_b64.as_bytes()) {
                         return Err(e);
                     }
@@ -169,6 +174,8 @@ pub fn start_node_connection(
                             NodeRole::Unknown,
                             (0, 16383),
                             NodeState::Active,
+                            0,
+                            0
                         ),
                     );
                 }
@@ -181,6 +188,7 @@ pub fn start_node_connection(
 
     Ok(())
 }
+
 
 /// Permite que un nodo esuche mensajes, y maneja las conexiones con los otros nodos.
 ///
@@ -240,6 +248,7 @@ fn connect_nodes(
     Ok(())
 }
 
+
 /// Maneja la comunicación con otro nodo.
 ///
 /// Por el momento solo lee el comando "node", y con eso se guarda la informacion del nodo.
@@ -267,52 +276,60 @@ fn handle_node(
     for command in reader.lines().map_while(Result::ok) {
         let message;
 
-        // Decodifica base64
-        let encoded_bytes = match general_purpose::STANDARD.decode(&command) {
-            Ok(bytes) => bytes,
-            Err(_) => {
-                eprintln!("Error decodificando base64");
-                continue;
+        if ENCRYPTION {
+            
+
+            // Decodifica base64
+            let encoded_bytes = match general_purpose::STANDARD.decode(&command) {
+                Ok(bytes) => bytes,
+                Err(_) => {
+                    eprintln!("Error decodificando base64");
+                    continue;
+                }
+            };
+
+            // Descifra como antes
+            let mut decrypted = Vec::new();
+            for chunk in encoded_bytes.chunks(16) {
+                let mut block = GenericArray::clone_from_slice(chunk);
+                cipher.decrypt_block(&mut block);
+                decrypted.extend_from_slice(&block);
             }
-        };
 
-        // Descifra como antes
-        let mut decrypted = Vec::new();
-        for chunk in encoded_bytes.chunks(16) {
-            let mut block = GenericArray::clone_from_slice(chunk);
-            cipher.decrypt_block(&mut block);
-            decrypted.extend_from_slice(&block);
-        }
-
-        // Padding seguro
-        if !decrypted.is_empty() {
-            let pad = *decrypted.last().unwrap() as usize;
-            if pad > 0 && pad <= decrypted.len() {
-                decrypted.truncate(decrypted.len() - pad);
+            // Padding seguro
+            if !decrypted.is_empty() {
+                let pad = *decrypted.last().unwrap() as usize;
+                if pad > 0 && pad <= decrypted.len() {
+                    decrypted.truncate(decrypted.len() - pad);
+                } else {
+                    eprintln!("Padding inválido al descifrar mensaje de nodo");
+                    continue;
+                }
             } else {
-                eprintln!("Padding inválido al descifrar mensaje de nodo");
                 continue;
             }
+
+            message = String::from_utf8(decrypted).expect("UTF-8 inválido");
+            
         } else {
-            continue;
+            message = command;
         }
 
-        message = String::from_utf8(decrypted).expect("UTF-8 inválido");
-        
 
         let input: Vec<String> = message
-            .split_whitespace()
-            .map(|s| s.to_string().to_lowercase())
-            .collect();
+        .split_whitespace()
+        .map(|s| s.to_string().to_lowercase())
+        .collect();
 
         let command = &input[0];
-        println!("Recibido: {:?}", input);
+        
+        // if command != "pong"  && command != "ping" || PRINT_PINGS {
+        //     println!("Recibido: {:?}", input);
+        // }
 
         match command.as_str() {
             "node" => {
-                println!("recibi el comando node");
-
-                if input.len() < 5 {
+                if input.len() < 6 {
                     continue;
                 }
 
@@ -325,6 +342,10 @@ fn handle_node(
                     Err(_) => continue,
                 };
                 let hash_range_end = match input[4].trim().parse::<usize>() {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                let priority = match input[5].trim().parse::<usize>() {
                     Ok(v) => v,
                     Err(_) => continue,
                 };
@@ -366,6 +387,8 @@ fn handle_node(
                         node_role.clone(),
                         (hash_range_start, hash_range_end),
                         NodeState::Active,
+                        priority,
+                        0
                     );
 
                     if hash_range_start == local_node_locked.hash_range.0 {
@@ -388,12 +411,13 @@ fn handle_node(
                     lock_nodes.insert(node_address.clone(), node_client);
 
                     let message = format!(
-                        "{:?} {} {:?} {} {}\n",
+                        "{:?} {} {:?} {} {} {}\n",
                         RedisMessage::Node,
                         local_node_locked.port,
                         local_node_locked.role,
                         local_node_locked.hash_range.0,
-                        local_node_locked.hash_range.1
+                        local_node_locked.hash_range.1,
+                        local_node_locked.priority,
                     );
                     let encrypted_b64 = encrypt_message(&cipher, &message);
 
@@ -442,9 +466,30 @@ fn handle_node(
                 deserialize_vec_hashmap(&serialized_vec, &shared_documents);
                 serialized_vec.clear();
             }
-            "start_replica_command" => saving_command = true,
+            "start_replica_command" => {
+                saving_command = true;
+                println!("Llego un start replica");
+            },
             "end_replica_command" => {
+                println!("Llego un end replica");
                 saving_command = false;
+                {
+                    let mut locked_local_node = local_node.lock().unwrap();
+                    let mut locked_peer_nodes = nodes.lock().unwrap();
+                    let updated_epoch = locked_local_node.epoch + 1;
+                    locked_local_node.epoch = updated_epoch;
+                    for replica in locked_local_node.replica_nodes.clone() {
+                        let replica_address = format!("127.0.0.1:{}", replica);
+                        if let Some(replica_node) = locked_peer_nodes.get_mut(&replica_address) {
+                            let message = format!("update_epoch {} {}\n", locked_local_node.port, updated_epoch);
+                            let encrypted_b64 = encrypt_message(&cipher, &message);
+                            if let Err(e) = replica_node.stream.write_all(encrypted_b64.as_bytes()) {
+                                return Err(e);
+                            }
+                        }
+                    }
+                }
+                println!("{:?}", command_string.clone());
                 let cursor = Cursor::new(command_string.clone());
                 let mut reader_for_command = BufReader::new(cursor);
 
@@ -457,6 +502,7 @@ fn handle_node(
                             &shared_sets,
                         );
                         println!("Replica response: {:?}", response.response);
+                        println!("\nshared documents after replication: {:?}\n", shared_documents);
                     }
                     Err(e) => {
                         if e.kind() == std::io::ErrorKind::UnexpectedEof {
@@ -477,55 +523,51 @@ fn handle_node(
                 let encrypted_b64 = encrypt_message(&cipher, &message);
                 let _ = stream.write_all(encrypted_b64.as_bytes());
             }
-            "confirm_master_down" => {
-                match confirm_master_state(local_node, &nodes) {
-                    Ok(master_state) => {
-                        if master_state == NodeState::Inactive {
+            "node_status" => {
+                // ("node_status {} {:?}\n", inactive_port, NodeState::Fail);
 
-                            let locked_nodes = match nodes.lock() {
-                                Ok(n) => n,
-                                Err(_) => continue,
-                            };
-                            let hash_range;
-
-                            {
-                                let locked_local_node = local_node.lock().unwrap();
-                                if locked_local_node.role != NodeRole::Replica {
-                                    println!("Master node cannot initiate replica promotion");
-                                }
-
-                                hash_range = locked_local_node.hash_range;
-                            }
-
-                            for (_, peer) in locked_nodes.iter() {
-                                if peer.role == NodeRole::Replica && peer.hash_range == hash_range {
-                                    if let Ok(mut peer_stream) = peer.stream.try_clone() {
-                                        let message = format!("initialize_replica_promotion\n");
-                                        let encrypted_b64 = encrypt_message(&cipher, &message);
-                                        let _ = peer_stream.write_all(encrypted_b64.as_bytes());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Err(_) => eprintln!("Error confirmando estado del master"),
+                let inactive_port = match input[1].trim().parse::<usize>() {
+                    Ok(p) => p,
+                    Err(_) => continue,
                 };
+                let inactive_state: NodeState = match input[2].trim().to_lowercase().as_str() {
+                    "fail" => NodeState::Fail,
+                    "pfail" => NodeState::PFail,
+                    _ => NodeState::Active,
+                };
+                let promote_replica = set_failed_node(local_node, &nodes, inactive_port, inactive_state);
+                if promote_replica {
+                    initialize_replica_promotion(local_node, &nodes);
+                }
             }
-            "initialize_replica_promotion" => {                initialize_replica_promotion(local_node, &nodes);
-            }
-            "inactive_node" => {
-                if input.len() > 1 {
-                    let inactive_node_addr = format!("127.0.0.1:{}", input[1]);
-                    if let Ok(mut locked_nodes) = nodes.lock() {
-                        if let Some(node) = locked_nodes.get_mut(&inactive_node_addr) {
-                            node.state = NodeState::Inactive;
-                        }
+            "update_epoch" => {
+                let port = match input[1].trim().parse::<usize>() {
+                    Ok(p) => p,
+                    Err(_) => continue,
+                };
+
+                let epoch = match input[2].trim().parse::<usize>() {
+                    Ok(p) => p,
+                    Err(_) => continue,
+                };
+
+                {
+                    let mut locked_peer_nodes = nodes.lock().unwrap();
+                    let address = format!("127.0.0.1:{}", port);
+
+                    if let Some(replica_node) = locked_peer_nodes.get_mut(&address) {
+                        replica_node.epoch = epoch;
                     }
                 }
+
             }
             _ => {
                 if saving_command {
-                    command_string.push_str(&format!("{}\r\n", command));
+                    let string_to_push = input.join("\r\n");
+                    command_string.push_str(&string_to_push);
+                    command_string.push_str("\r\n");
+                    command_string.push_str("\r\n");
+                    println!("Llego un saving command {:?}",command_string.clone());
                 } else {
                     let message = "Comando no reconocido\n";
                     let encrypted_b64 = encrypt_message(&cipher, &message);
@@ -537,6 +579,7 @@ fn handle_node(
 
     Ok(())
 }
+
 
 /// Lee un archivo de configuracion y genera una lista de los puertos a los que un nodo se debe conectar
 ///
@@ -559,6 +602,7 @@ fn read_node_ports<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<usize>> {
 
     Ok(ports)
 }
+
 
 pub fn broadcast_to_replicas(
     local_node: &Arc<Mutex<LocalNode>>,
@@ -620,6 +664,7 @@ pub fn broadcast_to_replicas(
 
     Ok(())
 }
+
 
 fn handle_replica_sync(
     replica_port: &String,
@@ -694,6 +739,7 @@ fn handle_replica_sync(
     Ok(())
 }
 
+
 fn serialize_vec_hashmap(
     map: &HashMap<String, String>,
     mut stream: TcpStream,
@@ -713,6 +759,7 @@ fn serialize_vec_hashmap(
     stream.write_all(encrypted_b64.as_bytes())?;
     Ok(())
 }
+
 
 fn serialize_hashset_hashmap(
     map: &HashMap<String, HashSet<String>>,
@@ -735,6 +782,7 @@ fn serialize_hashset_hashmap(
     Ok(())
 }
 
+
 fn deserialize_hashset_hashmap(
     lines: &Vec<String>,
     shared_sets: &Arc<Mutex<HashMap<String, HashSet<String>>>>,
@@ -752,6 +800,8 @@ fn deserialize_hashset_hashmap(
     } else {
         eprintln!("No se pudo bloquear shared_sets en deserialize_hashset_hashmap");
     }
+
+    println!("\nfinished hashset sync request: {:?}\n", shared_sets);
 }
 
 fn deserialize_vec_hashmap(lines: &Vec<String>, shared_documents: &RedisDocumentsMap) {
@@ -764,240 +814,219 @@ fn deserialize_vec_hashmap(lines: &Vec<String>, shared_documents: &RedisDocument
     } else {
         eprintln!("No se pudo bloquear shared_documents en deserialize_vec_hashmap");
     }
+
+    println!("\nfinished vec sync request: {:?}\n", shared_documents);
 }
 
-fn ping_to_master(
+
+fn ping_to_node(
     local_node: Arc<Mutex<LocalNode>>,
     peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
 ) -> std::io::Result<()> {
     let key = GenericArray::from_slice(&KEY);
     let cipher = Aes128::new(key);
     let ping_interval = Duration::from_secs(5);
-    let error_interval = Duration::from_secs(50);
+    let error_interval = Duration::from_secs(5);
     let mut last_sent = Instant::now();
 
-    let mut stream_to_ping = None;
-    println!("PING TO MASTER");
     loop {
         let mut now = Instant::now();
         if now.duration_since(last_sent) >= ping_interval {
+            let mut failed_port = 0;
+
             {
-                if stream_to_ping.is_none() {
-                    let locked_local_node = local_node.lock().unwrap();
-                    let mut locked_peer_nodes = peer_nodes.lock().unwrap();
-                    if let Some(port) = locked_local_node.master_node {
-                        let key = format!("127.0.0.1:{}", port);
-                        if let Some(peer_node) = locked_peer_nodes.get_mut(&key) {
-                            if peer_node.state == NodeState::Active {
-                                let cloned_stream = peer_node.stream.try_clone().ok();
-                                stream_to_ping = cloned_stream;
+                let mut locked_peer_nodes = peer_nodes.lock().unwrap();
+
+                for (_, peer) in locked_peer_nodes.iter_mut() {
+                    if peer.state != NodeState::Fail {
+                        if PRINT_PINGS { println!("sending to: {} {:?}", peer.port, peer.state) }
+                        match peer.stream.try_clone() {
+                            Ok(mut peer_stream) => {
+                                peer_stream.set_read_timeout(Some(error_interval))?;
+                                let mut reader = BufReader::new(peer_stream.try_clone()?);
+                                let message = "ping\n";
+                                let encrypted_b64 = encrypt_message(&cipher, &message);
+                                if let Err(e) = peer_stream.write_all(encrypted_b64.as_bytes()) {
+                                    return Err(e);
+                                }
+                                now = Instant::now();
+    
+                                let mut line = String::new();
+                                match reader.read_line(&mut line) {
+                                    Ok(0) => {
+                                        println!("Connection closed by peer");
+                                        failed_port = peer.port.clone();
+                                        break;
+                                    }
+                                    Ok(_) => {
+                                        if PRINT_PINGS { println!("Received response: {}", line.trim()) }
+                                    }
+                                    Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
+                                        println!("Timeout: no response within {:?}", error_interval);
+                                        failed_port = peer.port.clone();
+                                        break;
+                                    }
+                                    Err(e) => {
+                                        println!("Unexpected error: {}", e);
+                                        failed_port = peer.port.clone();
+                                        break;
+                                    }
+                                }
+                            }
+                            Err(_) => {
+                                std::hint::spin_loop();
                             }
                         }
                     }
                 }
             }
 
-            match stream_to_ping.as_ref() {
-                Some(mut stream) => {
-
-                    stream.set_read_timeout(Some(error_interval))?;
-                    let mut reader = BufReader::new(stream.try_clone()?);
-
-                    let mut encrypted_b64 = encrypt_message(&cipher, "ping\n");
-                    encrypted_b64.push('\n');
-                    stream.write_all(encrypted_b64.as_bytes())?;
-                    println!("escibo salto de linea");
-                    stream.flush()?;
-
-                    now = Instant::now();
-
-                    let mut line = String::new();
-                    let read_result = reader.read_line(&mut line);
-
-                    println!("LEO: {:?} | line: {:?}", read_result, line.trim());
-
-                    match read_result {
-                        Ok(0) => {
-                            println!("Connection closed by peer");
-                            request_master_state_confirmation(&local_node, &peer_nodes);
-                            stream_to_ping = None;
-                            std::hint::spin_loop();
-                        }
-                        Ok(_) => {
-                            println!("Received response: {}", line.trim());
-                        }
-                        Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                            println!("Timeout: no response within {:?}", error_interval);
-                            request_master_state_confirmation(&local_node, &peer_nodes);
-                            stream_to_ping = None;
-                            std::hint::spin_loop();
-                        }
-                        Err(e) => {
-                            println!("Unexpected error: {}", e);
-                            request_master_state_confirmation(&local_node, &peer_nodes);
-                            stream_to_ping = None;
-                            std::hint::spin_loop();
-                        }
-                    }
-
-                    last_sent = now;
-                }
-                None => {
-                    std::hint::spin_loop();
+            if failed_port != 0 {
+                let promote_replica: bool = detect_failed_node(&local_node, &peer_nodes, failed_port);
+                if promote_replica {
+                    initialize_replica_promotion(&local_node, &peer_nodes);
                 }
             }
+
+            
+
+            last_sent = now;
         }
-        std::hint::spin_loop();
     }
 }
 
-fn request_master_state_confirmation(
-    local_node: &Arc<Mutex<LocalNode>>,
-    peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
-) {
+
+
+
+fn detect_failed_node(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>, inactive_port: usize) -> bool {
     let key = GenericArray::from_slice(&KEY);
-    let cipher = Aes128::new(key);
-    let master_port_option;
-    let master_port;
-    let hash_range;
-
-    {
-        // Bloqueo local_node
-        match local_node.lock() {
-            Ok(locked_local_node) => {
-                if locked_local_node.role != NodeRole::Replica {
-                    println!("Master node cannot initiate replica promotion");
-                    return;
-                }
-
-                master_port_option = locked_local_node.master_node;
-                hash_range = locked_local_node.hash_range;
+    let cipher = Aes128::new(&key);
+    let mut locked_peer_nodes = peer_nodes.lock().unwrap();
+    let locked_local_node = local_node.lock().unwrap();
+    let mut peer_state = NodeState::Fail;
+    let mut promote_replica = false;
+    
+    let inactive_address = format!("127.0.0.1:{}", inactive_port);
+    if let Some(inactive_node) = locked_peer_nodes.get_mut(&inactive_address) {
+        match inactive_node.state {
+            NodeState::Active => {
+                inactive_node.state = NodeState::PFail;
+                peer_state = NodeState::PFail;
             }
-            Err(_) => {
-                eprintln!("Error al bloquear local_node");
-                return;
-            }
-        }
-
-        master_port = match master_port_option {
-            Some(p) => p,
-            None => {
-                println!("No master node");
-                return;
-            }
-        };
-    }
-
-    let mut contacted_replica = false;
-
-    {
-        // Bloqueo peer_nodes
-        let mut locked_peer_nodes = match peer_nodes.lock() {
-            Ok(n) => n,
-            Err(_) => {
-                eprintln!("Error al bloquear peer_nodes");
-                return;
-            }
-        };
-
-        // Marcar master como inactivo
-        for peer in locked_peer_nodes.values_mut() {
-            if peer.port == master_port {
-                peer.state = NodeState::Inactive;
-            }
-        }
-
-        // Intentar contactar a otra réplica
-        for (_, peer) in locked_peer_nodes.iter() {
-            if peer.role == NodeRole::Replica
-                && peer.hash_range == hash_range
-                && peer.port != master_port
-            {
-                let message = format!("confirm_master_down {}\n", master_port);
-                let encrypted_b64 = encrypt_message(&cipher, &message);
-                match peer.stream.try_clone() {
-                    Ok(mut peer_stream) => {
-                        println!("Enviando confirm_master_down a {}", peer.port);
-                        // let res = peer_stream.write_all(encrypted_b64.as_bytes());
-                        // println!("Resultado write_all: {:?}", res);
-                        
-                        if peer_stream.write_all(encrypted_b64.as_bytes()).is_ok() {
-                            contacted_replica = true;
-                        } else {
-                            eprintln!("Error escribiendo a la réplica");
+            NodeState::PFail => {
+                inactive_node.state = NodeState::Fail;
+                peer_state = NodeState::Fail;
+                if inactive_node.role == NodeRole::Master && inactive_node.hash_range.0 == locked_local_node.hash_range.0  && inactive_node.hash_range.1 == locked_local_node.hash_range.1 {
+                    promote_replica = true;
+                    for replica in locked_local_node.replica_nodes.clone() {
+                        let replica_address = format!("127.0.0.1:{}", replica);
+                        if let Some(replica_node) = locked_peer_nodes.get_mut(&replica_address) {
+                            // por las dudas verifico que no sea master y que este activo
+                            if replica_node.state == NodeState::Active && replica_node.role != NodeRole::Master {
+                               // si hay otra replica mas actualizada o si tenemos el mismo epoch pero la otra tiene una prioridad menor, no me vuelvo master
+                                if (replica_node.epoch > locked_local_node.epoch )|| (replica_node.epoch == locked_local_node.epoch && replica_node.priority < locked_local_node.priority) {
+                                    promote_replica = false;
+                                }
+                            }                        
                         }
                     }
-                    Err(_) => {
-                        eprintln!("Error clonando stream para réplica");
+                }
+            }
+            _ => {}
+         }
+    }
+
+    for (_, peer) in locked_peer_nodes.iter_mut() {
+        if peer.port != inactive_port {
+            let message = format!("node_status {} {:?}\n", inactive_port, peer_state);
+            let encrypted_b64 = encrypt_message(&cipher, &message);
+            let _ = peer.stream.write_all(encrypted_b64.as_bytes());
+            // to do: log error
+        }
+    }
+
+    promote_replica
+}
+
+
+fn set_failed_node(local_node: &Arc<Mutex<LocalNode>>, peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>, inactive_port: usize, inactive_state: NodeState) -> bool {
+    let key = GenericArray::from_slice(&KEY);
+    let cipher = Aes128::new(&key);
+    let mut locked_peer_nodes = peer_nodes.lock().unwrap();
+    let locked_local_node = local_node.lock().unwrap();
+    let mut promote_replica = false;
+    
+    let inactive_address = format!("127.0.0.1:{}", inactive_port);
+    if let Some(inactive_node) = locked_peer_nodes.get_mut(&inactive_address) {
+        if inactive_state == NodeState::Fail {
+            // lo marco como failed
+            inactive_node.state = NodeState::Fail;
+
+            // me fijo si tengo que promocionar
+            if inactive_node.role == NodeRole::Master && inactive_node.hash_range.0 == locked_local_node.hash_range.0  && inactive_node.hash_range.1 == locked_local_node.hash_range.1 {
+                promote_replica = true;
+                for replica in locked_local_node.replica_nodes.clone() {
+                    let replica_address = format!("127.0.0.1:{}", replica);
+                    if let Some(replica_node) = locked_peer_nodes.get_mut(&replica_address) {
+                        // por las dudas verifico que no sea master y que este activo
+                        if replica_node.state == NodeState::Active && replica_node.role != NodeRole::Master {
+                            // si hay otra replica mas actualizada o si tenemos el mismo epoch pero la otra tiene una prioridad menor, no me vuelvo master
+                             if (replica_node.epoch > locked_local_node.epoch )|| (replica_node.epoch == locked_local_node.epoch && replica_node.priority < locked_local_node.priority) {
+                                 promote_replica = false;
+                             }
+                         }
                     }
                 }
             }
+        } else {
+            // me llego un pfail -> depende de si yo lo tengo como active o pfail
+            match inactive_node.state {
+                NodeState::Active => {
+                    // lo marco como pfail
+                    inactive_node.state = NodeState::PFail;
+                }
+                NodeState::PFail => {
+                    // lo marco como failed
+                    inactive_node.state = NodeState::Fail;
+
+                    // me fijo si tengo que promocionar
+                    if inactive_node.role == NodeRole::Master && inactive_node.hash_range.0 == locked_local_node.hash_range.0  && inactive_node.hash_range.1 == locked_local_node.hash_range.1 {
+                        promote_replica = true;
+                        for replica in locked_local_node.replica_nodes.clone() {
+                            let replica_address = format!("127.0.0.1:{}", replica);
+                            if let Some(replica_node) = locked_peer_nodes.get_mut(&replica_address) {
+                                if replica_node.priority < locked_local_node.priority {
+                                    promote_replica = false;
+                                }
+                            }
+                        }
+                    }
+
+                    // yo detecte que hizo fail -> le aviso al resto
+                    for (_, peer) in locked_peer_nodes.iter_mut() {
+                        if peer.port != inactive_port {
+                            let message = format!("node_status {} {:?}\n", inactive_port, NodeState::Fail);
+                            let encrypted_b64 = encrypt_message(&cipher, &message);
+                            let _ = peer.stream.write_all(encrypted_b64.as_bytes());
+                            // to do: log error
+                        }
+                    }
+                }
+                _ => {}
+            }
         }
     }
 
-    if !contacted_replica {
-        initialize_replica_promotion(local_node, peer_nodes);
-    }
+    promote_replica
 }
 
-fn confirm_master_state(
-    local_node: &Arc<Mutex<LocalNode>>,
-    peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
-) -> std::io::Result<NodeState> {
-    let master_port_option;
-    let mut master_state = NodeState::Active;
-
-    {
-        master_port_option = match local_node.lock() {
-            Ok(locked_local_node) => locked_local_node.master_node,
-            Err(_) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Error locking local_node",
-                ));
-            }
-        };
-    }
-
-    let master_port = match master_port_option {
-        Some(p) => p,
-        None => {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Master node not set",
-            ));
-        }
-    };
-
-    {
-        let peer_nodes_locked = match peer_nodes.lock() {
-            Ok(lock) => lock,
-            Err(_) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Error locking peer_nodes",
-                ));
-            }
-        };
-
-        for (_addr, peer_node) in peer_nodes_locked.iter() {
-            if peer_node.port == master_port && peer_node.state == NodeState::Inactive {
-                master_state = NodeState::Inactive;
-            }
-        }
-    }
-
-    Ok(master_state)
-}
 
 fn initialize_replica_promotion(
     local_node: &Arc<Mutex<LocalNode>>,
-    peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
+    peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>
 ) {
     let key = GenericArray::from_slice(&KEY);
-    let cipher = Aes128::new(key);
-    println!("initializing replica promotion");
-
+    let cipher = Aes128::new(&key);
     let (mut locked_local_node, locked_peer_nodes) = match (local_node.lock(), peer_nodes.lock()) {
         (Ok(local), Ok(peers)) => (local, peers),
         _ => {
@@ -1006,45 +1035,29 @@ fn initialize_replica_promotion(
         }
     };
 
-    let inactive_port = match locked_local_node.master_node {
-        Some(port) => port,
-        None => {
-            eprintln!("No master node set in local_node");
-            return;
-        }
-    };
-
-    println!("inactive port: {}", inactive_port);
-
     locked_local_node.role = NodeRole::Master;
     locked_local_node.master_node = None;
+    locked_local_node.priority = 0;
 
     let node_info_message = format!(
-        "{:?} {} {:?} {} {}\n",
+        "{:?} {} {:?} {} {} {}\n",
         RedisMessage::Node,
         locked_local_node.port,
         locked_local_node.role,
         locked_local_node.hash_range.0,
-        locked_local_node.hash_range.1
+        locked_local_node.hash_range.1,
+        locked_local_node.priority,
     );
 
-    let inactive_node_message = format!("inactive_node {}\n", inactive_port);
-
-    let encrypted_b64_node_info = encrypt_message(&cipher, &node_info_message);
-    let encrypted_b64_inactive_node = encrypt_message(&cipher, &inactive_node_message);
-
-
+    let encrypted_b64 = encrypt_message(&cipher, &node_info_message);
 
     for (_, peer) in locked_peer_nodes.iter() {
         if peer.state == NodeState::Active {
-            println!("sending to: {}", peer.port);
+            println!("sending promotion info to: {}", peer.port);
             match peer.stream.try_clone() {
                 Ok(mut peer_stream) => {
-                    if let Err(e) = peer_stream.write_all(encrypted_b64_node_info.as_bytes()) {
+                    if let Err(e) = peer_stream.write_all(encrypted_b64.as_bytes()) {
                         eprintln!("Error writing node_info_message: {}", e);
-                    }
-                    if let Err(e) = peer_stream.write_all(encrypted_b64_inactive_node.as_bytes()) {
-                        eprintln!("Error writing inactive_node_message: {}", e);
                     }
                 }
                 Err(_) => {

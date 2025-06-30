@@ -1,0 +1,4 @@
+command parts: ["publish", "notas.txt", "*5\r\n$5\r\nWRITE\r\n$1\r\n3\r\n$4\r\nhola\r\n$13\r\n1751225401785\r\n$9\r\nnotas.txt\r\n"]
+
+
+command parts: ["publish", "notas.txt", "*4\r\n$11\r\nRELOAD-FILE\r\n$9\r\nnotas.txt\r\n$75\r\nnotas.txt/++/holaaa/--/buenas<space>como<space>estas/--/aaaaaaa/--/hola/--/\r\n$14\r\n127.0.0.1:4005\r\n"]
