@@ -47,6 +47,7 @@ pub enum FileWorkspaceMsg {
     SubscribeFile(String),
     ReloadFiles,
     ContentAdded(DocumentValueInfo),
+    AddFile(String, FileType),
 
     UpdateFile(DocumentValueInfo),
     ContentAddedSpreadSheet(DocumentValueInfo),
@@ -224,6 +225,24 @@ impl SimpleComponent for FileWorkspace {
                     .send(FileEditorMessage::ResetEditor)
                     .unwrap();
                 self.editor_visible = false;
+            }
+
+            FileWorkspaceMsg::AddFile(file_name, file_type) => {
+                let doc = if file_type == FileType::Sheet {
+                    Documento::Calculo(vec!["".to_string(); 100])
+                } else {
+                    Documento::Texto(vec!["".to_string()])
+                };
+                self.files.insert((file_name.clone(), file_type.clone()), doc);
+
+                let archivos_tipos: Vec<(String, FileType)> = self.files
+                    .keys()
+                    .map(|(name, tipo)| (name.clone(), tipo.clone()))
+                    .collect();
+                self.file_list_ctrl
+                    .sender()
+                    .send(FileFilterAction::UpdateFiles(archivos_tipos))
+                    .unwrap();
             }
 
             FileWorkspaceMsg::UpdateFile(doc_info) => {
