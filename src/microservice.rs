@@ -174,7 +174,7 @@ impl Microservice {
                     connect_node_sender.send(extra_socket)?;
                 }
                 Err(e) => {
-                    eprintln!("Error al conectar con nodo {}: {}", addr, e);
+                    println!("Error al conectar con nodo {}: {}", addr, e);
                 }
             }
         }
@@ -202,6 +202,7 @@ impl Microservice {
         };
         document_data
     }
+    
     /// Inicia el procesamiento automático de comandos en un hilo separado.
     ///
     /// Este método crea un hilo que se ejecuta en segundo plano y realiza
@@ -209,21 +210,19 @@ impl Microservice {
     fn start_automatic_commands(&self) {
         let node_streams_clone = Arc::clone(&self.node_streams);
         let last_command_sent_clone = Arc::clone(&self.last_command_sent);
-        let documents_clone = Arc::clone(&self.documents);
-        let document_streams_clone = Arc::clone(&self.document_streams);
+        let documents_clone = Arc::clone(&self.documents);    
         let logger_clone = self.logger.clone();
 
         thread::spawn(move || loop {
             match node_streams_clone.lock() {
                 Ok(_streams) => {}
                 Err(e) => {
-                    eprintln!("Error obteniendo lock de node_streams: {}", e);
+                    println!("Error obteniendo lock de node_streams: {}", e);
                     logger_clone.log(&format!("Error obteniendo lock de node_streams: {}", e));
                 }
             }
 
             if let Ok(docs) = documents_clone.lock() {
-                if let Ok(doc_streams) = document_streams_clone.lock() {
                     if let Ok(mut streams) = node_streams_clone.lock() {
                         logger_clone.log(&format!(
                             "Enviando comandos SET para persistir {} documentos",
@@ -244,7 +243,7 @@ impl Microservice {
                                 ));
 
                                 if let Err(e) = stream.write_all(set_command.as_bytes()) {
-                                    eprintln!(
+                                    println!(
                                         "Error enviando comando SET a nodo {}: {}",
                                         stream_id, e
                                     );
@@ -254,6 +253,7 @@ impl Microservice {
                                     ));
                                     continue;
                                 } else {
+                                    let _ = stream.flush();
                                     logger_clone.log(&format!(
                                         "Comando SET enviado exitosamente a nodo {}",
                                         stream_id
@@ -279,7 +279,7 @@ impl Microservice {
                                 ));
 
                                 if let Err(e) = stream.write_all(publis_reload_command.as_bytes()) {
-                                    eprintln!(
+                                    println!(
                                         "Error enviando mensaje RELOAD-FILE a nodo {}: {}",
                                         stream_id, e
                                     );
@@ -288,6 +288,7 @@ impl Microservice {
                                         stream_id, e
                                     ));
                                 } else {
+                                    let _ = stream.flush();
                                     logger_clone.log(&format!(
                                         "Mensaje RELOAD-FILE enviado exitosamente a nodo {}",
                                         stream_id
@@ -296,19 +297,15 @@ impl Microservice {
                             }
                         }
                     } else {
-                        eprintln!("Error obteniendo lock de node_streams para persistencia");
+                        println!("Error obteniendo lock de node_streams para persistencia");
                         logger_clone.log("Error obteniendo lock de node_streams para persistencia");
-                    }
-                } else {
-                    eprintln!("Error obteniendo lock de document_streams para persistencia");
-                    logger_clone.log("Error obteniendo lock de document_streams para persistencia");
-                }
+                    }                
             } else {
-                eprintln!("Error obteniendo lock de documents para persistencia");
+                println!("Error obteniendo lock de documents para persistencia");
                 logger_clone.log("Error obteniendo lock de documents para persistencia");
             }
 
-            thread::sleep(Duration::from_secs(10));
+            thread::sleep(Duration::from_secs(5));
         });
     }
     fn start_node_connection_handler(
@@ -332,7 +329,7 @@ impl Microservice {
                 cloned_document_streams,
                 logger,
             ) {
-                eprintln!("Error en la conexión con el nodo: {}", e);
+                println!("Error en la conexión con el nodo: {}", e);
             }
         });
     }
@@ -383,7 +380,7 @@ impl Microservice {
                     cloned_last_command,
                     log_clone,
                 ) {
-                    eprintln!("Error en la conexión con el nodo: {}", e);
+                    println!("Error en la conexión con el nodo: {}", e);
                 }
             });
         }
@@ -411,9 +408,9 @@ impl Microservice {
     fn listen_to_redis_response(
         mut microservice_socket: TcpStream,
         _connect_node_sender: MpscSender<TcpStream>,
-        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+        _node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
         documents: Arc<Mutex<HashMap<String, Documento>>>,
-        document_streams: Arc<Mutex<HashMap<String, String>>>,
+        _document_streams: Arc<Mutex<HashMap<String, String>>>,
         last_command_sent: Arc<Mutex<String>>,
         log_clone: Logger,
     ) -> std::io::Result<()> {
@@ -433,7 +430,7 @@ impl Microservice {
                     document,
                     client_id,
                 } => {
-                    if let Ok(mut docs) = documents.lock() {
+                    if let Ok(docs) = documents.lock() {
                         if let Some(documento) = docs.get(&document) {
                             let doc_content = match documento {
                                 Documento::Texto(lines) => lines.join(","),
@@ -457,7 +454,7 @@ impl Microservice {
                                 command_resp
                             ));
                             if let Err(e) = microservice_socket.write_all(command_resp.as_bytes()) {
-                                eprintln!(
+                                println!(
                                     "Error al enviar mensaje de actualizacion de archivo: {}",
                                     e
                                 );
@@ -465,22 +462,16 @@ impl Microservice {
                                     "Error al enviar mensaje de actualizacion de archivo: {}",
                                     e
                                 ));
-                            }
-                        } else {
-                            let doc_type = match document.split('.').last() {
-                                Some(ext) => ext,
-                                None => "",
-                            };
-                            
-                            if doc_type == "txt" {
-                                docs.insert(document.clone(), Documento::Texto(vec!["".to_string()]));
                             } else {
-                                
-                                docs.insert(document.clone(), Documento::Calculo(vec!["".to_string(); 100]));
-                            }                                                            
+                                let _ = microservice_socket.flush();
+                                log_clone.log(&format!(
+                                    "Enviando publish para client-subscribed: {}",
+                                    command_resp
+                                ));
+                            }
                         }
                     } else {
-                        eprintln!("Error obteniendo lock de documents para client-subscribed");
+                        println!("Error obteniendo lock de documents para client-subscribed");
                         log_clone.log("Error obteniendo lock de documents para client-subscribed");
                     }
                 }
@@ -497,7 +488,7 @@ impl Microservice {
                     ));
                     if let Ok(mut docs) = documents.lock() {
                         if document.ends_with(".txt") {
-                            let mut lines: Vec<String> = content
+                            let lines: Vec<String> = content
                                 .split("/--/")
                                 .filter(|s| !s.is_empty())
                                 .map(|s| s.to_string())
@@ -518,13 +509,7 @@ impl Microservice {
                             docs.insert(document.clone(), Documento::Calculo(rows));
                         }
                     } else {
-                        eprintln!("Error obteniendo lock de documents");
-                    }
-
-                    if let Ok(mut doc_streams) = document_streams.lock() {
-                        doc_streams.insert(document.clone(), stream_id.clone());
-                    } else {
-                        eprintln!("Error obteniendo lock de document_streams");
+                        println!("Error obteniendo lock de documents");
                     }
                 }
                 MicroserviceMessage::Write {
@@ -541,7 +526,7 @@ impl Microservice {
                             let parsed_index = match index.parse::<usize>() {
                                 Ok(idx) => idx,
                                 Err(e) => {
-                                    eprintln!("Error parseando índice: {}", e);
+                                    println!("Error parseando índice: {}", e);
                                     log_clone.log(&format!("Error parseando índice: {}", e));
                                     continue;
                                 }
@@ -606,27 +591,6 @@ impl Microservice {
                         log_clone.log("Error obteniendo lock de documents para write");
                     }
                 }
-                MicroserviceMessage::Set { document, doc_type } => {
-                    if let Ok(mut docs) = documents.lock() {
-                        if doc_type == "txt" {
-                            docs.insert(document.clone(), Documento::Texto(vec!["".to_string()]));
-                        } else {
-                            let mut rows = vec!["".to_string(); 100];
-                            docs.insert(document.clone(), Documento::Calculo(rows));
-                        }
-                        
-                        let document_data = Self::get_document_data(&document, docs.get(&document).unwrap());
-                        let set_parts = vec!["SET", &document, "\"\""];
-                        let set_command = redis_parser::format_resp_command(&set_parts);
-
-                        if let Ok(mut streams) = node_streams.lock() {
-                            // Usa el primer stream disponible
-                            if let Some((_addr, stream)) = streams.iter_mut().next() {
-                                let _ = stream.write_all(set_command.as_bytes());
-                            }
-                        }
-                    }
-                }
                 MicroserviceMessage::Error(_) => {}
                 _ => {}
             }
@@ -647,7 +611,7 @@ impl Microservice {
                 Ok(())
             }
             Err(e) => {
-                eprintln!("Error obteniendo lock de node_streams: {}", e);
+                println!("Error obteniendo lock de node_streams: {}", e);
                 Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::Other,
                     format!("Error obteniendo lock de node_streams: {}", e),
