@@ -135,7 +135,7 @@ pub fn handle_set(
         doc_name, notification
     );
 
-    RedisResponse::new(CommandResponse::Ok, true, notification, doc_name)
+    RedisResponse::new(CommandResponse::Ok, false, notification, doc_name)
 }
 
 // #[cfg(test)]
