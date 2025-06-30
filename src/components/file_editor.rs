@@ -76,12 +76,14 @@ impl SimpleComponent for FileEditorModel {
             gtk::Box {
                 set_orientation: gtk::Orientation::Horizontal,
                 set_spacing: 20,
-                #[name="back"]
+                #[name="back_button"]
                 gtk::Button {
                     set_label: "Volver",
                     connect_clicked[sender] => move |_| {
                         sender.output(FileEditorOutputMessage::GoBack).unwrap();
                     },
+                    add_css_class: "back-button",
+                    add_css_class: "button",
                 },
 
                 #[name="file_label"]

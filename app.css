@@ -146,6 +146,17 @@ spinner {
     background-color: #f5f5f5;
 }
 
+.list_file_names {
+    color: #1e1e1e;
+}
+
+.button.back_button {
+    background-color: #f34c0e;
+    color: white;
+    border-radius: 6px;
+    font-weight: bold;
+}
+
 #AppLogo {
     transform: scale(13);
 }
