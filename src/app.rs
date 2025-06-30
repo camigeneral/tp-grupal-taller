@@ -144,6 +144,8 @@ impl SimpleComponent for AppModel {
                             add_css_class: "button",
                             set_label: "Reload",
                             connect_clicked => AppMsg::GetFiles,
+                            set_margin_start: 20,
+                            set_margin_end: 11,
                         },
 
                         #[name="new_file_popover"]
