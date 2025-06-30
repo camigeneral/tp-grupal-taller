@@ -19,9 +19,6 @@ pub enum MicroserviceMessage {
         content: String,
         file: String,
     },
-    Ask {
-        response: Vec<String>,
-    },
     Error(String),
     Unknown(String),
 }
@@ -52,9 +49,7 @@ impl MicroserviceMessage {
                     file,
                 }
             }
-            "ASK" => MicroserviceMessage::Ask {
-                response: parts.to_vec(),
-            },
+
             cmd if cmd.starts_with("-ERR") => MicroserviceMessage::Error(cmd.to_string()),
             other => MicroserviceMessage::Unknown(other.to_string()),
         }
@@ -68,6 +63,11 @@ impl ToString for MicroserviceMessage {
                 document,
                 client_id,
             } => redis_parser::format_resp_command(&["client-subscribed", document, client_id]),
+            MicroserviceMessage::Doc {
+                document,
+                content,
+                stream_id,
+            } => redis_parser::format_resp_command(&["DOC", document, content, stream_id]),
             _ => "".to_string(),
         }
     }

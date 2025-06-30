@@ -12,17 +12,21 @@ pub enum NodeRole {
 #[derive(Debug, PartialEq)]
 pub enum NodeState {
     Active,
-    Inactive,
+    Fail,
+    PFail,
 }
 
 /// Estructura que representa la instancia de nodo levantada en la consola. Contiene el puerto en el que
-/// escucha nodos entrantes, el tipo (master o replica), y su hash range.
+/// escucha nodos entrantes, el tipo (master o replica), su hash range, y su prioridad. En el caso de ser
+/// master, la prioridad es 0.
 pub struct LocalNode {
     pub port: usize,
     pub role: NodeRole,
     pub hash_range: (usize, usize),
     pub master_node: Option<usize>,
     pub replica_nodes: Vec<usize>,
+    pub priority: usize,
+    pub epoch: usize,
 }
 
 impl LocalNode {
@@ -34,7 +38,7 @@ impl LocalNode {
         reader.read_line(&mut buf)?;
         let split_line: Vec<&str> = buf.split(",").collect();
 
-        if split_line.len() != 4 {
+        if split_line.len() != 5 {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "Invalid arguments",
@@ -64,12 +68,18 @@ impl LocalNode {
             }
         };
 
+        let priority = split_line[4].trim().parse::<usize>().map_err(|_| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid priority")
+        })?;
+
         Ok(LocalNode {
             port,
             role,
             hash_range: (hash_range_start, hash_range_end),
             master_node: None,
             replica_nodes: Vec::new(),
+            priority,
+            epoch: 0,
         })
     }
 }

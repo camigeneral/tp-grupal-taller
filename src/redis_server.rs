@@ -1,3 +1,4 @@
+extern crate aes;
 use commands::redis;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -213,6 +214,17 @@ fn initialize_datasets(documents: &RedisDocumentsMap) -> (SubscribersMap, SetsMa
     )
 }
 
+fn is_client_microservice(ctx: &Arc<ServerContext>, client_id: String) -> bool {
+    let clients_result = ctx.active_clients.lock();
+
+    if let Ok(clients_lock) = clients_result {
+        if let Some(client) = clients_lock.get(&client_id) {
+            return client.client_type == ClientType::Microservice;
+        }
+    }
+    false
+}
+
 fn handle_new_client_connection(
     mut client_stream: TcpStream,
     ctx: Arc<ServerContext>,
@@ -257,6 +269,7 @@ fn handle_new_client_connection(
                 return Err(e);
             }
         };
+
         subscribe_microservice_to_all_docs(
             client_stream_clone,
             client_addr.to_string().clone(),
@@ -292,6 +305,7 @@ fn handle_new_client_connection(
             Err(poisoned) => poisoned.into_inner(),
         };
         lock_clients.insert(client_addr_str, client.clone());
+
         if client_type == ClientType::Microservice {
             subscribe_to_internal_channel(Arc::clone(&ctx), client);
         }
@@ -334,7 +348,7 @@ pub fn subscribe_to_internal_channel(ctx: Arc<ServerContext>, microservice: clie
         Err(poisoned) => poisoned.into_inner(),
     };
 
-    channels_guard.insert("subscriptions".to_string(), microservice);
+    channels_guard.insert("notifications".to_string(), microservice);
     println!("Microservicio suscrito al canal interno subscriptions");
 }
 
@@ -372,26 +386,16 @@ fn handle_client(
                     break;
                 }
                 println!("Error al parsear comando: {}", e);
-                logger.log(&format!("Error al parsear comando: {}", e));
-
                 if let Err(write_err) = write_response(
                     stream,
                     &CommandResponse::Error("Comando inválido".to_string()),
                 ) {
-                    eprintln!(
-                        "Error al escribir respuesta de comando inválido: {}",
-                        write_err
-                    );
-                    logger.log(&format!(
-                        "Error al escribir respuesta de comando inválido: {}",
-                        write_err
-                    ));
-
-                    break;
+                    eprintln!("Error al escribir respuesta: {}", write_err);
                 }
                 continue;
             }
         };
+
         let doc = match &command_request.key {
             Some(doc) => doc.clone(),
             _ => "".to_string(),
@@ -399,28 +403,10 @@ fn handle_client(
 
         let command = command_request.command.clone();
 
-        println!("Comando recibido: {:?}", command_request);
         logger.log(&format!(
             "Comando recibido de {}: {:?}",
             client_id, command_request
         ));
-
-        //TODO esto solo se puede resolver con la replicacion, ya que hay informacion que tienen algunos nodos y otros que no
-        // Entonces el estado de las variables no es el mismo en cada instancia
-        /* if command_request.command != "auth" && command_request.command != "connect" {
-            println!("client_id {}", client_id);
-            println!("Usuarios logueados, {:#?}", ctx.logged_clients);
-            println!("Verificando autorización para client_id: {}", client_id);
-            let logged_clients_clone = ctx.logged_clients.clone();
-            if !is_authorized_client(ctx.logged_clients_clone, client_id.clone()) {
-                println!("Cliente no autorizado: {}", client_id);
-                utils::write_response(
-                    stream,
-                    &utils::CommandResponse::Error("Cliente sin autorizacion".to_string()),
-                )?;
-                continue;
-            }
-        } */
 
         let response = match execute_command_internal(
             command_request,
@@ -440,7 +426,6 @@ fn handle_client(
                 continue;
             }
         };
-        println!("response: {:#?}", response.get_resp());
 
         if let Err(e) = write_response(stream, &response) {
             println!("Error al escribir respuesta: {}", e);
@@ -453,7 +438,23 @@ fn handle_client(
 
         let is_subscribed_command = command == "subscribe";
         if is_subscribed_command && !response.get_resp().contains("ASK") {
-            notify_subscriptions_channel(Arc::clone(&ctx), doc, client_id.to_string());
+            notify_microservice(Arc::clone(&ctx), doc.clone(), client_id.to_string(), false);
+        }
+
+        if command.to_lowercase() == "set" {
+            if is_client_microservice(&ctx, client_id.clone()) {
+                if let Err(e) = persist_documents(&ctx.shared_documents, &ctx.local_node) {
+                    eprintln!("Error persistiendo documentos después de SET: {}", e);
+                    logger.log(&format!(
+                        "Error persistiendo documentos después de SET: {}",
+                        e
+                    ));
+                } else {
+                    logger.log("Documentos persistidos exitosamente después de comando SET");
+                }
+            } else {
+                notify_microservice(Arc::clone(&ctx), doc.clone(), client_id.to_string(), true);
+            }
         }
 
         logger.log(&format!(
@@ -475,7 +476,7 @@ fn handle_client(
 /// Ejecuta un comando internamente, manejando la resolución de ubicación de keys y la propagación a réplicas.
 ///
 /// Esta función extrae la lógica de ejecución de comandos de handle_client para poder
-/// ser reutilizada por funciones internas como notify_subscriptions_channel.
+/// ser reutilizada por funciones internas como notify_microservice.
 ///
 /// # Argumentos
 /// * `command_request` - El comando a ejecutar
@@ -505,6 +506,7 @@ fn execute_command_internal(
     ) {
         Ok(()) => {
             let unparsed_command = command_request.unparsed_command.clone();
+            // println!("\nunparsed command: {}", unparsed_command);
 
             let redis_response = redis::execute_command(
                 command_request.clone(),
@@ -516,20 +518,6 @@ fn execute_command_internal(
                 &ctx.logged_clients,
                 &ctx.internal_subscription_channel,
             );
-
-            // Si el comando es SET, persistir los documentos
-            if command_request.command.to_lowercase() == "set" {
-                if let Err(e) = persist_documents(&ctx.shared_documents, &ctx.local_node) {
-                    eprintln!("Error persistiendo documentos después de SET: {}", e);
-                    logger.log(&format!(
-                        "Error persistiendo documentos después de SET: {}",
-                        e
-                    ));
-                } else {
-                    println!("Documentos persistidos exitosamente después de comando SET");
-                    logger.log("Documentos persistidos exitosamente después de comando SET");
-                }
-            }
 
             if redis_response.publish {
                 if let Err(e) = publish_update(
@@ -543,6 +531,10 @@ fn execute_command_internal(
                 }
             }
 
+            println!(
+                "Broadcast_replica: {:?}",
+                command_request.command.to_lowercase()
+            );
             if let Err(e) = redis_node_handler::broadcast_to_replicas(
                 &ctx.local_node,
                 &ctx.peer_nodes,
@@ -572,7 +564,7 @@ fn get_microservice_peer_addr(ctx: &Arc<ServerContext>) -> Option<String> {
         Err(poisoned) => poisoned.into_inner(),
     };
 
-    if let Some(microservice) = channels_guard.get("subscriptions") {
+    if let Some(microservice) = channels_guard.get("notifications") {
         if let Ok(stream_guard) = microservice.stream.lock() {
             if let Some(stream) = stream_guard.as_ref() {
                 if let Ok(peer_addr) = stream.peer_addr() {
@@ -585,7 +577,12 @@ fn get_microservice_peer_addr(ctx: &Arc<ServerContext>) -> Option<String> {
     None
 }
 
-pub fn notify_subscriptions_channel(ctx: Arc<ServerContext>, doc: String, client_id: String) {
+pub fn notify_microservice(
+    ctx: Arc<ServerContext>,
+    doc: String,
+    client_id: String,
+    create_file: bool,
+) {
     let microservice_addr = match get_microservice_peer_addr(&ctx) {
         Some(addr) => addr,
         None => {
@@ -594,16 +591,24 @@ pub fn notify_subscriptions_channel(ctx: Arc<ServerContext>, doc: String, client
         }
     };
 
-    let message_enum = shared::MicroserviceMessage::ClientSubscribed {
-        document: doc.clone(),
-        client_id: client_id.clone(),
+    let message_enum = if !create_file {
+        shared::MicroserviceMessage::ClientSubscribed {
+            document: doc.clone(),
+            client_id: client_id.clone(),
+        }
+    } else {
+        shared::MicroserviceMessage::Doc {
+            document: doc.clone(),
+            content: String::new(),
+            stream_id: String::new(),
+        }
     };
 
     let message = message_enum.to_string();
 
     let command_request = CommandRequest {
         command: "publish".to_string(),
-        key: Some("subscriptions".to_string()),
+        key: Some("notifications".to_string()),
         arguments: vec![ValueType::String(message.to_string())],
         unparsed_command: format!("publish subscriptions {}", message),
     };
@@ -683,7 +688,7 @@ pub fn resolve_key_location(
         )
     };
 
-    println!("Hash: {}", hashed_key);
+    // println!("Hash: {}", hashed_key);
     logger.log(&format!("Hash: {}", hashed_key));
 
     if node_role != NodeRole::Master
@@ -704,7 +709,7 @@ pub fn resolve_key_location(
                 CommandResponse::String(format!("127.0.0.1:{}", peer_node.port - 10000)),
             ]);
 
-            println!("Hashing para otro nodo: {:?}", response_string.clone());
+            // println!("Hashing para otro nodo: {:?}", response_string.clone());
             logger.log(&format!(
                 "Hashing para otro nodo: {:?}",
                 response_string.clone()
@@ -718,10 +723,10 @@ pub fn resolve_key_location(
                 CommandResponse::String(hashed_key.clone().to_string()),
             ]);
 
-            println!(
-                "Hashing para nodo indefinido: {:?}",
-                response_string.clone()
-            );
+            // println!(
+            //     "Hashing para nodo indefinido: {:?}",
+            //     response_string.clone()
+            // );
             logger.log(&format!(
                 "Hashing para nodo indefinido: {:?}",
                 response_string.clone()
@@ -765,6 +770,7 @@ pub fn publish_update(
                     ));
                     return Err(e);
                 } else {
+                    client.flush()?;
                     logger.log(&format!(
                         "Actualización enviada a {} sobre documento {}",
                         subscriber_id, document_id
@@ -873,8 +879,14 @@ pub fn persist_documents(
         Err(poisoned) => poisoned.into_inner(),
     };
 
-    for (_document_id, doc) in documents_guard.iter() {
-        writeln!(persistence_file, "{}", doc)?;
+    for (doc_name, doc) in documents_guard.iter() {
+        let data = doc.to_string();
+        // Si el contenido ya empieza con el nombre, no lo agregues de nuevo
+        if data.starts_with(&format!("{}/++/", doc_name)) {
+            writeln!(persistence_file, "{}", data)?;
+        } else {
+            writeln!(persistence_file, "{}/++/{}/--/", doc_name, data)?;
+        }
     }
 
     Ok(())
@@ -911,7 +923,7 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, String>
         let messages_data = parts[1];
         documents.insert(document_id, messages_data.to_string());
     }
-    println!("documentos: {:#?}", documents);
+    // println!("documentos: {:#?}", documents);
     Ok(documents)
 }
 
@@ -959,6 +971,8 @@ pub fn subscribe_microservice_to_all_docs(
             let message = format_resp_command(&command_parts.clone());
             if let Err(e) = client_stream.write_all(message.as_bytes()) {
                 eprintln!("Error enviando notificación DOC al microservicio: {}", e);
+            } else {
+                let _ = client_stream.flush();
             }
         }
     }
@@ -975,7 +989,7 @@ pub fn subscribe_microservice_to_all_docs(
 fn initialize_subscription_channel() -> ClientsMap {
     let mut internal_channels: HashMap<String, client_info::Client> = HashMap::new();
     internal_channels.insert(
-        "subscriptions".to_string(),
+        "notifications".to_string(),
         client_info::Client {
             stream: Arc::new(Mutex::new(None)),
             client_type: ClientType::Microservice,

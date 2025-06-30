@@ -54,7 +54,6 @@ pub fn handle_auth(
             "".to_string(),
         );
     }
-    // Lock active_clients sin unwrap, con manejo
     let mut lock_clients = match active_clients.lock() {
         Ok(l) => l,
         Err(_) => {
@@ -81,7 +80,6 @@ pub fn handle_auth(
         }
     }
 
-    // Lock logged_clients sin unwrap, con manejo
     let mut logged_clients_lock = match logged_clients.lock() {
         Ok(l) => l,
         Err(_) => {
