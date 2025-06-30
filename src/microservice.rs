@@ -498,6 +498,7 @@ impl Microservice {
                         content.len(),
                         stream_id
                     ));
+                    println!("Recibi comando DOC");
                     if let Ok(mut docs) = documents.lock() {
                         if document.ends_with(".txt") {
                             let messages: Vec<String> = content

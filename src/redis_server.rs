@@ -106,8 +106,8 @@ fn start_server(
             }
         };
         let file_name = format!(
-            "redis_node_{}_{}.rdb",
-            locked_node.hash_range.0, locked_node.hash_range.1
+            "./rdb_files/redis_node_{}_{}_{}.rdb",
+            locked_node.hash_range.0, locked_node.hash_range.1, locked_node.port
         );
         let node_role = match locked_node.role {
             local_node::NodeRole::Master => local_node::NodeRole::Master,
@@ -848,15 +848,15 @@ pub fn persist_documents(
     let file_name = match local_node.lock() {
         Ok(locked_node) => {
             format!(
-                "redis_node_{}_{}.rdb",
-                locked_node.hash_range.0, locked_node.hash_range.1
+                "./rdb_files/redis_node_{}_{}_{}.rdb",
+                locked_node.hash_range.0, locked_node.hash_range.1, locked_node.port
             )
         }
         Err(poisoned) => {
             let locked_node = poisoned.into_inner();
             format!(
-                "redis_node_{}_{}.rdb",
-                locked_node.hash_range.0, locked_node.hash_range.1
+                "./rdb_files/redis_node_{}_{}_{}.rdb",
+                locked_node.hash_range.0, locked_node.hash_range.1, locked_node.port
             )
         }
     };
