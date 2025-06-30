@@ -174,7 +174,7 @@ impl Microservice {
                     connect_node_sender.send(extra_socket)?;
                 }
                 Err(e) => {
-                    eprintln!("Error al conectar con nodo {}: {}", addr, e);
+                    println!("Error al conectar con nodo {}: {}", addr, e);
                 }
             }
         }
@@ -182,7 +182,7 @@ impl Microservice {
     }
 
     fn get_document_data(doc_name: &String, documento: &Documento) -> String {
-        let document_data = match documento {
+        match documento {
             Documento::Texto(lines) => {
                 let mut data = format!("{}/++/", doc_name);
                 for linea in lines {
@@ -199,9 +199,9 @@ impl Microservice {
                 }
                 data
             }
-        };
-        document_data
+        }
     }
+
     /// Inicia el procesamiento automático de comandos en un hilo separado.
     ///
     /// Este método crea un hilo que se ejecuta en segundo plano y realiza
@@ -210,117 +210,67 @@ impl Microservice {
         let node_streams_clone = Arc::clone(&self.node_streams);
         let last_command_sent_clone = Arc::clone(&self.last_command_sent);
         let documents_clone = Arc::clone(&self.documents);
-        let document_streams_clone = Arc::clone(&self.document_streams);
         let logger_clone = self.logger.clone();
 
         thread::spawn(move || loop {
             match node_streams_clone.lock() {
                 Ok(_streams) => {}
                 Err(e) => {
-                    eprintln!("Error obteniendo lock de node_streams: {}", e);
+                    println!("Error obteniendo lock de node_streams: {}", e);
                     logger_clone.log(&format!("Error obteniendo lock de node_streams: {}", e));
                 }
             }
 
             if let Ok(docs) = documents_clone.lock() {
-                if let Ok(doc_streams) = document_streams_clone.lock() {
-                    if let Ok(mut streams) = node_streams_clone.lock() {
-                        logger_clone.log(&format!(
-                            "Enviando comandos SET para persistir {} documentos",
-                            docs.len()
-                        ));
+                if let Ok(mut streams) = node_streams_clone.lock() {
+                    logger_clone.log(&format!(
+                        "Enviando comandos SET para persistir {} documentos",
+                        docs.len()
+                    ));
 
-                        for (doc_name, documento) in docs.iter() {
-                            let document_data = Self::get_document_data(doc_name, documento);
+                    for (doc_name, documento) in docs.iter() {
+                        let document_data = Self::get_document_data(doc_name, documento);
 
-                            let default_stream = "127.0.0.1:4000".to_string();
-                            let stream_id = doc_streams.get(doc_name).unwrap_or(&default_stream);
-                            println!("\nmando set al stream id {}", stream_id);
-
+                        // Enviar a todos los nodos disponibles
+                        for (stream_id, stream) in streams.iter_mut() {
                             let set_parts = vec!["SET", doc_name, &document_data];
                             let set_command = redis_parser::format_resp_command(&set_parts);
 
                             logger_clone.log(&format!(
-                                "Enviando comando SET para persistir documento {}: {}",
-                                doc_name, set_command
+                                "Enviando comando SET para persistir documento {} en nodo {}: {}",
+                                doc_name, stream_id, set_command
                             ));
 
-                            if let Some(stream) = streams.get_mut(stream_id) {
-                                if let Err(e) = stream.write_all(set_command.as_bytes()) {
-                                    eprintln!(
-                                        "Error enviando comando SET a nodo {}: {}",
-                                        stream_id, e
-                                    );
-                                    logger_clone.log(&format!(
-                                        "Error enviando comando SET a nodo {}: {}",
-                                        stream_id, e
-                                    ));
-                                    continue;
-                                } else {
-                                    logger_clone.log(&format!(
-                                        "Comando SET enviado exitosamente a nodo {}",
-                                        stream_id
-                                    ));
-                                }
-
-                                if let Ok(mut last_command) = last_command_sent_clone.lock() {
-                                    *last_command = set_command;
-                                }
-
-                                let doc_name_cloned = doc_name.clone();
-                                let reload_message_parts =
-                                    vec!["RELOAD-FILE", &doc_name, &document_data, stream_id];
-                                let reload_message_resp =
-                                    redis_parser::format_resp_command(&reload_message_parts);
-                                let publis_reload_command = redis_parser::format_resp_publish(
-                                    &doc_name_cloned.clone(),
-                                    &reload_message_resp,
-                                );
+                            if let Err(e) = stream.write_all(set_command.as_bytes()) {
+                                println!("Error enviando comando SET a nodo {}: {}", stream_id, e);
                                 logger_clone.log(&format!(
-                                    "Enviando mensaje RELOAD-FILE para documento {}: {}",
-                                    doc_name, reload_message_resp
+                                    "Error enviando comando SET a nodo {}: {}",
+                                    stream_id, e
                                 ));
-
-                                if let Err(e) = stream.write_all(publis_reload_command.as_bytes()) {
-                                    eprintln!(
-                                        "Error enviando mensaje RELOAD-FILE a nodo {}: {}",
-                                        stream_id, e
-                                    );
-                                    logger_clone.log(&format!(
-                                        "Error enviando mensaje RELOAD-FILE a nodo {}: {}",
-                                        stream_id, e
-                                    ));
-                                } else {
-                                    logger_clone.log(&format!(
-                                        "Mensaje RELOAD-FILE enviado exitosamente a nodo {}",
-                                        stream_id
-                                    ));
-                                }
+                                continue;
                             } else {
-                                eprintln!(
-                                    "Stream no encontrado para documento {} con stream_id {}",
-                                    doc_name, stream_id
-                                );
+                                let _ = stream.flush();
                                 logger_clone.log(&format!(
-                                    "Stream no encontrado para documento {} con stream_id {}",
-                                    doc_name, stream_id
+                                    "Comando SET enviado exitosamente a nodo {}",
+                                    stream_id
                                 ));
                             }
+
+                            if let Ok(mut last_command) = last_command_sent_clone.lock() {
+                                *last_command = set_command;
+                            }
                         }
-                    } else {
-                        eprintln!("Error obteniendo lock de node_streams para persistencia");
-                        logger_clone.log("Error obteniendo lock de node_streams para persistencia");
                     }
                 } else {
-                    eprintln!("Error obteniendo lock de document_streams para persistencia");
-                    logger_clone.log("Error obteniendo lock de document_streams para persistencia");
+                    println!("Error obteniendo lock de node_streams para persistencia");
+                    logger_clone.log("Error obteniendo lock de node_streams para persistencia");
                 }
             } else {
-                eprintln!("Error obteniendo lock de documents para persistencia");
+                println!("Error obteniendo lock de documents para persistencia");
                 logger_clone.log("Error obteniendo lock de documents para persistencia");
             }
 
-            thread::sleep(Duration::from_secs(30));
+            thread::sleep(Duration::from_secs(3));
         });
     }
     fn start_node_connection_handler(
@@ -344,7 +294,7 @@ impl Microservice {
                 cloned_document_streams,
                 logger,
             ) {
-                eprintln!("Error en la conexión con el nodo snch: {}", e);
+                println!("Error en la conexión con el nodo: {}", e);
             }
         });
     }
@@ -395,7 +345,7 @@ impl Microservice {
                     cloned_last_command,
                     log_clone,
                 ) {
-                    eprintln!("Error en la conexión con el nodo ctn: {}", e);
+                    println!("Error en la conexión con el nodo: {}", e);
                 }
             });
         }
@@ -422,10 +372,10 @@ impl Microservice {
     /// * `Err(std::io::Error)` si ocurre un error de IO.
     fn listen_to_redis_response(
         mut microservice_socket: TcpStream,
-        connect_node_sender: MpscSender<TcpStream>,
-        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+        _connect_node_sender: MpscSender<TcpStream>,
+        _node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
         documents: Arc<Mutex<HashMap<String, Documento>>>,
-        document_streams: Arc<Mutex<HashMap<String, String>>>,
+        _document_streams: Arc<Mutex<HashMap<String, String>>>,
         last_command_sent: Arc<Mutex<String>>,
         log_clone: Logger,
     ) -> std::io::Result<()> {
@@ -469,7 +419,7 @@ impl Microservice {
                                 command_resp
                             ));
                             if let Err(e) = microservice_socket.write_all(command_resp.as_bytes()) {
-                                eprintln!(
+                                println!(
                                     "Error al enviar mensaje de actualizacion de archivo: {}",
                                     e
                                 );
@@ -477,13 +427,16 @@ impl Microservice {
                                     "Error al enviar mensaje de actualizacion de archivo: {}",
                                     e
                                 ));
+                            } else {
+                                let _ = microservice_socket.flush();
+                                log_clone.log(&format!(
+                                    "Enviando publish para client-subscribed: {}",
+                                    command_resp
+                                ));
                             }
-                        } else {
-                            eprintln!("Documento no encontrado: {}", document);
-                            log_clone.log(&format!("Documento no encontrado: {}", document));
                         }
                     } else {
-                        eprintln!("Error obteniendo lock de documents para client-subscribed");
+                        println!("Error obteniendo lock de documents para client-subscribed");
                         log_clone.log("Error obteniendo lock de documents para client-subscribed");
                     }
                 }
@@ -501,30 +454,28 @@ impl Microservice {
                     println!("Recibi comando DOC");
                     if let Ok(mut docs) = documents.lock() {
                         if document.ends_with(".txt") {
-                            let messages: Vec<String> = content
+                            let lines: Vec<String> = content
                                 .split("/--/")
                                 .filter(|s| !s.is_empty())
                                 .map(|s| s.to_string())
                                 .collect();
-                            docs.insert(document.clone(), Documento::Texto(messages));
+                            docs.insert(document.clone(), Documento::Texto(lines));
                         } else {
-                            let mut rows: Vec<String> =
-                                content.split("/--/").map(|s| s.to_string()).collect();
-
+                            let mut rows: Vec<String> = content
+                                .split("/--/")
+                                .filter(|_| true)
+                                .map(|s| s.to_string())
+                                .collect();
+                            if rows.is_empty() {
+                                rows.push("".to_string());
+                            }
                             while rows.len() < 100 {
                                 rows.push(String::new());
                             }
-
                             docs.insert(document.clone(), Documento::Calculo(rows));
                         }
                     } else {
-                        eprintln!("Error obteniendo lock de documents");
-                    }
-
-                    if let Ok(mut doc_streams) = document_streams.lock() {
-                        doc_streams.insert(document.clone(), stream_id.clone());
-                    } else {
-                        eprintln!("Error obteniendo lock de document_streams");
+                        println!("Error obteniendo lock de documents");
                     }
                 }
                 MicroserviceMessage::Write {
@@ -541,7 +492,7 @@ impl Microservice {
                             let parsed_index = match index.parse::<usize>() {
                                 Ok(idx) => idx,
                                 Err(e) => {
-                                    eprintln!("Error parseando índice: {}", e);
+                                    println!("Error parseando índice: {}", e);
                                     log_clone.log(&format!("Error parseando índice: {}", e));
                                     continue;
                                 }
@@ -606,100 +557,8 @@ impl Microservice {
                         log_clone.log("Error obteniendo lock de documents para write");
                     }
                 }
-                MicroserviceMessage::Ask { response } => {
-                    // if response.len() < 3 {
-                    //     log_clone.log("Nodo de redireccion no disponible");
-                    // } else {
-                    //     let _ = Self::send_command_to_nodes(
-                    //         connect_node_sender.clone(),
-                    //         node_streams.clone(),
-                    //         last_command_sent.clone(),
-                    //         response.clone(),
-                    //     );
-                    //     println!("Redirigiendo comando a nodo: {:?}", response);
-                    //     log_clone.log(&format!("Redirigiendo comando a nodo: {:?}", response));
-                    // }
-                }
                 MicroserviceMessage::Error(_) => {}
                 _ => {}
-            }
-        }
-        Ok(())
-    }
-
-    fn send_command_to_nodes(
-        connect_node_sender: MpscSender<TcpStream>,
-        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
-        last_command_sent: Arc<Mutex<String>>,
-        response: Vec<String>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let last_line_cloned = match last_command_sent.lock() {
-            Ok(locked) => locked.clone(),
-            Err(e) => {
-                eprintln!("Error al bloquear el mutex de last_command_sent: {}", e);
-                return Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Mutex lock failed: {}", e),
-                )));
-            }
-        };
-
-        let mut locked_node_streams = match node_streams.lock() {
-            Ok(locked) => locked,
-            Err(e) => {
-                eprintln!("Error al bloquear el mutex de node_streams: {}", e);
-                return Err(Box::new(std::io::Error::other(format!(
-                    "Mutex lock failed: {}",
-                    e
-                ))));
-            }
-        };
-
-        let new_node_address = response[2].to_string();
-
-        println!("Ultimo comando ejecutado: {:#?}", last_line_cloned);
-        println!("Redirigiendo a nodo: {}", new_node_address);
-
-        if let Some(stream) = locked_node_streams.get_mut(&new_node_address) {
-            println!("Usando conexión existente al nodo {}", new_node_address);
-            if let Err(e) = stream.write_all(last_line_cloned.as_bytes()) {
-                eprintln!("Error al escribir en el nodo: {}", e);
-                return Err(Box::new(e));
-            }
-        } else {
-            println!("Creando nueva conexión al nodo {}", new_node_address);
-            let parts: Vec<&str> = "connect".split_whitespace().collect();
-            let resp_command = redis_parser::format_resp_command(&parts);
-            let mut final_stream = match TcpStream::connect(new_node_address.clone()) {
-                Ok(stream) => stream,
-                Err(e) => {
-                    eprintln!("Error al conectar con el nuevo nodo: {}", e);
-                    return Err(Box::new(e));
-                }
-            };
-            if let Err(e) = final_stream.write_all(resp_command.as_bytes()) {
-                eprintln!("Error al escribir en el nuevo nodo: {}", e);
-                return Err(Box::new(e));
-            }
-
-            let mut cloned_stream_to_connect = match final_stream.try_clone() {
-                Ok(clone) => clone,
-                Err(e) => {
-                    eprintln!("Error al clonar el socket: {}", e);
-                    return Err(Box::new(e));
-                }
-            };
-            locked_node_streams.insert(new_node_address, final_stream);
-
-            if let Err(e) = connect_node_sender.send(cloned_stream_to_connect.try_clone()?) {
-                eprintln!("Error al enviar el nodo conectado: {}", e);
-                return Err(Box::new(e));
-            }
-            std::thread::sleep(std::time::Duration::from_millis(10));
-
-            if let Err(e) = cloned_stream_to_connect.write_all(last_line_cloned.as_bytes()) {
-                eprintln!("Error al reenviar el último comando: {}", e);
-                return Err(Box::new(e));
             }
         }
         Ok(())
@@ -718,7 +577,7 @@ impl Microservice {
                 Ok(())
             }
             Err(e) => {
-                eprintln!("Error obteniendo lock de node_streams: {}", e);
+                println!("Error obteniendo lock de node_streams: {}", e);
                 Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::Other,
                     format!("Error obteniendo lock de node_streams: {}", e),

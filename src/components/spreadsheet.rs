@@ -2,7 +2,7 @@ extern crate gtk4;
 extern crate relm4;
 
 use crate::components::structs::document_value_info::DocumentValueInfo;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::HashSet;
 
 use self::gtk4::prelude::{BoxExt, EditableExt, EntryExt, GridExt, OrientableExt, WidgetExt};
 use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
@@ -151,13 +151,11 @@ impl SpreadsheetModel {
         for ch in formula.chars() {
             if ch.is_ascii_alphabetic() || ch.is_ascii_digit() {
                 current_ref.push(ch);
-            } else {
-                if !current_ref.is_empty() {
-                    if let Some((row, col)) = self.parse_cell_reference(&current_ref) {
-                        references.insert((row, col));
-                    }
-                    current_ref.clear();
+            } else if !current_ref.is_empty() {
+                if let Some((row, col)) = self.parse_cell_reference(&current_ref) {
+                    references.insert((row, col));
                 }
+                current_ref.clear();
             }
         }
 

@@ -1,6 +1,5 @@
 use super::auth;
 use super::client_action;
-use super::list;
 use super::pub_sub;
 use super::redis_parser::{CommandRequest, CommandResponse, ValueType};
 use super::redis_response::RedisResponse;

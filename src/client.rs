@@ -115,6 +115,7 @@ pub fn client_run(
                 || parts[0] == "subscribe"
                 || parts[0] == "unsubscribe"
                 || parts[0] == "get_files"
+                || parts[0] == "set"
             {
                 format_resp_command(&parts)
             } else if parts[0].contains("WRITE") {
@@ -279,24 +280,21 @@ fn listen_to_redis_response(
                     let _ = sender.send(AppMsg::UpdateFilesList(archivos));
                 }
             }
-            "RELOAD-FILE" => {
-                if response.len() >= 3 {
-                    let file_id = response[1].clone();
-                    let content = response[2].clone();
-                    println!(
-                        "Recibido RELOAD-FILE para {} con contenido: {}",
-                        file_id, content
-                    );
-                    if let Some(sender) = &ui_sender {
-                        let _ = sender.send(AppMsg::ReloadFile(file_id, content));
-                    }
-                } else {
-                    eprintln!("Mensaje RELOAD-FILE mal formado: {:?}", response);
-                }
-            }
             _ => {
                 if let Some(sender) = &ui_sender {
                     let _ = sender.send(AppMsg::ManageResponse(response[0].clone()));
+                }
+                if let Ok(last_command) = last_command_sent.lock() {
+                    // Verifica si el comando fue SET y extrae el nombre del archivo
+                    if last_command.to_uppercase().contains("SET") {
+                        let lines: Vec<&str> = last_command.split("\r\n").collect();
+                        if lines.len() >= 5 {
+                            let file_name = lines[4];
+                            if let Some(sender) = &ui_sender {
+                                let _ = sender.send(AppMsg::AddFile(file_name.to_string()));
+                            }
+                        }
+                    }
                 }
             }
         }

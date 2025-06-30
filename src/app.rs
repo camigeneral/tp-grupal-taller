@@ -1,7 +1,7 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::{
-    prelude::{BoxExt, GtkWindowExt, OrientableExt, PopoverExt, WidgetExt},
+    prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, PopoverExt, WidgetExt},
     CssProvider,
 };
 use crate::components::structs::document_value_info::DocumentValueInfo;
@@ -60,7 +60,7 @@ pub enum AppMsg {
     CloseApplication,
     GetFiles,
     RefreshData(DocumentValueInfo),
-    CreateFile(String, String),
+    CreateFile(String, String, String),
     SubscribeFile(String),
     UnsubscribeFile(String),
     PrepareAndExecuteCommand(String, String),
@@ -81,6 +81,7 @@ pub enum AppMsg {
     UpdateFilesList(Vec<String>),
     FilesLoaded,
     ReloadFile(String, String),
+    AddFile(String),
 }
 
 #[relm4::component(pub)]
@@ -125,7 +126,7 @@ impl SimpleComponent for AppModel {
                          }
                     },
 
-    /*                 gtk::Box {
+                     gtk::Box {
                         set_hexpand: true,
                         set_halign: gtk::Align::End,
 
@@ -135,6 +136,14 @@ impl SimpleComponent for AppModel {
                             add_css_class: "button",
                             set_label: "Nuevo Archivo",
                             connect_clicked => AppMsg::ToggleNewFilePopover,
+                        },
+
+                        #[name="reload_button"]
+                        gtk::Button {
+                            add_css_class: "reload",
+                            add_css_class: "button",
+                            set_label: "Reload",
+                            connect_clicked => AppMsg::GetFiles,
                         },
 
                         #[name="new_file_popover"]
@@ -165,7 +174,7 @@ impl SimpleComponent for AppModel {
                                 }
                             },
                         },
-                    } */
+                    }
                 },
 
                 append: model.files_manager_cont.widget(),
@@ -211,7 +220,7 @@ impl SimpleComponent for AppModel {
             |output| match output {
                 NavbarOutput::ToggleConnectionRequested => AppMsg::Connect,
                 NavbarOutput::CreateFileRequested(file_id, content) => {
-                    AppMsg::CreateFile(file_id, content)
+                    AppMsg::CreateFile(file_id, content, "txt".to_string()) // Por defecto, tipo "txt"
                 }
             },
         );
@@ -262,7 +271,7 @@ impl SimpleComponent for AppModel {
             Propagation::Proceed
         });
         let widgets = view_output!();
-        //model.new_file_popover = Some(widgets.new_file_popover.clone());
+        model.new_file_popover = Some(widgets.new_file_popover.clone());
         let ui_sender: relm4::Sender<AppMsg> = sender.input_sender().clone();
         let (tx, rx) = channel::<String>();
         let command_sender = Some(tx.clone());
@@ -362,8 +371,8 @@ impl SimpleComponent for AppModel {
                 ));
             }
 
-            AppMsg::CreateFile(file_id, content) => {
-                self.command = format!("SET {} \"{}\"", file_id, content);
+            AppMsg::CreateFile(file_id, content, file_type) => {
+                self.command = format!("set {} {}", file_id, content);
                 sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::AddContent(doc_info) => {
@@ -453,8 +462,15 @@ impl SimpleComponent for AppModel {
                     println!("El nombre del archivo es obligatorio.");
                     return;
                 }
-                let file_id = format!("{}.txt", self.file_name.trim());
-                sender.input(AppMsg::CreateFile(file_id, "".to_string()));
+                let file_id = format!(
+                    "{}.txt",
+                    self.file_name.split(' ').collect::<Vec<&str>>().join("_")
+                );
+                sender.input(AppMsg::CreateFile(
+                    file_id,
+                    "\"\"".to_string(),
+                    "txt".to_string(),
+                ));
             }
 
             AppMsg::CreateSpreadsheetDocument => {
@@ -465,8 +481,15 @@ impl SimpleComponent for AppModel {
                     println!("El nombre del archivo es obligatorio.");
                     return;
                 }
-                let file_id = format!("{}.xlsx", self.file_name.trim());
-                sender.input(AppMsg::CreateFile(file_id, "".to_string()));
+                let file_id = format!(
+                    "{}.xlsx",
+                    self.file_name.split(' ').collect::<Vec<&str>>().join("_")
+                );
+                sender.input(AppMsg::CreateFile(
+                    file_id,
+                    "\"\"".to_string(),
+                    "xlsx".to_string(),
+                ));
             }
 
             AppMsg::UpdateFilesList(archivos) => {
@@ -493,14 +516,24 @@ impl SimpleComponent for AppModel {
                 } else {
                     FileType::Text
                 };
-
+                let mut doc_file = DocumentValueInfo::new(content, 0);
+                doc_file.decode_text();
                 // Actualizar directamente el FileWorkspace con el nuevo contenido
                 self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(
                     file_id.clone(),
                     "1".to_string(), // qty_subs
                     file_type,
-                    content,
+                    doc_file.value,
                 ));
+            }
+            AppMsg::AddFile(file_name) => {
+                let doc_type = if file_name.ends_with("txt") {
+                    FileType::Text
+                } else {
+                    FileType::Sheet
+                };
+                self.files_manager_cont
+                    .emit(FileWorkspaceMsg::AddFile(file_name, doc_type));
             }
         }
     }

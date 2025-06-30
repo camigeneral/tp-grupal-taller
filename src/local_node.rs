@@ -18,7 +18,7 @@ pub enum NodeState {
 
 /// Estructura que representa la instancia de nodo levantada en la consola. Contiene el puerto en el que
 /// escucha nodos entrantes, el tipo (master o replica), su hash range, y su prioridad. En el caso de ser
-/// master, la prioridad es 0. 
+/// master, la prioridad es 0.
 pub struct LocalNode {
     pub port: usize,
     pub role: NodeRole,
@@ -79,7 +79,7 @@ impl LocalNode {
             master_node: None,
             replica_nodes: Vec::new(),
             priority,
-            epoch: 0
+            epoch: 0,
         })
     }
 }
