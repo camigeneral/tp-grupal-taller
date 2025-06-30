@@ -259,37 +259,6 @@ impl Microservice {
                             if let Ok(mut last_command) = last_command_sent_clone.lock() {
                                 *last_command = set_command;
                             }
-
-                            let doc_name_cloned = doc_name.clone();
-                            let reload_message_parts =
-                                vec!["RELOAD-FILE", &doc_name, &document_data, stream_id];
-                            let reload_message_resp =
-                                redis_parser::format_resp_command(&reload_message_parts);
-                            let publis_reload_command = redis_parser::format_resp_publish(
-                                &doc_name_cloned.clone(),
-                                &reload_message_resp,
-                            );
-                            logger_clone.log(&format!(
-                                "Enviando mensaje RELOAD-FILE para documento {}: {}",
-                                doc_name, reload_message_resp
-                            ));
-
-                            if let Err(e) = stream.write_all(publis_reload_command.as_bytes()) {
-                                println!(
-                                    "Error enviando mensaje RELOAD-FILE a nodo {}: {}",
-                                    stream_id, e
-                                );
-                                logger_clone.log(&format!(
-                                    "Error enviando mensaje RELOAD-FILE a nodo {}: {}",
-                                    stream_id, e
-                                ));
-                            } else {
-                                let _ = stream.flush();
-                                logger_clone.log(&format!(
-                                    "Mensaje RELOAD-FILE enviado exitosamente a nodo {}",
-                                    stream_id
-                                ));
-                            }
                         }
                     }
                 } else {
