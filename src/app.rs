@@ -493,13 +493,14 @@ impl SimpleComponent for AppModel {
                 } else {
                     FileType::Text
                 };
-
+                let mut doc_file = DocumentValueInfo::new(content, 0);
+                doc_file.decode_text();
                 // Actualizar directamente el FileWorkspace con el nuevo contenido
                 self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(
                     file_id.clone(),
                     "1".to_string(), // qty_subs
                     file_type,
-                    content,
+                    doc_file.value,
                 ));
             }
         }
