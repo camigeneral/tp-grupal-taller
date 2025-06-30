@@ -81,7 +81,7 @@ pub enum AppMsg {
     UpdateFilesList(Vec<String>),
     FilesLoaded,
     ReloadFile(String, String),
-    AddFile(),
+    AddFile(String),
 }
 
 #[relm4::component(pub)]
@@ -143,7 +143,7 @@ impl SimpleComponent for AppModel {
                             add_css_class: "reload",
                             add_css_class: "button",
                             set_label: "Reload",
-                            connect_clicked => AppMsg::AddFile(),
+                            connect_clicked => AppMsg::GetFiles,
                         },
 
                         #[name="new_file_popover"]
@@ -462,7 +462,7 @@ impl SimpleComponent for AppModel {
                     println!("El nombre del archivo es obligatorio.");
                     return;
                 }
-                let file_id = format!("{}.txt", self.file_name.trim());
+                let file_id = format!("{}.txt", self.file_name.split(' ').collect::<Vec<&str>>().join("_"));
                 sender.input(AppMsg::CreateFile(file_id, "\"\"".to_string(),"txt".to_string()));
             }
 
@@ -474,7 +474,7 @@ impl SimpleComponent for AppModel {
                     println!("El nombre del archivo es obligatorio.");
                     return;
                 }
-                let file_id = format!("{}.xlsx", self.file_name.trim());
+                let file_id = format!("{}.xlsx", self.file_name.split(' ').collect::<Vec<&str>>().join("_"));
                 sender.input(AppMsg::CreateFile(file_id, "\"\"".to_string(),"xlsx".to_string()));
             }
 
@@ -512,10 +512,15 @@ impl SimpleComponent for AppModel {
                     doc_file.value,
                 ));
             }
-            AppMsg::AddFile() => {
-                // En vez de mantener la lista, simplemente refresca desde el servidor
-                sender.input(AppMsg::GetFiles);
+            AppMsg::AddFile(file_name) => {
+                let doc_type = if file_name.ends_with("txt") {
+                    FileType::Text
+                } else {
+                    FileType::Sheet
+                };
+                self.files_manager_cont.emit(FileWorkspaceMsg::AddFile(file_name, doc_type));
             }
+            
         }
     }
 }
