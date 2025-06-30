@@ -270,7 +270,7 @@ impl Microservice {
                 logger_clone.log("Error obteniendo lock de documents para persistencia");
             }
 
-            thread::sleep(Duration::from_secs(5));
+            thread::sleep(Duration::from_secs(3));
         });
     }
     fn start_node_connection_handler(
