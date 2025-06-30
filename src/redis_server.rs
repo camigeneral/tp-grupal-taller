@@ -876,8 +876,14 @@ pub fn persist_documents(
         Err(poisoned) => poisoned.into_inner(),
     };
 
-    for (_document_id, doc) in documents_guard.iter() {
-        writeln!(persistence_file, "{}", doc)?;
+    for (doc_name, doc) in documents_guard.iter() {
+        let data = doc.to_string();
+        // Si el contenido ya empieza con el nombre, no lo agregues de nuevo
+        if data.starts_with(&format!("{}/++/", doc_name)) {
+            writeln!(persistence_file, "{}", data)?;
+        } else {
+            writeln!(persistence_file, "{}/++/{}/--/", doc_name, data)?;
+        }
     }
 
     Ok(())
