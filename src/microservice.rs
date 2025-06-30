@@ -499,20 +499,29 @@ impl Microservice {
                     ));
                     if let Ok(mut docs) = documents.lock() {
                         if document.ends_with(".txt") {
-                            let messages: Vec<String> = content
+                            let mut lines: Vec<String> = content
                                 .split("/--/")
                                 .filter(|s| !s.is_empty())
                                 .map(|s| s.to_string())
                                 .collect();
-                            docs.insert(document.clone(), Documento::Texto(messages));
+                            // Si el contenido es vacío, agrega una línea vacía
+                            if lines.is_empty() {
+                                lines.push("".to_string());
+                            }
+                            docs.insert(document.clone(), Documento::Texto(lines));
                         } else {
-                            let mut rows: Vec<String> =
-                                content.split("/--/").map(|s| s.to_string()).collect();
-
+                            let mut rows: Vec<String> = content
+                                .split("/--/")
+                                .filter(|_| true) // para mantener al menos un elemento aunque esté vacío
+                                .map(|s| s.to_string())
+                                .collect();
+                            // Si el contenido es vacío, agrega una celda vacía
+                            if rows.is_empty() {
+                                rows.push("".to_string());
+                            }
                             while rows.len() < 100 {
                                 rows.push(String::new());
                             }
-
                             docs.insert(document.clone(), Documento::Calculo(rows));
                         }
                     } else {
@@ -616,6 +625,27 @@ impl Microservice {
                         );
                         println!("Redirigiendo comando a nodo: {:?}", response);
                         log_clone.log(&format!("Redirigiendo comando a nodo: {:?}", response));
+                    }
+                }
+                MicroserviceMessage::Set { document, doc_type } => {
+                    if let Ok(mut docs) = documents.lock() {
+                        if doc_type == "txt" {
+                            docs.insert(document.clone(), Documento::Texto(vec!["".to_string()]));
+                        } else {
+                            let mut rows = vec!["".to_string(); 100];
+                            docs.insert(document.clone(), Documento::Calculo(rows));
+                        }
+                        
+                        let document_data = Self::get_document_data(&document, docs.get(&document).unwrap());
+                        let set_parts = vec!["SET", &document, &document_data];
+                        let set_command = redis_parser::format_resp_command(&set_parts);
+
+                        if let Ok(mut streams) = node_streams.lock() {
+                            // Usa el primer stream disponible
+                            if let Some((_addr, stream)) = streams.iter_mut().next() {
+                                let _ = stream.write_all(set_command.as_bytes());
+                            }
+                        }
                     }
                 }
                 MicroserviceMessage::Error(_) => {}
