@@ -233,18 +233,16 @@ impl Microservice {
                         for (doc_name, documento) in docs.iter() {
                             let document_data = Self::get_document_data(doc_name, documento);
 
-                            let default_stream = "127.0.0.1:4000".to_string();
-                            let stream_id = doc_streams.get(doc_name).unwrap_or(&default_stream);
+                            // Enviar a todos los nodos disponibles
+                            for (stream_id, stream) in streams.iter_mut() {
+                                let set_parts = vec!["SET", doc_name, &document_data];
+                                let set_command = redis_parser::format_resp_command(&set_parts);
 
-                            let set_parts = vec!["SET", doc_name, &document_data];
-                            let set_command = redis_parser::format_resp_command(&set_parts);
+                                logger_clone.log(&format!(
+                                    "Enviando comando SET para persistir documento {} en nodo {}: {}",
+                                    doc_name, stream_id, set_command
+                                ));
 
-                            logger_clone.log(&format!(
-                                "Enviando comando SET para persistir documento {}: {}",
-                                doc_name, set_command
-                            ));
-
-                            if let Some(stream) = streams.get_mut(stream_id) {
                                 if let Err(e) = stream.write_all(set_command.as_bytes()) {
                                     eprintln!(
                                         "Error enviando comando SET a nodo {}: {}",
@@ -295,15 +293,6 @@ impl Microservice {
                                         stream_id
                                     ));
                                 }
-                            } else {
-                                eprintln!(
-                                    "Stream no encontrado para documento {} con stream_id {}",
-                                    doc_name, stream_id
-                                );
-                                logger_clone.log(&format!(
-                                    "Stream no encontrado para documento {} con stream_id {}",
-                                    doc_name, stream_id
-                                ));
                             }
                         }
                     } else {
@@ -319,7 +308,7 @@ impl Microservice {
                 logger_clone.log("Error obteniendo lock de documents para persistencia");
             }
 
-            thread::sleep(Duration::from_secs(30));
+            thread::sleep(Duration::from_secs(10));
         });
     }
     fn start_node_connection_handler(
@@ -421,8 +410,8 @@ impl Microservice {
     /// * `Err(std::io::Error)` si ocurre un error de IO.
     fn listen_to_redis_response(
         mut microservice_socket: TcpStream,
-        connect_node_sender: MpscSender<TcpStream>,
-        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+        _connect_node_sender: MpscSender<TcpStream>,
+        _node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
         documents: Arc<Mutex<HashMap<String, Documento>>>,
         document_streams: Arc<Mutex<HashMap<String, String>>>,
         last_command_sent: Arc<Mutex<String>>,
