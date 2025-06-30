@@ -373,7 +373,7 @@ fn send_command_to_nodes(
         std::thread::sleep(std::time::Duration::from_millis(2));
 
         // vuelvo a hacer subscribe
-        if let Some((doc_name)) = extract_document_name(&last_line_cloned) {
+        if let Some(doc_name) = extract_document_name(&last_line_cloned) {
             let subscribe_command = format!("*2\r\n$9\r\nsubscribe\r\n${}\r\n{}\r\n", doc_name.len(), doc_name);
             if let Err(e) = cloned_stream_to_connect.write_all(subscribe_command.as_bytes()) {
                 eprintln!("Error subscribing to doc: {}", doc_name);

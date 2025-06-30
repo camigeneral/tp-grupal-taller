@@ -1,6 +1,7 @@
 use super::redis_parser::CommandResponse;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct RedisResponse {
     pub response: CommandResponse,
     pub publish: bool,

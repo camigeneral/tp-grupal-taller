@@ -1,4 +1,5 @@
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
 pub enum Documento {
     Texto(Vec<String>),
     Calculo(Vec<String>),
@@ -10,6 +11,7 @@ impl Default for Documento {
     }
 }
 
+#[allow(dead_code)]
 impl Documento {
     pub fn as_texto_mut(&mut self) -> Option<&mut Vec<String>> {
         match self {

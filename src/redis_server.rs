@@ -27,6 +27,7 @@ mod peer_node;
 mod redis_node_handler;
 mod server_context;
 mod utils;
+mod document;
 use crate::server_context::ServerContext;
 use client_info::ClientType;
 #[path = "redis_types.rs"]
@@ -864,15 +865,11 @@ pub fn persist_documents(
         }
     };
 
-    let mut persistence_file = match OpenOptions::new()
+    let mut persistence_file = OpenOptions::new()
         .create(true)
         .truncate(true)
         .write(true)
-        .open(&file_name)
-    {
-        Ok(file) => file,
-        Err(e) => return Err(e),
-    };
+        .open(&file_name)?;
 
     let documents_guard = match documents.lock() {
         Ok(guard) => guard,

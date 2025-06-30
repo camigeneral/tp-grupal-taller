@@ -74,24 +74,18 @@ pub fn start_node_connection(
     shared_sets: &SetsMap,
 ) -> Result<(), std::io::Error> {
     let key = GenericArray::from_slice(&KEY);
-    let cipher = Aes128::new(&key);
+    let cipher = Aes128::new(key);
 
     let cloned_nodes = Arc::clone(peer_nodes);
 
-    let config_path = match get_config_path(port) {
-        Ok(path) => path,
-        Err(e) => return Err(e),
-    };
+    let config_path = get_config_path(port)?;
 
     let cloned_local_node = Arc::clone(local_node);
     let cloned_document_subscribers = Arc::clone(document_subscribers);
     let cloned_shared_documents = Arc::clone(shared_documents);
     let cloned_shared_sets = Arc::clone(shared_sets);
 
-    let node_ports = match read_node_ports(config_path) {
-        Ok(ports) => ports,
-        Err(e) => return Err(e),
-    };
+    let node_ports = read_node_ports(config_path)?;
 
     thread::spawn(move || {
         let _ = connect_nodes(
@@ -141,10 +135,7 @@ pub fn start_node_connection(
 
             match TcpStream::connect(&node_address_to_connect) {
                 Ok(stream) => {
-                    let mut cloned_stream = match stream.try_clone() {
-                        Ok(s) => s,
-                        Err(e) => return Err(e),
-                    };
+                    let mut cloned_stream = stream.try_clone()?;
 
                     let message = format!(
                         "{:?} {} {:?} {} {} {}\n",
@@ -159,9 +150,7 @@ pub fn start_node_connection(
                     println!("Recibido comando: {}", message);
 
                     let encrypted_b64 = encrypt_message(&cipher, &message);
-                    if let Err(e) = cloned_stream.write_all(encrypted_b64.as_bytes()) {
-                        return Err(e);
-                    }
+                    cloned_stream.write_all(encrypted_b64.as_bytes())?;
 
                     lock_peer_nodes.insert(
                         peer_addr,
@@ -256,7 +245,7 @@ fn handle_node(
     shared_sets: SetsMap,
 ) -> std::io::Result<()> {
     let key = GenericArray::from_slice(&KEY);
-    let cipher = Aes128::new(&key);
+    let cipher = Aes128::new(key);
 
     let reader = match stream.try_clone() {
         Ok(s) => BufReader::new(s),
@@ -269,9 +258,7 @@ fn handle_node(
     let mut serialized_vec = Vec::new();
 
     for command in reader.lines().map_while(Result::ok) {
-        let message;
-
-        if ENCRYPTION {
+        let message = if ENCRYPTION {
             // Decodifica base64
             let encoded_bytes = match general_purpose::STANDARD.decode(&command) {
                 Ok(bytes) => bytes,
@@ -302,10 +289,10 @@ fn handle_node(
                 continue;
             }
 
-            message = String::from_utf8(decrypted).expect("UTF-8 inválido");
+            String::from_utf8(decrypted).expect("UTF-8 inválido")
         } else {
-            message = command;
-        }
+            command
+        };
 
         let input: Vec<String> = message
             .split_whitespace()
@@ -479,10 +466,7 @@ fn handle_node(
                                 locked_local_node.port, updated_epoch
                             );
                             let encrypted_b64 = encrypt_message(&cipher, &message);
-                            if let Err(e) = replica_node.stream.write_all(encrypted_b64.as_bytes())
-                            {
-                                return Err(e);
-                            }
+                            replica_node.stream.write_all(encrypted_b64.as_bytes())?;
                         }
                     }
                 }
@@ -521,7 +505,7 @@ fn handle_node(
             }
             "ping" => {
                 let message = "pong\n";
-                let encrypted_b64 = encrypt_message(&cipher, &message);
+                let encrypted_b64 = encrypt_message(&cipher, message);
                 let _ = stream.write_all(encrypted_b64.as_bytes());
             }
             "node_status" => {
@@ -571,7 +555,7 @@ fn handle_node(
                     println!("Llego un saving command {:?}", command_string.clone());
                 } else {
                     let message = "Comando no reconocido\n";
-                    let encrypted_b64 = encrypt_message(&cipher, &message);
+                    let encrypted_b64 = encrypt_message(&cipher, message);
                     let _ = stream.write_all(encrypted_b64.as_bytes());
                 }
             }
@@ -751,7 +735,7 @@ fn serialize_vec_hashmap(
     }
 
     let message = "end_serialize_vec\n";
-    let encrypted_b64 = encrypt_message(&cipher, &message);
+    let encrypted_b64 = encrypt_message(&cipher, message);
 
     stream.write_all(encrypted_b64.as_bytes())?;
     Ok(())
@@ -772,7 +756,7 @@ fn serialize_hashset_hashmap(
         println!("se mando start");
     }
     let message = "end_serialize_hashmap\n";
-    let encrypted_b64 = encrypt_message(&cipher, &message);
+    let encrypted_b64 = encrypt_message(&cipher, message);
     stream.write_all(encrypted_b64.as_bytes())?;
     println!("se mando end");
     Ok(())
@@ -841,17 +825,15 @@ fn ping_to_node(
                                 peer_stream.set_read_timeout(Some(error_interval))?;
                                 let mut reader = BufReader::new(peer_stream.try_clone()?);
                                 let message = "ping\n";
-                                let encrypted_b64 = encrypt_message(&cipher, &message);
-                                if let Err(e) = peer_stream.write_all(encrypted_b64.as_bytes()) {
-                                    return Err(e);
-                                }
+                                let encrypted_b64 = encrypt_message(&cipher, message);
+                                peer_stream.write_all(encrypted_b64.as_bytes())?;
                                 now = Instant::now();
 
                                 let mut line = String::new();
                                 match reader.read_line(&mut line) {
                                     Ok(0) => {
                                         println!("Connection closed by peer");
-                                        failed_port = peer.port.clone();
+                                        failed_port = peer.port;
                                         break;
                                     }
                                     Ok(_) => {
@@ -864,12 +846,12 @@ fn ping_to_node(
                                             "Timeout: no response within {:?}",
                                             error_interval
                                         );
-                                        failed_port = peer.port.clone();
+                                        failed_port = peer.port;
                                         break;
                                     }
                                     Err(e) => {
                                         println!("Unexpected error: {}", e);
-                                        failed_port = peer.port.clone();
+                                        failed_port = peer.port;
                                         break;
                                     }
                                 }
@@ -901,7 +883,7 @@ fn detect_failed_node(
     inactive_port: usize,
 ) -> bool {
     let key = GenericArray::from_slice(&KEY);
-    let cipher = Aes128::new(&key);
+    let cipher = Aes128::new(key);
     let mut locked_peer_nodes = peer_nodes.lock().unwrap();
     let locked_local_node = local_node.lock().unwrap();
     let mut peer_state = NodeState::Fail;
@@ -964,7 +946,7 @@ fn set_failed_node(
     inactive_state: NodeState,
 ) -> bool {
     let key = GenericArray::from_slice(&KEY);
-    let cipher = Aes128::new(&key);
+    let cipher = Aes128::new(key);
     let mut locked_peer_nodes = peer_nodes.lock().unwrap();
     let locked_local_node = local_node.lock().unwrap();
     let mut promote_replica = false;
@@ -1051,7 +1033,7 @@ fn initialize_replica_promotion(
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
 ) {
     let key = GenericArray::from_slice(&KEY);
-    let cipher = Aes128::new(&key);
+    let cipher = Aes128::new(key);
     let (mut locked_local_node, locked_peer_nodes) = match (local_node.lock(), peer_nodes.lock()) {
         (Ok(local), Ok(peers)) => (local, peers),
         _ => {
