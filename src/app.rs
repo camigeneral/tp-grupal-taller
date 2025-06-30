@@ -144,6 +144,8 @@ impl SimpleComponent for AppModel {
                             add_css_class: "button",
                             set_label: "Reload",
                             connect_clicked => AppMsg::GetFiles,
+                            set_margin_start: 20,
+                            set_margin_end: 11,
                         },
 
                         #[name="new_file_popover"]
@@ -290,10 +292,9 @@ impl SimpleComponent for AppModel {
         match message {
             AppMsg::Connect => {
                 if self.is_logged_in {
-                    self.header_cont
-                        .sender()
-                        .send(NavbarMsg::SetConnectionStatus(true))
-                        .unwrap();
+                    if let Err(_e) = self.header_cont.sender().send(NavbarMsg::SetConnectionStatus(true)) {
+                        eprintln!("Failed to send message");
+                    }
                 }
             }
             AppMsg::Error(error_message) => {
@@ -306,15 +307,13 @@ impl SimpleComponent for AppModel {
             }
             AppMsg::Ignore => {}
             AppMsg::LoginSuccess(username) => {
-                self.header_cont
-                    .sender()
-                    .send(NavbarMsg::SetLoggedInUser(username))
-                    .unwrap();
+                if self.header_cont.sender().send(NavbarMsg::SetLoggedInUser(username)).is_err() {
+                    eprintln!("Failed to send message");
+                }
 
-                self.header_cont
-                    .sender()
-                    .send(NavbarMsg::SetConnectionStatus(true))
-                    .unwrap();
+                if self.header_cont.sender().send(NavbarMsg::SetConnectionStatus(true)).is_err() {
+                    eprintln!("Failed to send message");
+                }
                 self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
                 self.is_logged_in = true;
             }
@@ -322,18 +321,17 @@ impl SimpleComponent for AppModel {
                 self.login_form_cont.emit(LoginMsg::SetErrorForm(error));
             }
             AppMsg::Logout => {
-                self.header_cont
-                    .sender()
-                    .send(NavbarMsg::SetConnectionStatus(false))
-                    .unwrap();
-
-                self.header_cont
-                    .sender()
-                    .send(NavbarMsg::SetLoggedInUser("".to_string()))
-                    .unwrap();
-
+                if self.header_cont.sender().send(NavbarMsg::SetConnectionStatus(false)).is_err() {
+                    eprintln!("Failed to send message");
+                }
+            
+                if self.header_cont.sender().send(NavbarMsg::SetLoggedInUser("".to_string())).is_err() {
+                    eprintln!("Failed to send message");
+                }
+            
                 self.is_logged_in = false;
             }
+            
             AppMsg::CommandChanged(command) => {
                 self.command = command;
             }
@@ -371,7 +369,7 @@ impl SimpleComponent for AppModel {
                 ));
             }
 
-            AppMsg::CreateFile(file_id, content, file_type) => {
+            AppMsg::CreateFile(file_id, content, _file_type) => {
                 self.command = format!("set {} {}", file_id, content);
                 sender.input(AppMsg::ExecuteCommand);
             }

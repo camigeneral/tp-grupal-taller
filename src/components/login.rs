@@ -138,12 +138,12 @@ impl SimpleComponent for LoginForm {
                 self.password = new_password;
             }
             LoginMsg::Submit => {
-                sender
-                    .output(LoginOutput::LoginRequested(
-                        self.username.clone(),
-                        self.password.clone(),
-                    ))
-                    .unwrap();
+                if let Err(_e) = sender.output(LoginOutput::LoginRequested(
+                    self.username.clone(),
+                    self.password.clone(),
+                )) {
+                    eprintln!("Failed to send login request output");
+                }
             }
             LoginMsg::SetErrorForm(error) => self.error_message = error,
         }

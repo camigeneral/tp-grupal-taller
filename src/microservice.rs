@@ -68,7 +68,7 @@ impl Microservice {
     pub fn new(config_path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let logger = logger::Logger::init(
             logger::Logger::get_log_path_from_config(config_path),
-            "0000".parse().unwrap(),
+            "0000".parse()?,
         );
         Ok(Microservice {
             node_streams: Arc::new(Mutex::new(HashMap::new())),
@@ -159,7 +159,7 @@ impl Microservice {
         &self,
         connect_node_sender: &MpscSender<TcpStream>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let other_ports = vec![4001, 4002, 4003, 4004, 4005, 4006, 4007, 4008];
+        let other_ports = vec![4003, 4004, 4005, 4006, 4007, 4008, 4001, 4002];
         for port in other_ports {
             let addr = format!("127.0.0.1:{}", port);
             match TcpStream::connect(&addr) {
@@ -451,6 +451,7 @@ impl Microservice {
                         content.len(),
                         stream_id
                     ));
+                    println!("Recibi comando DOC");
                     if let Ok(mut docs) = documents.lock() {
                         if document.ends_with(".txt") {
                             let lines: Vec<String> = content

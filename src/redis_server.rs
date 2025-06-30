@@ -20,6 +20,7 @@ use crate::local_node::NodeState;
 use commands::redis_parser::format_resp_command;
 mod client_info;
 mod commands;
+mod document;
 mod encryption;
 mod hashing;
 mod local_node;
@@ -106,8 +107,8 @@ fn start_server(
             }
         };
         let file_name = format!(
-            "redis_node_{}_{}.rdb",
-            locked_node.hash_range.0, locked_node.hash_range.1
+            "./rdb_files/redis_node_{}_{}_{}.rdb",
+            locked_node.hash_range.0, locked_node.hash_range.1, locked_node.port
         );
         let node_role = match locked_node.role {
             local_node::NodeRole::Master => local_node::NodeRole::Master,
@@ -709,7 +710,7 @@ pub fn resolve_key_location(
                 CommandResponse::String(format!("127.0.0.1:{}", peer_node.port - 10000)),
             ]);
 
-            // println!("Hashing para otro nodo: {:?}", response_string.clone());
+            println!("\n\nHashing para otro nodo: {:?}", response_string.clone());
             logger.log(&format!(
                 "Hashing para otro nodo: {:?}",
                 response_string.clone()
@@ -851,28 +852,24 @@ pub fn persist_documents(
     let file_name = match local_node.lock() {
         Ok(locked_node) => {
             format!(
-                "redis_node_{}_{}.rdb",
-                locked_node.hash_range.0, locked_node.hash_range.1
+                "./rdb_files/redis_node_{}_{}_{}.rdb",
+                locked_node.hash_range.0, locked_node.hash_range.1, locked_node.port
             )
         }
         Err(poisoned) => {
             let locked_node = poisoned.into_inner();
             format!(
-                "redis_node_{}_{}.rdb",
-                locked_node.hash_range.0, locked_node.hash_range.1
+                "./rdb_files/redis_node_{}_{}_{}.rdb",
+                locked_node.hash_range.0, locked_node.hash_range.1, locked_node.port
             )
         }
     };
 
-    let mut persistence_file = match OpenOptions::new()
+    let mut persistence_file = OpenOptions::new()
         .create(true)
         .truncate(true)
         .write(true)
-        .open(&file_name)
-    {
-        Ok(file) => file,
-        Err(e) => return Err(e),
-    };
+        .open(&file_name)?;
 
     let documents_guard = match documents.lock() {
         Ok(guard) => guard,

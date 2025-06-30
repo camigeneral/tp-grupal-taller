@@ -103,9 +103,9 @@ impl SimpleComponent for NavbarModel {
                     return;
                 }
                 let file_id = format!("{}.txt", self.file_name.trim());
-                sender
-                    .output(NavbarOutput::CreateFileRequested(file_id, "".to_string()))
-                    .unwrap();
+                if let Err(_e) = sender.output(NavbarOutput::CreateFileRequested(file_id, "".to_string())) {
+                    eprintln!("Failed to send message");
+                }
             }
             NavbarMsg::SetFileName(file_name) => self.file_name = file_name,
             NavbarMsg::CreateSpreadsheetDocument => {
@@ -116,9 +116,9 @@ impl SimpleComponent for NavbarModel {
                     return;
                 }
                 let file_id = format!("{}.xlsx", self.file_name.trim());
-                sender
-                    .output(NavbarOutput::CreateFileRequested(file_id, "".to_string()))
-                    .unwrap();
+                if let Err(_e) = sender.output(NavbarOutput::CreateFileRequested(file_id, "".to_string())) {
+                    eprintln!("Failed to send message");
+                }
             }
             NavbarMsg::SetLoggedInUser(username) => {
                 self.username = username;
