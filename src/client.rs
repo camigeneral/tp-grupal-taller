@@ -374,6 +374,15 @@ fn send_command_to_nodes(
         }
         std::thread::sleep(std::time::Duration::from_millis(2));
 
+        // vuelvo a hacer subscribe
+        if let Some((doc_name)) = extract_document_name(&last_line_cloned) {
+            let subscribe_command = format!("*2\r\n$9\r\nsubscribe\r\n${}\r\n{}\r\n", doc_name.len(), doc_name);
+            if let Err(e) = cloned_stream_to_connect.write_all(subscribe_command.as_bytes()) {
+                eprintln!("Error subscribing to doc: {}", doc_name);
+                return Err(Box::new(e));
+            }
+        }
+
         if let Err(e) = cloned_stream_to_connect.write_all(last_line_cloned.as_bytes()) {
             eprintln!("Error al reenviar el último comando: {}", e);
             return Err(Box::new(e));
@@ -409,4 +418,17 @@ fn connect_to_nodes(
     }
 
     Ok(())
+}
+
+
+fn extract_document_name(resp: &str) -> Option<String> {
+    let parts: Vec<&str> = resp.split("\r\n").collect();
+
+    for part in parts.iter().rev() {
+        if !part.is_empty() && (part.ends_with(".txt") || part.ends_with(".xlsx")) {
+            return Some(part.to_string());
+        }
+    }
+
+    None
 }

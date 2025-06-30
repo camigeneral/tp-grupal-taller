@@ -707,7 +707,7 @@ pub fn resolve_key_location(
                 CommandResponse::String(format!("127.0.0.1:{}", peer_node.port - 10000)),
             ]);
 
-            // println!("Hashing para otro nodo: {:?}", response_string.clone());
+            println!("Hashing para otro nodo: {:?}", response_string.clone());
             logger.log(&format!(
                 "Hashing para otro nodo: {:?}",
                 response_string.clone()

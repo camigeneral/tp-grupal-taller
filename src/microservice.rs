@@ -159,7 +159,7 @@ impl Microservice {
         &self,
         connect_node_sender: &MpscSender<TcpStream>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let other_ports = vec![4001, 4002, 4003, 4004, 4005, 4006, 4007, 4008];
+        let other_ports = vec![4003, 4004, 4005, 4006, 4007, 4008, 4001, 4002];
         for port in other_ports {
             let addr = format!("127.0.0.1:{}", port);
             match TcpStream::connect(&addr) {
@@ -235,6 +235,7 @@ impl Microservice {
 
                             let default_stream = "127.0.0.1:4000".to_string();
                             let stream_id = doc_streams.get(doc_name).unwrap_or(&default_stream);
+                            println!("\nmando set al stream id {}", stream_id);
 
                             let set_parts = vec!["SET", doc_name, &document_data];
                             let set_command = redis_parser::format_resp_command(&set_parts);
@@ -343,7 +344,7 @@ impl Microservice {
                 cloned_document_streams,
                 logger,
             ) {
-                eprintln!("Error en la conexión con el nodo: {}", e);
+                eprintln!("Error en la conexión con el nodo snch: {}", e);
             }
         });
     }
@@ -394,7 +395,7 @@ impl Microservice {
                     cloned_last_command,
                     log_clone,
                 ) {
-                    eprintln!("Error en la conexión con el nodo: {}", e);
+                    eprintln!("Error en la conexión con el nodo ctn: {}", e);
                 }
             });
         }
@@ -605,18 +606,18 @@ impl Microservice {
                     }
                 }
                 MicroserviceMessage::Ask { response } => {
-                    if response.len() < 3 {
-                        log_clone.log("Nodo de redireccion no disponible");
-                    } else {
-                        let _ = Self::send_command_to_nodes(
-                            connect_node_sender.clone(),
-                            node_streams.clone(),
-                            last_command_sent.clone(),
-                            response.clone(),
-                        );
-                        println!("Redirigiendo comando a nodo: {:?}", response);
-                        log_clone.log(&format!("Redirigiendo comando a nodo: {:?}", response));
-                    }
+                    // if response.len() < 3 {
+                    //     log_clone.log("Nodo de redireccion no disponible");
+                    // } else {
+                    //     let _ = Self::send_command_to_nodes(
+                    //         connect_node_sender.clone(),
+                    //         node_streams.clone(),
+                    //         last_command_sent.clone(),
+                    //         response.clone(),
+                    //     );
+                    //     println!("Redirigiendo comando a nodo: {:?}", response);
+                    //     log_clone.log(&format!("Redirigiendo comando a nodo: {:?}", response));
+                    // }
                 }
                 MicroserviceMessage::Error(_) => {}
                 _ => {}
