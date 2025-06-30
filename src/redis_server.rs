@@ -20,6 +20,7 @@ use crate::local_node::NodeState;
 use commands::redis_parser::format_resp_command;
 mod client_info;
 mod commands;
+mod document;
 mod encryption;
 mod hashing;
 mod local_node;
@@ -27,7 +28,6 @@ mod peer_node;
 mod redis_node_handler;
 mod server_context;
 mod utils;
-mod document;
 use crate::server_context::ServerContext;
 use client_info::ClientType;
 #[path = "redis_types.rs"]

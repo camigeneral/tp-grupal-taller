@@ -1,10 +1,10 @@
 use crate::client_info::Client;
+use document::Documento;
 use local_node::LocalNode;
 use peer_node::PeerNode;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
-use document::Documento;
 
 /// Mapa de suscriptores a documentos.
 ///
