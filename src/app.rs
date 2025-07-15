@@ -10,7 +10,7 @@ use crate::components::{
     login::{LoginForm, LoginMsg, LoginOutput},
 };
 use app::gtk4::glib::Propagation;
-use client::client_run;
+use client::LocalClient;
 use components::error_modal::ErrorModalMsg;
 use components::file_workspace::{FileWorkspace, FileWorkspaceMsg, FileWorkspaceOutputMessage};
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
@@ -280,9 +280,15 @@ impl SimpleComponent for AppModel {
         model.command_sender = command_sender;
 
         thread::spawn(move || {
-            if let Err(e) = client_run(port, rx, Some(ui_sender)) {
-                eprintln!("Error al iniciar el cliente: {:?}", e);
-            }
+
+            match LocalClient::new(port, Some(ui_sender), Some(rx)){
+                Ok(mut client) => {
+                    client.run()
+                }
+                Err(e) => {
+                    eprintln!("Error al iniciar el cliente: {:?}", e);            
+                }
+            }           
         });
 
         ComponentParts { model, widgets }
