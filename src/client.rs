@@ -15,28 +15,53 @@ use redis_types::RedisClientResponseType;
 #[path = "utils/redis_parser.rs"]
 mod redis_parser;
 
-struct NodeConnectionParams {
-    pub redis_socket: TcpStream,
-    pub node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
-    pub last_command_sent: Arc<Mutex<String>>,
-    pub ui_sender: Option<UiSender<AppMsg>>,
-    pub address: String,
+
+#[derive(Clone)]
+struct WriterRegistry {
+    writers: Arc<Mutex<HashMap<String, MpscSender<String>>>>,
 }
+
+impl WriterRegistry {
+    pub fn new() -> Self {
+        Self {
+            writers: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub fn insert(&self, node_id: String, sender: MpscSender<String>) {
+        if let Ok(mut map) = self.writers.lock() {
+            map.insert(node_id, sender);
+        } else {
+            eprintln!("No se pudo bloquear writer_registry para insertar");
+        }
+    }
+
+    pub fn get(&self, node_id: &str) -> Option<MpscSender<String>> {
+        self.writers.lock().ok()?.get(node_id).cloned()
+    }
+}
+
 
 
 pub struct LocalClient {
     address: String,
     ui_sender: Option<UiSender<AppMsg>>,
-    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     last_command_sent: Arc<Mutex<String>>,
     redis_socket: TcpStream,
     redis_sender: Option<MpscSender<String>>,
     rx_ui: Option<Receiver<String>>,
-    node_writers: Arc<Mutex<HashMap<String, MpscSender<String>>>>,
+    writer_registry: WriterRegistry
+}
+
+#[derive(Clone)]
+struct NodeConnectionContext {
+    last_command_sent: Arc<Mutex<String>>,
+    ui_sender: Option<UiSender<AppMsg>>,
+    writer_registry: WriterRegistry
 }
 
 impl LocalClient {
-    fn new(port: u16, ui_sender: Option<UiSender<AppMsg>>, rx_ui: Option<Receiver<String>>) ->  Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(port: u16, ui_sender: Option<UiSender<AppMsg>>, rx_ui: Option<Receiver<String>>) ->  Result<Self, Box<dyn std::error::Error>> {
         let address = format!("127.0.0.1:{}", port);
         let socket: TcpStream = match TcpStream::connect(address.clone()) {
             Ok(s) => s,
@@ -49,79 +74,50 @@ impl LocalClient {
         Ok(Self {
             address,
             ui_sender, 
-            node_streams: Arc::new(Mutex::new(HashMap::new())),
             last_command_sent: Arc::new(Mutex::new("".to_string())),
             redis_socket: socket,
             redis_sender: None,
             rx_ui,
-            node_writers: Arc::new(Mutex::new(HashMap::new())),
+            writer_registry: WriterRegistry::new()
         })
     }
 
     fn spawn_writer_channel(
-        node_id: Option<String>,
+        node_id: String,
         stream: TcpStream,
-        maybe_writers: Option<&Arc<Mutex<HashMap<String, MpscSender<String>>>>>,
+        writer_registry: &WriterRegistry,
     ) -> MpscSender<String> {
         let (tx, rx) = channel::<String>();
-        let maybe_node_id = node_id.clone();
+
+        let node_id_for_thread = node_id.clone();
 
         thread::spawn(move || {
             let mut writer = BufWriter::new(stream);
             for msg in rx {
                 if let Err(e) = writer.write_all(msg.as_bytes()) {
-                    if let Some(ref id) = maybe_node_id {
-                        eprintln!("Error escribiendo al nodo {}: {}", id, e);
-                    } else {
-                        eprintln!("Error escribiendo en el socket Redis: {}", e);
-                    }
+                    eprintln!("Error escribiendo al nodo {}: {}", node_id_for_thread, e);
                     break;
                 }
                 let _ = writer.flush();
             }
         });
-
-        if let (Some(writers), Some(id)) = (maybe_writers, node_id) {
-            if let Ok(mut locked) = writers.lock() {
-                locked.insert(id, tx.clone());
-            } else {
-                eprintln!("No se pudo bloquear node_writers");
-            }
-        }
+        writer_registry.insert(node_id, tx.clone());
 
         tx
     }
 
-    
-    fn register_redis_socket_in_map(&self) -> std::io::Result<()> {
-        let socket_clone = self.redis_socket.try_clone()
-            .map_err(|e| {
-                eprintln!("Failed to clone socket: {}", e);
-                std::io::Error::other("Socket clone failed")
-            })?;
-
-        let mut locked_map = self.node_streams.lock()
-            .map_err(|_| std::io::Error::other("Failed to lock node_streams"))?;
-
-        locked_map.insert(self.address.clone(), socket_clone);
-
-        Ok(())
-    }
-
     fn register_and_connect_node(&self) -> std::io::Result<()>{
         let redis_socket = match self.redis_socket.try_clone() {
-                Ok(clone) => clone,
-                Err(e) => {
-                    eprintln!("Error al clonar el socket: {}", e);
-                    return Err(e);
-                }
-            };
-
-        let _ = self.register_redis_socket_in_map();
+            Ok(clone) => clone,
+            Err(e) => {
+                eprintln!("Error al clonar el socket: {}", e);
+                return Err(e);
+            }
+        };
 
         let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
         let connect_node_sender_cloned = connect_node_sender.clone();
-        let params = NodeConnectionParams::from(self);
+        let params = NodeConnectionContext::from(self);
         thread::spawn(move || {
             if let Err(e) = Self::connect_to_nodes(
                 connect_node_sender_cloned,
@@ -138,17 +134,24 @@ impl LocalClient {
     }
 
     fn set_redis_sender(&mut self) {
-        let redis_socket = self.redis_socket.try_clone().unwrap();
-        let tx = Self::spawn_writer_channel(
-            None,                   
-            redis_socket,
-            None,                    
-        );
-        self.redis_sender = Some(tx);
+        let redis_socket = match self.redis_socket.try_clone() {
+            Ok(clone) => clone,
+            Err(e) => {
+                eprintln!("Error al clonar el socket de Redis: {}", e);
+                return;
+            }
+        };
 
+        let tx = Self::spawn_writer_channel(
+            self.address.clone(),
+            redis_socket,
+            &self.writer_registry,
+        );
+
+        self.redis_sender = Some(tx);
     }
 
-    fn run(&mut self) {
+    pub fn run(&mut self) {
 
         self.set_redis_sender();
 
@@ -159,7 +162,7 @@ impl LocalClient {
 
         let _ = self.register_and_connect_node();
         
-        self.read_comming_messages();
+        let _= self.read_comming_messages();
     }
 
     fn get_resp_command(&self, parts: Vec<&str>, command: &str) -> String {
@@ -198,23 +201,18 @@ impl LocalClient {
     }
 
     fn connect_to_nodes(
-        sender: MpscSender<TcpStream>,
+        node_sender: MpscSender<TcpStream>,
         reciever: Receiver<TcpStream>,
-        params: NodeConnectionParams
+        params: NodeConnectionContext
     ) -> std::io::Result<()> {
-        for stream in reciever {
-            let cloned_node_streams = Arc::clone(&params.node_streams);
-            let cloned_last_command = Arc::clone(&params.last_command_sent);
-            let cloned_sender = params.ui_sender.clone();
-            let cloned_own_sender = sender.clone();
-
+        for stream in reciever {            
+            let cloned_own_sender = node_sender.clone();
+            let params_clone = params.clone();
             thread::spawn(move || {
                 if let Err(e) = Self::listen_to_redis_response(
-                    stream,
-                    cloned_sender,
+                    stream,                
                     cloned_own_sender,
-                    cloned_node_streams,
-                    cloned_last_command,
+                    params_clone                   
                 ) {
                     eprintln!("Error en la conexión con el nodo: {}", e);
                 }
@@ -269,17 +267,15 @@ impl LocalClient {
     fn handle_ask(
         response: Vec<String>,
         connect_node_sender: MpscSender<TcpStream>,
-        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
-        last_command_sent: Arc<Mutex<String>>
+        contenxt: NodeConnectionContext,        
     ) { 
          if response.len() < 3 {
             println!("Nodo de redireccion no disponible");
         } else {
             let _ = Self::send_command_to_nodes(
-                connect_node_sender.clone(),
-                node_streams.clone(),
-                last_command_sent.clone(),
                 response,
+                connect_node_sender.clone(),
+                contenxt.clone()
             );
         }
      }
@@ -375,11 +371,9 @@ impl LocalClient {
     }
 
     fn listen_to_redis_response(        
-        client_socket: TcpStream,
-        ui_sender: Option<UiSender<AppMsg>>,
+        client_socket: TcpStream,    
         connect_node_sender: MpscSender<TcpStream>,
-        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
-        last_command_sent: Arc<Mutex<String>>,
+        params: NodeConnectionContext
     ) -> std::io::Result<()> {
         let client_socket_cloned = match client_socket.try_clone() {
             Ok(clone) => clone,
@@ -390,7 +384,7 @@ impl LocalClient {
         };
 
         let mut reader: BufReader<TcpStream> = BufReader::new(client_socket);
-        let cloned_last_command: Arc<Mutex<String>> = Arc::clone(&last_command_sent.clone());
+        let cloned_last_command: Arc<Mutex<String>> = Arc::clone(&params.last_command_sent.clone());
 
         loop {
             let (response, _) = match redis_parser::parse_resp_command(&mut reader) {
@@ -400,6 +394,8 @@ impl LocalClient {
                     break;
                 }
             };
+
+            let params_clone: NodeConnectionContext = params.clone();
 
             if response.is_empty() {
                 break;
@@ -412,127 +408,116 @@ impl LocalClient {
                     return Err(e);
                 }
             };
-            let cloned_ui_sender = ui_sender.clone();
+            let cloned_ui_sender = params.ui_sender.clone();
 
             println!("Respuesta de redis: {}", response.join(" "));
 
             let response_type = RedisClientResponseType::from(response[0].as_str());            
-            let cloned_node_streams = Arc::clone(&node_streams);
             let cloned_connect_node_sender = connect_node_sender.clone();
 
             match response_type {
-                RedisClientResponseType::Ask => Self::handle_ask(response, cloned_connect_node_sender, cloned_node_streams, cloned_last_command.clone()),
+                RedisClientResponseType::Ask => Self::handle_ask(response, cloned_connect_node_sender, params_clone),
                 RedisClientResponseType::Status => Self::handle_status(response, local_addr.to_string(), cloned_ui_sender),
                 RedisClientResponseType::Write => Self::handle_write(response, cloned_ui_sender),
                 RedisClientResponseType::Files => Self::handle_files(response, cloned_ui_sender),
                 RedisClientResponseType::Error => Self::handle_error(response, cloned_ui_sender),
-                RedisClientResponseType::Other(_) => Self::handle_unknown( response, cloned_ui_sender, cloned_last_command.clone()),
+                RedisClientResponseType::Other => Self::handle_unknown(response, cloned_ui_sender, cloned_last_command.clone()),
             }
         }
         Ok(())
     }
 
 
-    fn send_command_to_nodes(
-        connect_node_sender: MpscSender<TcpStream>,
-        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
-        last_command_sent: Arc<Mutex<String>>,
-        response: Vec<String>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let last_line_cloned = match last_command_sent.lock() {
-            Ok(locked) => locked.clone(),
-            Err(e) => {
-                eprintln!("Error al bloquear el mutex de last_command_sent: {}", e);
-                return Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Mutex lock failed: {}", e),
-                )));
-            }
-        };
+ fn send_command_to_nodes(
+    response: Vec<String>,
+    connect_node_sender: MpscSender<TcpStream>,
+    context: NodeConnectionContext,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Extraigo el último comando enviado
+    let last_line_cloned = {
+        let locked = context.last_command_sent.lock()
+            .map_err(|e| {
+                eprintln!("Error locking last_command_sent mutex: {}", e);
+                std::io::Error::new(std::io::ErrorKind::Other, "Mutex lock failed")
+            })?;
+        locked.clone()
+    };
 
-        let mut locked_node_streams = match node_streams.lock() {
-            Ok(locked) => locked,
-            Err(e) => {
-                eprintln!("Error al bloquear el mutex de node_streams: {}", e);
-                return Err(Box::new(std::io::Error::other(format!(
-                    "Mutex lock failed: {}",
-                    e
-                ))));
-            }
-        };
+    let new_node_address = response.get(2)
+        .ok_or_else(|| {
+            eprintln!("No new node address in response");
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid response")
+        })?.to_string();
 
-        let new_node_address = response[2].to_string();
+    println!("Last command executed: {:#?}", last_line_cloned);
+    println!("Redirecting to node: {}", new_node_address);
 
-        println!("Ultimo comando ejecutado: {:#?}", last_line_cloned);
-        println!("Redirigiendo a nodo: {}", new_node_address);
+    if let Some(sender) = context.writer_registry.get(&new_node_address) {
+        println!("Using existing writer for node {}", new_node_address);
+        sender.send(last_line_cloned.clone())
+            .map_err(|e| {
+                eprintln!("Failed to send command to node {}: {}", new_node_address, e);
+                std::io::Error::new(std::io::ErrorKind::Other, "Send failed")
+            })?;
+    } else {
+        println!("Creating new connection for node {}", new_node_address);
 
-        if let Some(stream) = locked_node_streams.get_mut(&new_node_address) {
-            println!("Usando conexión existente al nodo {}", new_node_address);
-            if let Err(e) = stream.write_all(last_line_cloned.as_bytes()) {
-                eprintln!("Error al escribir en el nodo: {}", e);
-                return Err(Box::new(e));
-            }
-        } else {
-            println!("Creando nueva conexión al nodo {}", new_node_address);
-            let parts: Vec<&str> = "connect".split_whitespace().collect();
-            let resp_command = redis_parser::format_resp_command(&parts);
-            let mut final_stream = match TcpStream::connect(new_node_address.clone()) {
-                Ok(stream) => stream,
-                Err(e) => {
-                    eprintln!("Error al conectar con el nuevo nodo: {}", e);
-                    return Err(Box::new(e));
-                }
-            };
-            if let Err(e) = final_stream.write_all(resp_command.as_bytes()) {
-                eprintln!("Error al escribir en el nuevo nodo: {}", e);
-                return Err(Box::new(e));
-            }
+        let parts: Vec<&str> = "connect".split_whitespace().collect();
+        let resp_command = redis_parser::format_resp_command(&parts);
 
-            let mut cloned_stream_to_connect = match final_stream.try_clone() {
-                Ok(clone) => clone,
-                Err(e) => {
-                    eprintln!("Error al clonar el socket: {}", e);
-                    return Err(Box::new(e));
-                }
-            };
-            locked_node_streams.insert(new_node_address, final_stream);
+        let stream = TcpStream::connect(new_node_address.clone())
+            .map_err(|e| {
+                eprintln!("Error connecting to new node: {}", e);
+                e
+            })?;
 
-            if let Err(e) = connect_node_sender.send(cloned_stream_to_connect.try_clone()?) {
-                eprintln!("Error al enviar el nodo conectado: {}", e);
-                return Err(Box::new(e));
-            }
-            std::thread::sleep(std::time::Duration::from_millis(2));
+        let writer_sender = Self::spawn_writer_channel(
+            new_node_address.clone(),
+            stream.try_clone()?,
+            &context.writer_registry.clone(),
+        );
 
-            // vuelvo a hacer subscribe
-            if let Some(doc_name) = extract_document_name(&last_line_cloned) {
-                let subscribe_command = format!(
-                    "*2\r\n$9\r\nsubscribe\r\n${}\r\n{}\r\n",
-                    doc_name.len(),
-                    doc_name
-                );
-                if let Err(e) = cloned_stream_to_connect.write_all(subscribe_command.as_bytes()) {
-                    eprintln!("Error subscribing to doc: {}", doc_name);
-                    return Err(Box::new(e));
-                }
-            }
+        writer_sender.send(resp_command)?;
 
-            if let Err(e) = cloned_stream_to_connect.write_all(last_line_cloned.as_bytes()) {
-                eprintln!("Error al reenviar el último comando: {}", e);
-                return Err(Box::new(e));
-            }
+        connect_node_sender.send(stream.try_clone()?)
+            .map_err(|e| {
+                eprintln!("Failed to send connected node stream: {}", e);
+                std::io::Error::new(std::io::ErrorKind::Other, "Send failed")
+            })?;
+
+        std::thread::sleep(std::time::Duration::from_millis(2));
+
+        // Si hay documento en el último comando, vuelvo a hacer subscribe
+        if let Some(doc_name) = extract_document_name(&last_line_cloned) {
+            let subscribe_command = format!(
+                "*2\r\n$9\r\nsubscribe\r\n${}\r\n{}\r\n",
+                doc_name.len(),
+                doc_name
+            );
+            writer_sender.send(subscribe_command)
+                .map_err(|e| {
+                    eprintln!("Error sending subscribe command: {}", e);
+                    std::io::Error::new(std::io::ErrorKind::Other, "Send failed")
+                })?;
         }
-        Ok(())
+
+        writer_sender.send(last_line_cloned)
+            .map_err(|e| {
+                eprintln!("Error resending last command: {}", e);
+                std::io::Error::new(std::io::ErrorKind::Other, "Send failed")
+            })?;
     }
+
+    Ok(())
+}
 }
 
-impl From<&LocalClient> for NodeConnectionParams {
+impl From<&LocalClient> for NodeConnectionContext {
     fn from(client: &LocalClient) -> Self {
-        NodeConnectionParams {
-            redis_socket: client.redis_socket.try_clone().unwrap(),
-            node_streams: Arc::clone(&client.node_streams),
+        NodeConnectionContext {
             last_command_sent: Arc::clone(&client.last_command_sent),
             ui_sender: client.ui_sender.clone(),
-            address: client.address.clone(),
+            writer_registry: client.writer_registry.clone()
         }
     }
 }
