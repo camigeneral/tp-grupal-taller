@@ -333,7 +333,22 @@ impl LocalClient {
             )));
         }
      }
-    /*fn handle_unknown( cmd: String, response: Vec<String>) { ... } */
+    fn handle_unknown( response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>, last_command_sent: Arc<Mutex<String>>,) { 
+        if let Some(sender) = &ui_sender {
+            let _ = sender.send(AppMsg::ManageResponse(response[0].clone()));
+        }
+        if let Ok(last_command) = last_command_sent.lock() {
+            if last_command.to_uppercase().contains("SET") {
+                let lines: Vec<&str> = last_command.split("\r\n").collect();
+                if lines.len() >= 5 {
+                    let file_name = lines[4];
+                    if let Some(sender) = &ui_sender {
+                        let _ = sender.send(AppMsg::AddFile(file_name.to_string()));
+                    }
+                }
+            }
+        }
+    }
 
     fn listen_to_redis_response(        
         client_socket: TcpStream,
@@ -387,7 +402,7 @@ impl LocalClient {
                 RedisClientResponseType::Write => Self::handle_write(response, cloned_ui_sender),
                 RedisClientResponseType::Files => Self::handle_files(response, cloned_ui_sender),
                 RedisClientResponseType::Error => Self::handle_error(response, cloned_ui_sender),
-                /*RedisClientResponseType::Other(cmd) => Self::handle_unknown(cmd, response), */
+                RedisClientResponseType::Other(_) => Self::handle_unknown( response, cloned_ui_sender, cloned_last_command.clone()),
                 _ => {}
             }
 
