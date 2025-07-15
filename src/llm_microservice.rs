@@ -8,11 +8,17 @@ fn main() {
     let api_key = "_";
 
     let body = json!({
+        "system_instruction": {
+            "parts": [{
+                "text": "Respondé únicamente con la respuesta solicitada. No agregues introducciones, explicaciones, comentarios, aclaraciones ni conclusiones. No uses frases como 'Claro', 'Aquí está', 'Como modelo de lenguaje', etc. Solo devolvé la respuesta en bruto. Nada más."
+            }]
+        },
         "contents": [{
             "parts": [{
                 "text": "¿Cuál es la capital de Francia?"
             }]
         }]
+        
     })
     .to_string();
 
