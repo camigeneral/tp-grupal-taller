@@ -57,3 +57,26 @@ pub type LoggedClientsMap = Arc<Mutex<HashMap<String, bool>>>;
 /// manteniendo la capacidad de escritura. Útil para casos donde se necesita flexibilidad
 /// en el tipo de datos almacenado.
 pub type WriteClient<T> = Arc<Mutex<HashMap<String, T>>>;
+
+pub enum RedisClientResponseType {
+    Ask,
+    Status,
+    Write,
+    Files,
+    Error,
+    Other(String),
+}
+
+impl From<&str> for RedisClientResponseType {
+    fn from(s: &str) -> Self {
+        match s.to_uppercase().as_str() {
+            "ASK" => Self::Ask,
+            "STATUS" => Self::Status,
+            "WRITE" => Self::Write,
+            "FILES" => Self::Files,
+            s if s.starts_with("-ERR") => Self::Error,
+            _ => Self::Other(s.to_string()),
+        }
+    }
+}
+
