@@ -1,7 +1,5 @@
 use crate::client_info::Client;
-#[path = "document.rs"]
-pub mod document;
-use self::document::Document;
+use rusty_docs::document::Document;
 use local_node::LocalNode;
 use peer_node::PeerNode;
 use std::collections::HashMap;

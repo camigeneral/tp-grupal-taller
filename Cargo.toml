@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2015"
 
 [dependencies]
+rusty-docs = { path = "." }
 gtk4 = { version = "0.9.6", package = "gtk4" }
 relm4 = { version = "0.9.1" }
 gdk4 = { version = "0.9.6" }
