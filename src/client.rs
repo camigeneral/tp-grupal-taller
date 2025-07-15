@@ -4,7 +4,7 @@ use crate::app::AppMsg;
 use crate::components::structs::document_value_info::DocumentValueInfo;
 use commands::redis_parser::{format_resp_command, format_resp_publish};
 use std::collections::HashMap;
-use std::io::{BufReader, Write};
+use std::io::{BufReader, Write, BufWriter};
 use std::net::TcpStream;
 use std::sync::mpsc::{channel, Receiver, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
@@ -12,6 +12,129 @@ use std::thread;
 
 #[path = "utils/redis_parser.rs"]
 mod redis_parser;
+
+
+pub struct LocalClient {
+    address: String,
+    ui_sender: Option<Sender<AppMsg>>,
+    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+    last_command_sent: Arc<Mutex<String>>,
+    redis_socket: TcpStream,
+    redis_sender: Option<MpscSender<String>>
+}
+
+impl LocalClient {
+    fn new(port: u16, ui_sender: Option<Sender<AppMsg>>) ->  Result<Self, Box<dyn std::error::Error>> {
+        let address = format!("127.0.0.1:{}", port);
+        let socket: TcpStream = match TcpStream::connect(address.clone()) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Error al conectar al servidor: {}", e);
+                return Err(Box::new(e));
+            }
+        };
+
+        Ok(Self {
+            address,
+            ui_sender, 
+            node_streams: Arc::new(Mutex::new(HashMap::new())),
+            last_command_sent: Arc::new(Mutex::new("".to_string())),
+            redis_socket: socket,
+            redis_sender: None
+        })
+    }
+
+    fn spwan_writer_channel(&mut self) {
+        let (socket_tx, socket_rx) = channel::<String>();
+        let redis_socket = match self.redis_socket.try_clone() {
+            Ok(clone) => clone,
+            Err(e) => {
+                eprintln!("Error al clonar el socket: {}", e);
+                return;
+            }
+        };
+        self.redis_sender = Some(socket_tx);
+
+        thread::spawn(move || {
+            let mut writer = BufWriter::new(redis_socket);
+            for msg in socket_rx {
+                if let Err(e) = writer.write_all(msg.as_bytes()) {
+                    eprintln!("Error escribiendo en el socket Redis: {}", e);
+                    break;
+                }
+                let _ = writer.flush();
+            }            
+        });
+    }
+    
+    fn register_redis_socket_in_map(&self) -> std::io::Result<()> {
+        let socket_clone = self.redis_socket.try_clone()
+            .map_err(|e| {
+                eprintln!("Failed to clone socket: {}", e);
+                std::io::Error::other("Socket clone failed")
+            })?;
+
+        let mut locked_map = self.node_streams.lock()
+            .map_err(|_| std::io::Error::other("Failed to lock node_streams"))?;
+
+        locked_map.insert(self.address.clone(), socket_clone);
+
+        Ok(())
+    }
+
+    fn register_and_connect_node(&mut self) -> std::io::Result<()>{
+        let redis_socket = match self.redis_socket.try_clone() {
+                Ok(clone) => clone,
+                Err(e) => {
+                    eprintln!("Error al clonar el socket: {}", e);
+                    return Err(e);
+                }
+            };
+
+        let _ = self.register_redis_socket_in_map();
+
+        let cloned_node_streams = Arc::clone(&self.node_streams);
+        let cloned_last_command = Arc::clone(&self.last_command_sent);
+
+        let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
+        let connect_node_sender_cloned = connect_node_sender.clone();
+        let ui_sender_copy = self.ui_sender.clone();
+        thread::spawn(move || {
+            if let Err(e) = connect_to_nodes(
+                connect_node_sender_cloned,
+                connect_nodes_receiver,
+                ui_sender_copy,
+                cloned_node_streams,
+                cloned_last_command,
+            ) {
+                eprintln!("Error en la conexión con el nodo: {}", e);
+            }
+        });
+
+        let _ = connect_node_sender.send(redis_socket);
+        Ok(())
+
+    }
+
+
+    fn run(&mut self) {
+
+        self.spwan_writer_channel();
+        let initial_command = redis_parser::format_resp_command(&["Cliente"]);
+        if let Some(redis_sender) = &self.redis_sender {
+            let _ = redis_sender.send(initial_command);
+        }
+
+        let _ = self.register_and_connect_node();
+        
+        self.read_comming_messages();
+    }
+
+    fn read_comming_messages(&mut self) {
+
+    }
+}
+
 
 pub fn client_run(
     port: u16,
