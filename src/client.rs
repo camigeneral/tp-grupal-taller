@@ -259,8 +259,25 @@ impl LocalClient {
             );
         }
      }
-    /* fn handle_status(&self, response: Vec<String>) { ... }
-    fn handle_write(&self, response: Vec<String>) { ... }
+    fn handle_status(response: Vec<String>, local_addr: String, ui_sender: Option<UiSender<AppMsg>>) { 
+        let socket = response[2].clone();
+        let doc = response[1].clone();
+        let content = response[3].clone();
+        if socket != local_addr {
+            return;
+        }
+
+        if let Some(sender) = &ui_sender {
+            let mut document = DocumentValueInfo::new(content, 0);
+            document.decode_text();
+            let _ = sender.send(AppMsg::ManageSubscribeResponse(
+                doc.to_string(),
+                "1".to_string(),
+                document.value.to_string(),
+            ));
+        }
+     }
+    /*fn handle_write(&self, response: Vec<String>) { ... }
     fn handle_files(&self, response: Vec<String>) { ... }
     fn handle_error(&self, response: Vec<String>) { ... }
     fn handle_unknown(&self, cmd: String, response: Vec<String>) { ... } */
@@ -303,7 +320,7 @@ impl LocalClient {
                     return Err(e);
                 }
             };
-            let cloned_sender = ui_sender.clone();
+            let cloned_ui_sender = ui_sender.clone();
 
             println!("Respuesta de redis: {}", response.join(" "));
 
@@ -313,8 +330,8 @@ impl LocalClient {
 
             match response_type {
                 RedisClientResponseType::Ask => Self::handle_ask(response, cloned_connect_node_sender, cloned_node_streams, cloned_last_command.clone()),
-                /* RedisClientResponseType::Status => Self::handle_status(response),
-                RedisClientResponseType::Write => Self::handle_write(response),
+                RedisClientResponseType::Status => Self::handle_status(response, local_addr.to_string(), cloned_ui_sender),
+                /*RedisClientResponseType::Write => Self::handle_write(response),
                 RedisClientResponseType::Files => Self::handle_files(response),
                 RedisClientResponseType::Error => Self::handle_error(response),
                 RedisClientResponseType::Other(cmd) => Self::handle_unknown(cmd, response), */
