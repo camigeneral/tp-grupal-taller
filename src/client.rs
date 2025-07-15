@@ -31,7 +31,8 @@ pub struct LocalClient {
     last_command_sent: Arc<Mutex<String>>,
     redis_socket: TcpStream,
     redis_sender: Option<MpscSender<String>>,
-    rx_ui: Option<Receiver<String>>
+    rx_ui: Option<Receiver<String>>,
+    node_writers: Arc<Mutex<HashMap<String, MpscSender<String>>>>,
 }
 
 impl LocalClient {
@@ -52,33 +53,45 @@ impl LocalClient {
             last_command_sent: Arc::new(Mutex::new("".to_string())),
             redis_socket: socket,
             redis_sender: None,
-            rx_ui
+            rx_ui,
+            node_writers: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
-    
-    fn spwan_writer_channel(&mut self) {
-        let (socket_tx, socket_rx) = channel::<String>();
-        let redis_socket = match self.redis_socket.try_clone() {
-            Ok(clone) => clone,
-            Err(e) => {
-                eprintln!("Error al clonar el socket: {}", e);
-                return;
-            }
-        };
-        self.redis_sender = Some(socket_tx);
+    fn spawn_writer_channel(
+        node_id: Option<String>,
+        stream: TcpStream,
+        maybe_writers: Option<&Arc<Mutex<HashMap<String, MpscSender<String>>>>>,
+    ) -> MpscSender<String> {
+        let (tx, rx) = channel::<String>();
+        let maybe_node_id = node_id.clone();
 
         thread::spawn(move || {
-            let mut writer = BufWriter::new(redis_socket);
-            for msg in socket_rx {
+            let mut writer = BufWriter::new(stream);
+            for msg in rx {
                 if let Err(e) = writer.write_all(msg.as_bytes()) {
-                    eprintln!("Error escribiendo en el socket Redis: {}", e);
+                    if let Some(ref id) = maybe_node_id {
+                        eprintln!("Error escribiendo al nodo {}: {}", id, e);
+                    } else {
+                        eprintln!("Error escribiendo en el socket Redis: {}", e);
+                    }
                     break;
                 }
                 let _ = writer.flush();
-            }            
+            }
         });
+
+        if let (Some(writers), Some(id)) = (maybe_writers, node_id) {
+            if let Ok(mut locked) = writers.lock() {
+                locked.insert(id, tx.clone());
+            } else {
+                eprintln!("No se pudo bloquear node_writers");
+            }
+        }
+
+        tx
     }
+
     
     fn register_redis_socket_in_map(&self) -> std::io::Result<()> {
         let socket_clone = self.redis_socket.try_clone()
@@ -124,10 +137,21 @@ impl LocalClient {
 
     }
 
+    fn set_redis_sender(&mut self) {
+        let redis_socket = self.redis_socket.try_clone().unwrap();
+        let tx = Self::spawn_writer_channel(
+            None,                   
+            redis_socket,
+            None,                    
+        );
+        self.redis_sender = Some(tx);
+
+    }
 
     fn run(&mut self) {
 
-        self.spwan_writer_channel();
+        self.set_redis_sender();
+
         let initial_command = redis_parser::format_resp_command(&["Cliente"]);
         if let Some(redis_sender) = &self.redis_sender {
             let _ = redis_sender.send(initial_command);
