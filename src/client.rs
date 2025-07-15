@@ -1,5 +1,5 @@
 extern crate relm4;
-use self::relm4::Sender;
+use self::relm4::Sender as UiSender;
 use crate::app::AppMsg;
 use crate::components::structs::document_value_info::DocumentValueInfo;
 use commands::redis_parser::{format_resp_command, format_resp_publish};
@@ -18,21 +18,22 @@ struct NodeConnectionParams {
     pub redis_socket: TcpStream,
     pub node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     pub last_command_sent: Arc<Mutex<String>>,
-    pub ui_sender: Option<Sender<AppMsg>>,
+    pub ui_sender: Option<UiSender<AppMsg>>,
     pub address: String,
 }
 
 pub struct LocalClient {
     address: String,
-    ui_sender: Option<Sender<AppMsg>>,
+    ui_sender: Option<UiSender<AppMsg>>,
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     last_command_sent: Arc<Mutex<String>>,
     redis_socket: TcpStream,
-    redis_sender: Option<MpscSender<String>>
+    redis_sender: Option<MpscSender<String>>,
+    rx_ui: Option<Receiver<String>>
 }
 
 impl LocalClient {
-    fn new(port: u16, ui_sender: Option<Sender<AppMsg>>) ->  Result<Self, Box<dyn std::error::Error>> {
+    fn new(port: u16, ui_sender: Option<UiSender<AppMsg>>, rx_ui: Option<Receiver<String>>) ->  Result<Self, Box<dyn std::error::Error>> {
         let address = format!("127.0.0.1:{}", port);
         let socket: TcpStream = match TcpStream::connect(address.clone()) {
             Ok(s) => s,
@@ -48,7 +49,8 @@ impl LocalClient {
             node_streams: Arc::new(Mutex::new(HashMap::new())),
             last_command_sent: Arc::new(Mutex::new("".to_string())),
             redis_socket: socket,
-            redis_sender: None
+            redis_sender: None,
+            rx_ui
         })
     }
 
@@ -134,8 +136,65 @@ impl LocalClient {
         self.read_comming_messages();
     }
 
-    fn read_comming_messages(&mut self) {
+    fn read_comming_messages(&mut self) -> std::io::Result<()> {
+        let rx_ui = match &self.rx_ui {
+            Some(rx) => rx,
+            None => return Ok(()),
+        };
 
+        for command in rx_ui {
+            let trimmed_command = command.to_string().trim().to_lowercase();
+            if trimmed_command == "close" {
+                println!("Desconectando del servidor");
+                let parts: Vec<&str> = trimmed_command.split_whitespace().collect();
+                let resp_command = redis_parser::format_resp_publish(parts[0], parts.get(1).unwrap_or(&""));
+
+                println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
+
+                if let Err(e) = self.redis_socket.write_all(resp_command.as_bytes()) {
+                    eprintln!("Error al escribir en el socket: {}", e);
+                    return Err(e);
+                }
+                break;
+            } else {
+                println!("Enviando: {:?}", command);
+
+                let parts: Vec<&str> = command.split_whitespace().collect();
+                let resp_command = if parts[0] == "AUTH"
+                    || parts[0] == "subscribe"
+                    || parts[0] == "unsubscribe"
+                    || parts[0] == "get_files"
+                    || parts[0] == "set"
+                {
+                    format_resp_command(&parts)
+                } else if parts[0].contains("WRITE") {
+                    let splited_command: Vec<&str> = command.split("|").collect();
+                    let client_command = format_resp_command(&splited_command).clone().to_string();
+                    format_resp_publish(splited_command[4], &client_command)
+                } else {
+                    format_resp_publish(parts.get(1).unwrap_or(&""), &command)
+                };
+
+                {
+                    let mut last_command = match self.last_command_sent.lock() {
+                        Ok(locked) => locked,
+                        Err(e) => {
+                            eprintln!("Error al bloquear el mutex de last_command_sent: {}", e);
+                            return Err(std::io::Error::other("Mutex lock failed"));
+                        }
+                    };
+                    *last_command = resp_command.clone();
+                }
+
+                println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
+
+                if let Err(e) = self.redis_socket.write_all(resp_command.as_bytes()) {
+                    eprintln!("Error al escribir en el socket: {}", e);
+                    return Err(e);
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -155,7 +214,7 @@ impl From<&LocalClient> for NodeConnectionParams {
 pub fn client_run(
     port: u16,
     rx: Receiver<String>,
-    ui_sender: Option<Sender<AppMsg>>,
+    ui_sender: Option<UiSender<AppMsg>>,
 ) -> std::io::Result<()> {
     let node_streams: Arc<Mutex<HashMap<String, TcpStream>>> = Arc::new(Mutex::new(HashMap::new()));
     let last_command_sent: Arc<Mutex<String>> = Arc::new(Mutex::new("".to_string()));
