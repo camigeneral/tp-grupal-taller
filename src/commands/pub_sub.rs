@@ -152,7 +152,7 @@ fn publish_to_internal_channel(message: &str, subscription_channel: &ClientsMap)
             return 0;
         }
     };
-    
+
     if let Some(microservice) = channels_guard.get("notifications") {
         if let Ok(mut stream_guard) = microservice.stream.lock() {
             if let Some(stream) = stream_guard.as_mut() {

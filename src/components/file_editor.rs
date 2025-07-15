@@ -181,9 +181,14 @@ impl SimpleComponent for FileEditorModel {
                         let filas: Vec<String> =
                             content.split("\n").map(|s| s.to_string()).collect();
 
-                            if self.spreadsheet_ctrl.sender().send(SpreadsheetMsg::UpdateSheet(file_name.clone(), filas)).is_err() {
-                                eprintln!("Failed to send message");
-                            }
+                        if self
+                            .spreadsheet_ctrl
+                            .sender()
+                            .send(SpreadsheetMsg::UpdateSheet(file_name.clone(), filas))
+                            .is_err()
+                        {
+                            eprintln!("Failed to send message");
+                        }
                     }
                     _ => {
                         self.text_editor_visible = true;
@@ -208,13 +213,15 @@ impl SimpleComponent for FileEditorModel {
                     FileType::Sheet => {
                         self.text_editor_visible = false;
                         self.spreadsheet_visible = true;
-                        if self.spreadsheet_ctrl
+                        if self
+                            .spreadsheet_ctrl
                             .sender()
                             .send(SpreadsheetMsg::UpdateSheetContent(
                                 file_name.clone(),
                                 index,
                                 content,
-                            )).is_err()
+                            ))
+                            .is_err()
                         {
                             eprintln!("Failed to send  message");
                         }
