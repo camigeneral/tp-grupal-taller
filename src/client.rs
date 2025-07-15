@@ -108,7 +108,7 @@ impl LocalClient {
         let connect_node_sender_cloned = connect_node_sender.clone();
         let params = NodeConnectionParams::from(self);
         thread::spawn(move || {
-            if let Err(e) = connect_to_nodes(
+            if let Err(e) = Self::connect_to_nodes(
                 connect_node_sender_cloned,
                 connect_nodes_receiver,
                 params
@@ -170,6 +170,33 @@ impl LocalClient {
         *last_command = resp_command.clone();
         Ok(())
     }
+
+    fn connect_to_nodes(
+        sender: MpscSender<TcpStream>,
+        reciever: Receiver<TcpStream>,
+        params: NodeConnectionParams
+    ) -> std::io::Result<()> {
+        for stream in reciever {
+            let cloned_node_streams = Arc::clone(&params.node_streams);
+            let cloned_last_command = Arc::clone(&params.last_command_sent);
+            let cloned_sender = params.ui_sender.clone();
+            let cloned_own_sender = sender.clone();
+
+            thread::spawn(move || {
+                if let Err(e) = listen_to_redis_response(
+                    stream,
+                    cloned_sender,
+                    cloned_own_sender,
+                    cloned_node_streams,
+                    cloned_last_command,
+                ) {
+                    eprintln!("Error en la conexión con el nodo: {}", e);
+                }
+            });
+        }
+
+        Ok(())
+    }
     
     fn read_comming_messages(&mut self) -> std::io::Result<()> {
         let rx_ui = match &self.rx_ui {
@@ -226,7 +253,7 @@ impl From<&LocalClient> for NodeConnectionParams {
     }
 }
 
-
+/* 
 pub fn client_run(
     port: u16,
     rx: Receiver<String>,
@@ -362,10 +389,10 @@ pub fn client_run(
 
     Ok(())
 }
-
+ */
 fn listen_to_redis_response(
     client_socket: TcpStream,
-    ui_sender: Option<Sender<AppMsg>>,
+    ui_sender: Option<UiSender<AppMsg>>,
     connect_node_sender: MpscSender<TcpStream>,
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     last_command_sent: Arc<Mutex<String>>,
@@ -604,32 +631,5 @@ fn send_command_to_nodes(
             return Err(Box::new(e));
         }
     }
-    Ok(())
-}
-
-fn connect_to_nodes(
-    sender: MpscSender<TcpStream>,
-    reciever: Receiver<TcpStream>,
-    params: NodeConnectionParams
-) -> std::io::Result<()> {
-    for stream in reciever {
-        let cloned_node_streams = Arc::clone(&params.node_streams);
-        let cloned_last_command = Arc::clone(&params.last_command_sent);
-        let cloned_sender = params.ui_sender.clone();
-        let cloned_own_sender = sender.clone();
-
-        thread::spawn(move || {
-            if let Err(e) = listen_to_redis_response(
-                stream,
-                cloned_sender,
-                cloned_own_sender,
-                cloned_node_streams,
-                cloned_last_command,
-            ) {
-                eprintln!("Error en la conexión con el nodo: {}", e);
-            }
-        });
-    }
-
     Ok(())
 }
