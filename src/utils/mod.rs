@@ -9,4 +9,3 @@ pub fn extract_document_name(resp: &str) -> Option<String> {
 
     None
 }
-

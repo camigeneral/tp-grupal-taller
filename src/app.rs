@@ -279,17 +279,14 @@ impl SimpleComponent for AppModel {
         let command_sender = Some(tx.clone());
         model.command_sender = command_sender;
 
-        thread::spawn(move || {
-
-            match LocalClient::new(port, Some(ui_sender), Some(rx)){
-                Ok(mut client) => {
-                    client.run()
-                }
+        thread::spawn(
+            move || match LocalClient::new(port, Some(ui_sender), Some(rx)) {
+                Ok(mut client) => client.run(),
                 Err(e) => {
-                    eprintln!("Error al iniciar el cliente: {:?}", e);            
+                    eprintln!("Error al iniciar el cliente: {:?}", e);
                 }
-            }           
-        });
+            },
+        );
 
         ComponentParts { model, widgets }
     }
@@ -298,7 +295,11 @@ impl SimpleComponent for AppModel {
         match message {
             AppMsg::Connect => {
                 if self.is_logged_in {
-                    if let Err(_e) = self.header_cont.sender().send(NavbarMsg::SetConnectionStatus(true)) {
+                    if let Err(_e) = self
+                        .header_cont
+                        .sender()
+                        .send(NavbarMsg::SetConnectionStatus(true))
+                    {
                         eprintln!("Failed to send message");
                     }
                 }
@@ -313,11 +314,21 @@ impl SimpleComponent for AppModel {
             }
             AppMsg::Ignore => {}
             AppMsg::LoginSuccess(username) => {
-                if self.header_cont.sender().send(NavbarMsg::SetLoggedInUser(username)).is_err() {
+                if self
+                    .header_cont
+                    .sender()
+                    .send(NavbarMsg::SetLoggedInUser(username))
+                    .is_err()
+                {
                     eprintln!("Failed to send message");
                 }
 
-                if self.header_cont.sender().send(NavbarMsg::SetConnectionStatus(true)).is_err() {
+                if self
+                    .header_cont
+                    .sender()
+                    .send(NavbarMsg::SetConnectionStatus(true))
+                    .is_err()
+                {
                     eprintln!("Failed to send message");
                 }
                 self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
@@ -327,17 +338,27 @@ impl SimpleComponent for AppModel {
                 self.login_form_cont.emit(LoginMsg::SetErrorForm(error));
             }
             AppMsg::Logout => {
-                if self.header_cont.sender().send(NavbarMsg::SetConnectionStatus(false)).is_err() {
+                if self
+                    .header_cont
+                    .sender()
+                    .send(NavbarMsg::SetConnectionStatus(false))
+                    .is_err()
+                {
                     eprintln!("Failed to send message");
                 }
-            
-                if self.header_cont.sender().send(NavbarMsg::SetLoggedInUser("".to_string())).is_err() {
+
+                if self
+                    .header_cont
+                    .sender()
+                    .send(NavbarMsg::SetLoggedInUser("".to_string()))
+                    .is_err()
+                {
                     eprintln!("Failed to send message");
                 }
-            
+
                 self.is_logged_in = false;
             }
-            
+
             AppMsg::CommandChanged(command) => {
                 self.command = command;
             }
