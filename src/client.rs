@@ -9,10 +9,18 @@ use std::net::TcpStream;
 use std::sync::mpsc::{channel, Receiver, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use utils::extract_document_name;
 
 #[path = "utils/redis_parser.rs"]
 mod redis_parser;
 
+struct NodeConnectionParams {
+    pub redis_socket: TcpStream,
+    pub node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+    pub last_command_sent: Arc<Mutex<String>>,
+    pub ui_sender: Option<Sender<AppMsg>>,
+    pub address: String,
+}
 
 pub struct LocalClient {
     address: String,
@@ -44,6 +52,7 @@ impl LocalClient {
         })
     }
 
+    
     fn spwan_writer_channel(&mut self) {
         let (socket_tx, socket_rx) = channel::<String>();
         let redis_socket = match self.redis_socket.try_clone() {
@@ -82,7 +91,7 @@ impl LocalClient {
         Ok(())
     }
 
-    fn register_and_connect_node(&mut self) -> std::io::Result<()>{
+    fn register_and_connect_node(&self) -> std::io::Result<()>{
         let redis_socket = match self.redis_socket.try_clone() {
                 Ok(clone) => clone,
                 Err(e) => {
@@ -93,19 +102,14 @@ impl LocalClient {
 
         let _ = self.register_redis_socket_in_map();
 
-        let cloned_node_streams = Arc::clone(&self.node_streams);
-        let cloned_last_command = Arc::clone(&self.last_command_sent);
-
         let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
         let connect_node_sender_cloned = connect_node_sender.clone();
-        let ui_sender_copy = self.ui_sender.clone();
+        let params = NodeConnectionParams::from(self);
         thread::spawn(move || {
             if let Err(e) = connect_to_nodes(
                 connect_node_sender_cloned,
                 connect_nodes_receiver,
-                ui_sender_copy,
-                cloned_node_streams,
-                cloned_last_command,
+                params
             ) {
                 eprintln!("Error en la conexión con el nodo: {}", e);
             }
@@ -132,6 +136,18 @@ impl LocalClient {
 
     fn read_comming_messages(&mut self) {
 
+    }
+}
+
+impl From<&LocalClient> for NodeConnectionParams {
+    fn from(client: &LocalClient) -> Self {
+        NodeConnectionParams {
+            redis_socket: client.redis_socket.try_clone().unwrap(),
+            node_streams: Arc::clone(&client.node_streams),
+            last_command_sent: Arc::clone(&client.last_command_sent),
+            ui_sender: client.ui_sender.clone(),
+            address: client.address.clone(),
+        }
     }
 }
 
@@ -519,14 +535,12 @@ fn send_command_to_nodes(
 fn connect_to_nodes(
     sender: MpscSender<TcpStream>,
     reciever: Receiver<TcpStream>,
-    ui_sender: Option<Sender<AppMsg>>,
-    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
-    last_command_sent: Arc<Mutex<String>>,
+    params: NodeConnectionParams
 ) -> std::io::Result<()> {
     for stream in reciever {
-        let cloned_node_streams = Arc::clone(&node_streams);
-        let cloned_last_command = Arc::clone(&last_command_sent);
-        let cloned_sender = ui_sender.clone();
+        let cloned_node_streams = Arc::clone(&params.node_streams);
+        let cloned_last_command = Arc::clone(&params.last_command_sent);
+        let cloned_sender = params.ui_sender.clone();
         let cloned_own_sender = sender.clone();
 
         thread::spawn(move || {
@@ -543,16 +557,4 @@ fn connect_to_nodes(
     }
 
     Ok(())
-}
-
-fn extract_document_name(resp: &str) -> Option<String> {
-    let parts: Vec<&str> = resp.split("\r\n").collect();
-
-    for part in parts.iter().rev() {
-        if !part.is_empty() && (part.ends_with(".txt") || part.ends_with(".xlsx")) {
-            return Some(part.to_string());
-        }
-    }
-
-    None
 }
