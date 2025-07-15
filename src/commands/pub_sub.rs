@@ -145,7 +145,14 @@ pub fn handle_unsubscribe(
 }
 
 fn publish_to_internal_channel(message: &str, subscription_channel: &ClientsMap) -> i64 {
-    let channels_guard = subscription_channel.lock().unwrap();
+    let channels_guard = match subscription_channel.lock() {
+        Ok(guard) => guard,
+        Err(_) => {
+            eprintln!("Failed to lock subscription_channel");
+            return 0;
+        }
+    };
+    
     if let Some(microservice) = channels_guard.get("notifications") {
         if let Ok(mut stream_guard) = microservice.stream.lock() {
             if let Some(stream) = stream_guard.as_mut() {
@@ -172,8 +179,21 @@ fn publish_to_subscribers<T: Write>(
     active_clients: &WriteClient<T>,
 ) -> i64 {
     let mut sent_count = 0;
-    let subscribers_guard = document_subscribers.lock().unwrap();
-    let mut clients_guard = active_clients.lock().unwrap();
+    let subscribers_guard = match document_subscribers.lock() {
+        Ok(guard) => guard,
+        Err(_) => {
+            eprintln!("Failed to lock document_subscribers");
+            return 0;
+        }
+    };
+
+    let mut clients_guard = match active_clients.lock() {
+        Ok(guard) => guard,
+        Err(_) => {
+            eprintln!("Failed to lock active_clients");
+            return 0;
+        }
+    };
 
     if let Some(subscribers) = subscribers_guard.get(doc) {
         for subscriber_id in subscribers {

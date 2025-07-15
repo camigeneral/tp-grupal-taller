@@ -16,7 +16,11 @@ pub struct Client {
 
 impl Write for Client {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
-        let mut stream_guard = self.stream.lock().unwrap();
+        let mut stream_guard = self
+            .stream
+            .lock()
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Mutex poisoned"))?;
+
         match stream_guard.as_mut() {
             Some(stream) => stream.write(buf),
             None => Err(std::io::Error::new(
@@ -27,7 +31,11 @@ impl Write for Client {
     }
 
     fn flush(&mut self) -> Result<()> {
-        let mut stream_guard = self.stream.lock().unwrap();
+        let mut stream_guard = self
+            .stream
+            .lock()
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Mutex poisoned"))?;
+
         match stream_guard.as_mut() {
             Some(stream) => stream.flush(),
             None => Err(std::io::Error::new(
