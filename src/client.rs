@@ -320,8 +320,20 @@ impl LocalClient {
             let _ = sender.send(AppMsg::UpdateFilesList(archivos));
         }
      }
-    /*fn handle_error( response: Vec<String>) { ... }
-    fn handle_unknown( cmd: String, response: Vec<String>) { ... } */
+    fn handle_error( response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) { 
+        let error_message = if response.len() > 1 {
+            response[1..].join(" ")
+        } else {
+            "Error desconocido".to_string()
+        };
+        if let Some(sender) = &ui_sender {
+            let _ = sender.send(AppMsg::Error(format!(
+                "Hubo un problema: {}",
+                error_message
+            )));
+        }
+     }
+    /*fn handle_unknown( cmd: String, response: Vec<String>) { ... } */
 
     fn listen_to_redis_response(        
         client_socket: TcpStream,
@@ -374,8 +386,8 @@ impl LocalClient {
                 RedisClientResponseType::Status => Self::handle_status(response, local_addr.to_string(), cloned_ui_sender),
                 RedisClientResponseType::Write => Self::handle_write(response, cloned_ui_sender),
                 RedisClientResponseType::Files => Self::handle_files(response, cloned_ui_sender),
-                /*RedisClientResponseType::Error => Self::handle_error(response),
-                RedisClientResponseType::Other(cmd) => Self::handle_unknown(cmd, response), */
+                RedisClientResponseType::Error => Self::handle_error(response, cloned_ui_sender),
+                /*RedisClientResponseType::Other(cmd) => Self::handle_unknown(cmd, response), */
                 _ => {}
             }
 
