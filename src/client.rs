@@ -277,10 +277,42 @@ impl LocalClient {
             ));
         }
      }
-    /*fn handle_write(&self, response: Vec<String>) { ... }
-    fn handle_files(&self, response: Vec<String>) { ... }
-    fn handle_error(&self, response: Vec<String>) { ... }
-    fn handle_unknown(&self, cmd: String, response: Vec<String>) { ... } */
+    fn handle_write(response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) { 
+        if let Some(sender) = &ui_sender {
+            let index = match response[1].parse::<i32>() {
+                Ok(i) => i,
+                Err(_) => {
+                    eprintln!("Error parsing index from response: {:?}", response[1]);
+                    return;
+                }
+            };
+
+            let text = response[2].to_string();
+            let file = response[4].to_string();
+
+            let split_text = text.split("<enter>").collect::<Vec<_>>();
+
+            if split_text.len() == 2 {
+                let (before_newline, after_newline) = (split_text[0], split_text[1]);
+
+                for (offset, content) in [(0, before_newline), (1, after_newline)] {
+                    let mut doc_info =
+                        DocumentValueInfo::new(content.to_string(), index + offset);
+                    doc_info.file = file.clone();
+                    doc_info.decode_text();
+                    let _ = sender.send(AppMsg::RefreshData(doc_info));
+                }
+            } else {
+                let mut doc_info = DocumentValueInfo::new(text, index);
+                doc_info.file = file.clone();
+                doc_info.decode_text();
+                let _ = sender.send(AppMsg::RefreshData(doc_info));
+            }
+        }
+    }
+    /*fn handle_files( response: Vec<String>) { ... }
+    fn handle_error( response: Vec<String>) { ... }
+    fn handle_unknown( cmd: String, response: Vec<String>) { ... } */
 
     fn listen_to_redis_response(        
         client_socket: TcpStream,
@@ -331,8 +363,8 @@ impl LocalClient {
             match response_type {
                 RedisClientResponseType::Ask => Self::handle_ask(response, cloned_connect_node_sender, cloned_node_streams, cloned_last_command.clone()),
                 RedisClientResponseType::Status => Self::handle_status(response, local_addr.to_string(), cloned_ui_sender),
-                /*RedisClientResponseType::Write => Self::handle_write(response),
-                RedisClientResponseType::Files => Self::handle_files(response),
+                RedisClientResponseType::Write => Self::handle_write(response, cloned_ui_sender),
+                /*RedisClientResponseType::Files => Self::handle_files(response),
                 RedisClientResponseType::Error => Self::handle_error(response),
                 RedisClientResponseType::Other(cmd) => Self::handle_unknown(cmd, response), */
                 _ => {}
