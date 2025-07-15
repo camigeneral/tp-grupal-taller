@@ -1,5 +1,5 @@
 use crate::client_info::Client;
-use rusty_docs::document::Document;
+use crate::document::Document;
 use local_node::LocalNode;
 use peer_node::PeerNode;
 use std::collections::HashMap;
