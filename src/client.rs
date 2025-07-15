@@ -3,21 +3,29 @@ use self::relm4::Sender as UiSender;
 use crate::app::AppMsg;
 use crate::components::structs::document_value_info::DocumentValueInfo;
 use commands::redis_parser::{format_resp_command, format_resp_publish};
+use redis_types::RedisClientResponseType;
 use std::collections::HashMap;
-use std::io::{BufReader, Write, BufWriter};
+use std::io::{BufReader, BufWriter, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::{channel, Receiver, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use utils::extract_document_name;
-use redis_types::RedisClientResponseType;
 
 #[path = "utils/redis_parser.rs"]
 mod redis_parser;
 
-
+/// Registro de canales de escritura asociados a nodos.
+///
+/// Esta estructura permite registrar y acceder a los canales (`Sender<String>`)
+/// que se utilizan para enviar mensajes a cada nodo conectado. Es útil para manejar
+/// múltiples conexiones a nodos Redis y enviar comandos de forma concurrente.
+///
+/// Internamente, utiliza un `HashMap` protegido por un `Mutex` y envuelto en un `Arc`
+/// para permitir acceso seguro desde múltiples hilos.
 #[derive(Clone)]
 struct WriterRegistry {
+    /// Mapa de identificadores de nodo a canales de envío de mensajes.
     writers: Arc<Mutex<HashMap<String, MpscSender<String>>>>,
 }
 
@@ -41,27 +49,67 @@ impl WriterRegistry {
     }
 }
 
-
-
+/// Cliente local que maneja la conexión y comunicación con el servidor Redis.
+///
+/// Esta estructura representa el cliente principal de la aplicación, encargado de:
+/// - Mantener la conexión TCP con el servidor Redis.
+/// - Enviar y recibir comandos y respuestas.
+/// - Gestionar la comunicación con la interfaz de usuario (UI).
+/// - Administrar los canales de escritura a nodos y el registro de conexiones.
+/// - Sincronizar el estado del último comando enviado.
+///
+/// Todos los campos que pueden ser accedidos desde múltiples hilos están protegidos
+/// mediante `Arc` y `Mutex` para garantizar la seguridad en concurrencia.
 pub struct LocalClient {
+    /// Dirección IP y puerto del servidor Redis al que se conecta este cliente.
     address: String,
+    /// Canal para enviar mensajes a la interfaz de usuario (UI).
     ui_sender: Option<UiSender<AppMsg>>,
+    /// Último comando enviado al servidor Redis, protegido por un Mutex para acceso concurrente.
     last_command_sent: Arc<Mutex<String>>,
+    /// Socket TCP activo para la comunicación con el servidor Redis.
     redis_socket: TcpStream,
+    /// Canal de envío de comandos al servidor Redis.
     redis_sender: Option<MpscSender<String>>,
+    /// Canal de recepción de mensajes provenientes de la UI.
     rx_ui: Option<Receiver<String>>,
-    writer_registry: WriterRegistry
+    /// Registro de canales de escritura para los nodos conectados.
+    writer_registry: WriterRegistry,
 }
 
+/// Contexto de conexión para un nodo Redis.
+///
+/// Esta estructura agrupa los recursos necesarios para manejar la comunicación
+/// y el estado asociado a una conexión con un nodo específico. Permite compartir
+/// el estado entre hilos y facilita el manejo de mensajes y respuestas.
+///
+/// Se utiliza principalmente al crear nuevas conexiones o al redirigir comandos
+/// a otros nodos del clúster.
 #[derive(Clone)]
 struct NodeConnectionContext {
+    /// Último comando enviado a este nodo.
     last_command_sent: Arc<Mutex<String>>,
+    /// Canal para enviar mensajes a la interfaz de usuario.
     ui_sender: Option<UiSender<AppMsg>>,
-    writer_registry: WriterRegistry
+    /// Registro de canales de escritura para los nodos.
+    writer_registry: WriterRegistry,
 }
 
 impl LocalClient {
-    pub fn new(port: u16, ui_sender: Option<UiSender<AppMsg>>, rx_ui: Option<Receiver<String>>) ->  Result<Self, Box<dyn std::error::Error>> {
+    /// Crea una nueva instancia de `LocalClient` y establece la conexión TCP con el servidor Redis.
+    ///
+    /// # Argumentos
+    /// * `port` - Puerto al que conectarse en localhost.
+    /// * `ui_sender` - Canal opcional para enviar mensajes a la UI.
+    /// * `rx_ui` - Canal opcional para recibir mensajes desde la UI.
+    ///
+    /// # Errores
+    /// Retorna un error si no se puede conectar al servidor Redis.
+    pub fn new(
+        port: u16,
+        ui_sender: Option<UiSender<AppMsg>>,
+        rx_ui: Option<Receiver<String>>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let address = format!("127.0.0.1:{}", port);
         let socket: TcpStream = match TcpStream::connect(address.clone()) {
             Ok(s) => s,
@@ -73,15 +121,26 @@ impl LocalClient {
 
         Ok(Self {
             address,
-            ui_sender, 
+            ui_sender,
             last_command_sent: Arc::new(Mutex::new("".to_string())),
             redis_socket: socket,
             redis_sender: None,
             rx_ui,
-            writer_registry: WriterRegistry::new()
+            writer_registry: WriterRegistry::new(),
         })
     }
 
+    /// Crea y lanza un canal de escritura dedicado para un nodo Redis.
+    ///
+    /// Este canal permite enviar mensajes de forma concurrente a un nodo específico.
+    ///
+    /// # Argumentos
+    /// * `node_id` - Identificador del nodo.
+    /// * `stream` - Stream TCP hacia el nodo.
+    /// * `writer_registry` - Registro global de writers.
+    ///
+    /// # Retorna
+    /// El sender asociado al canal de escritura.
     fn spawn_writer_channel(
         node_id: String,
         stream: TcpStream,
@@ -106,7 +165,11 @@ impl LocalClient {
         tx
     }
 
-    fn register_and_connect_node(&self) -> std::io::Result<()>{
+    /// Registra y conecta un nuevo nodo Redis, lanzando un hilo para manejar la conexión.
+    ///
+    /// # Errores
+    /// Retorna un error si falla la clonación del socket o la conexión.
+    fn register_and_connect_node(&self) -> std::io::Result<()> {
         let redis_socket = match self.redis_socket.try_clone() {
             Ok(clone) => clone,
             Err(e) => {
@@ -119,20 +182,20 @@ impl LocalClient {
         let connect_node_sender_cloned = connect_node_sender.clone();
         let params = NodeConnectionContext::from(self);
         thread::spawn(move || {
-            if let Err(e) = Self::connect_to_nodes(
-                connect_node_sender_cloned,
-                connect_nodes_receiver,
-                params
-            ) {
+            if let Err(e) =
+                Self::connect_to_nodes(connect_node_sender_cloned, connect_nodes_receiver, params)
+            {
                 eprintln!("Error en la conexión con el nodo: {}", e);
             }
         });
 
         let _ = connect_node_sender.send(redis_socket);
         Ok(())
-
     }
 
+    /// Inicializa el canal de envío de comandos al servidor Redis.
+    ///
+    /// Clona el socket y crea el canal de escritura principal.
     fn set_redis_sender(&mut self) {
         let redis_socket = match self.redis_socket.try_clone() {
             Ok(clone) => clone,
@@ -142,17 +205,16 @@ impl LocalClient {
             }
         };
 
-        let tx = Self::spawn_writer_channel(
-            self.address.clone(),
-            redis_socket,
-            &self.writer_registry,
-        );
+        let tx =
+            Self::spawn_writer_channel(self.address.clone(), redis_socket, &self.writer_registry);
 
         self.redis_sender = Some(tx);
     }
 
+    /// Ejecuta el ciclo principal del cliente, inicializando canales y manejando mensajes.
+    ///
+    /// Este método debe llamarse para iniciar la lógica de comunicación y procesamiento.
     pub fn run(&mut self) {
-
         self.set_redis_sender();
 
         let initial_command = redis_parser::format_resp_command(&["Cliente"]);
@@ -161,10 +223,18 @@ impl LocalClient {
         }
 
         let _ = self.register_and_connect_node();
-        
-        let _= self.read_comming_messages();
+
+        let _ = self.read_comming_messages();
     }
 
+    /// Genera el comando RESP adecuado según el tipo de comando recibido.
+    ///
+    /// # Argumentos
+    /// * `parts` - Partes del comando separadas por espacio.
+    /// * `command` - Comando original como string.
+    ///
+    /// # Retorna
+    /// El comando RESP serializado.
     fn get_resp_command(&self, parts: Vec<&str>, command: &str) -> String {
         if parts.is_empty() {
             return String::new();
@@ -188,7 +258,14 @@ impl LocalClient {
         }
     }
 
-    fn set_last_command(&self, resp_command: String)->  std::io::Result<()>  {
+    /// Actualiza el último comando enviado, almacenándolo de forma segura.
+    ///
+    /// # Argumentos
+    /// * `resp_command` - Comando RESP a guardar.
+    ///
+    /// # Errores
+    /// Retorna un error si falla el acceso al mutex.
+    fn set_last_command(&self, resp_command: String) -> std::io::Result<()> {
         let mut last_command = match self.last_command_sent.lock() {
             Ok(locked) => locked,
             Err(e) => {
@@ -200,20 +277,29 @@ impl LocalClient {
         Ok(())
     }
 
+    /// Maneja la conexión y escucha respuestas de múltiples nodos Redis.
+    ///
+    /// Lanza un hilo por cada nueva conexión recibida.
+    ///
+    /// # Argumentos
+    /// * `node_sender` - Canal para enviar nuevos streams.
+    /// * `reciever` - Canal para recibir streams TCP.
+    /// * `params` - Contexto de conexión.
+    ///
+    /// # Errores
+    /// Retorna un error si falla la conexión o el manejo de streams.
     fn connect_to_nodes(
         node_sender: MpscSender<TcpStream>,
         reciever: Receiver<TcpStream>,
-        params: NodeConnectionContext
+        params: NodeConnectionContext,
     ) -> std::io::Result<()> {
-        for stream in reciever {            
+        for stream in reciever {
             let cloned_own_sender = node_sender.clone();
             let params_clone = params.clone();
             thread::spawn(move || {
-                if let Err(e) = Self::listen_to_redis_response(
-                    stream,                
-                    cloned_own_sender,
-                    params_clone                   
-                ) {
+                if let Err(e) =
+                    Self::listen_to_redis_response(stream, cloned_own_sender, params_clone)
+                {
                     eprintln!("Error en la conexión con el nodo: {}", e);
                 }
             });
@@ -222,6 +308,12 @@ impl LocalClient {
         Ok(())
     }
 
+    /// Lee y procesa los mensajes entrantes desde la UI.
+    ///
+    /// Envía los comandos al servidor Redis y actualiza el estado local.
+    ///
+    /// # Errores
+    /// Retorna un error si falla el envío o la recepción de mensajes.
     fn read_comming_messages(&mut self) -> std::io::Result<()> {
         let rx_ui = match &self.rx_ui {
             Some(rx) => rx,
@@ -237,8 +329,9 @@ impl LocalClient {
             let trimmed_command = command.to_string().trim().to_lowercase();
             let parts: Vec<&str> = command.split_whitespace().collect();
             if trimmed_command == "close" {
-                println!("Desconectando del servidor");            
-                let resp_command = redis_parser::format_resp_publish(parts[0], parts.get(1).unwrap_or(&""));
+                println!("Desconectando del servidor");
+                let resp_command =
+                    redis_parser::format_resp_publish(parts[0], parts.get(1).unwrap_or(&""));
 
                 println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
 
@@ -248,11 +341,11 @@ impl LocalClient {
                 }
                 break;
             } else {
-                println!("Enviando: {:?}", command);            
+                println!("Enviando: {:?}", command);
                 let resp_command = self.get_resp_command(parts, &command);
 
                 let _ = self.set_last_command(resp_command.clone());
-                
+
                 println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
 
                 if let Err(e) = redis_sender.send(resp_command) {
@@ -264,22 +357,38 @@ impl LocalClient {
         Ok(())
     }
 
+    /// Maneja respuestas de tipo ASK, redirigiendo comandos a otros nodos si es necesario.
+    ///
+    /// # Argumentos
+    /// * `response` - Respuesta recibida.
+    /// * `connect_node_sender` - Canal para enviar streams a nuevos nodos.
+    /// * `contenxt` - Contexto de conexión.
     fn handle_ask(
         response: Vec<String>,
         connect_node_sender: MpscSender<TcpStream>,
-        contenxt: NodeConnectionContext,        
-    ) { 
-         if response.len() < 3 {
+        contenxt: NodeConnectionContext,
+    ) {
+        if response.len() < 3 {
             println!("Nodo de redireccion no disponible");
         } else {
             let _ = Self::send_command_to_nodes(
                 response,
                 connect_node_sender.clone(),
-                contenxt.clone()
+                contenxt.clone(),
             );
         }
-     }
-    fn handle_status(response: Vec<String>, local_addr: String, ui_sender: Option<UiSender<AppMsg>>) { 
+    }
+    /// Maneja respuestas de tipo STATUS, actualizando la UI con el estado del documento.
+    ///
+    /// # Argumentos
+    /// * `response` - Respuesta recibida.
+    /// * `local_addr` - Dirección local del cliente.
+    /// * `ui_sender` - Canal para enviar mensajes a la UI.
+    fn handle_status(
+        response: Vec<String>,
+        local_addr: String,
+        ui_sender: Option<UiSender<AppMsg>>,
+    ) {
         let socket = response[2].clone();
         let doc = response[1].clone();
         let content = response[3].clone();
@@ -296,8 +405,13 @@ impl LocalClient {
                 document.value.to_string(),
             ));
         }
-     }
-    fn handle_write(response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) { 
+    }
+    /// Maneja respuestas de tipo WRITE, actualizando el contenido del documento en la UI.
+    ///
+    /// # Argumentos
+    /// * `response` - Respuesta recibida.
+    /// * `ui_sender` - Canal para enviar mensajes a la UI.
+    fn handle_write(response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) {
         if let Some(sender) = &ui_sender {
             let index = match response[1].parse::<i32>() {
                 Ok(i) => i,
@@ -316,8 +430,7 @@ impl LocalClient {
                 let (before_newline, after_newline) = (split_text[0], split_text[1]);
 
                 for (offset, content) in [(0, before_newline), (1, after_newline)] {
-                    let mut doc_info =
-                        DocumentValueInfo::new(content.to_string(), index + offset);
+                    let mut doc_info = DocumentValueInfo::new(content.to_string(), index + offset);
                     doc_info.file = file.clone();
                     doc_info.decode_text();
                     let _ = sender.send(AppMsg::RefreshData(doc_info));
@@ -330,7 +443,12 @@ impl LocalClient {
             }
         }
     }
-    fn handle_files( response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) { 
+    /// Maneja respuestas de tipo FILES, actualizando la lista de archivos en la UI.
+    ///
+    /// # Argumentos
+    /// * `response` - Respuesta recibida.
+    /// * `ui_sender` - Canal para enviar mensajes a la UI.
+    fn handle_files(response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) {
         let archivos = if response.len() > 1 {
             response[1..].to_vec()
         } else {
@@ -339,8 +457,13 @@ impl LocalClient {
         if let Some(sender) = &ui_sender {
             let _ = sender.send(AppMsg::UpdateFilesList(archivos));
         }
-     }
-    fn handle_error( response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) { 
+    }
+    /// Maneja respuestas de tipo ERROR, mostrando mensajes de error en la UI.
+    ///
+    /// # Argumentos
+    /// * `response` - Respuesta recibida.
+    /// * `ui_sender` - Canal para enviar mensajes a la UI.
+    fn handle_error(response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) {
         let error_message = if response.len() > 1 {
             response[1..].join(" ")
         } else {
@@ -352,8 +475,18 @@ impl LocalClient {
                 error_message
             )));
         }
-     }
-    fn handle_unknown( response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>, last_command_sent: Arc<Mutex<String>>,) { 
+    }
+    /// Maneja respuestas desconocidas, intentando deducir la acción adecuada.
+    ///
+    /// # Argumentos
+    /// * `response` - Respuesta recibida.
+    /// * `ui_sender` - Canal para enviar mensajes a la UI.
+    /// * `last_command_sent` - Último comando enviado, para contexto adicional.
+    fn handle_unknown(
+        response: Vec<String>,
+        ui_sender: Option<UiSender<AppMsg>>,
+        last_command_sent: Arc<Mutex<String>>,
+    ) {
         if let Some(sender) = &ui_sender {
             let _ = sender.send(AppMsg::ManageResponse(response[0].clone()));
         }
@@ -370,10 +503,19 @@ impl LocalClient {
         }
     }
 
-    fn listen_to_redis_response(        
-        client_socket: TcpStream,    
+    /// Escucha y procesa respuestas del servidor Redis en un hilo dedicado.
+    ///
+    /// # Argumentos
+    /// * `client_socket` - Socket TCP hacia el servidor Redis.
+    /// * `connect_node_sender` - Canal para enviar streams a nuevos nodos.
+    /// * `params` - Contexto de conexión.
+    ///
+    /// # Errores
+    /// Retorna un error si falla la lectura o el procesamiento de respuestas.
+    fn listen_to_redis_response(
+        client_socket: TcpStream,
         connect_node_sender: MpscSender<TcpStream>,
-        params: NodeConnectionContext
+        params: NodeConnectionContext,
     ) -> std::io::Result<()> {
         let client_socket_cloned = match client_socket.try_clone() {
             Ok(clone) => clone,
@@ -412,104 +554,114 @@ impl LocalClient {
 
             println!("Respuesta de redis: {}", response.join(" "));
 
-            let response_type = RedisClientResponseType::from(response[0].as_str());            
+            let response_type = RedisClientResponseType::from(response[0].as_str());
             let cloned_connect_node_sender = connect_node_sender.clone();
 
             match response_type {
-                RedisClientResponseType::Ask => Self::handle_ask(response, cloned_connect_node_sender, params_clone),
-                RedisClientResponseType::Status => Self::handle_status(response, local_addr.to_string(), cloned_ui_sender),
+                RedisClientResponseType::Ask => {
+                    Self::handle_ask(response, cloned_connect_node_sender, params_clone)
+                }
+                RedisClientResponseType::Status => {
+                    Self::handle_status(response, local_addr.to_string(), cloned_ui_sender)
+                }
                 RedisClientResponseType::Write => Self::handle_write(response, cloned_ui_sender),
                 RedisClientResponseType::Files => Self::handle_files(response, cloned_ui_sender),
                 RedisClientResponseType::Error => Self::handle_error(response, cloned_ui_sender),
-                RedisClientResponseType::Other => Self::handle_unknown(response, cloned_ui_sender, cloned_last_command.clone()),
+                RedisClientResponseType::Other => {
+                    Self::handle_unknown(response, cloned_ui_sender, cloned_last_command.clone())
+                }
             }
         }
         Ok(())
     }
 
-
- fn send_command_to_nodes(
-    response: Vec<String>,
-    connect_node_sender: MpscSender<TcpStream>,
-    context: NodeConnectionContext,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // Extraigo el último comando enviado
-    let last_line_cloned = {
-        let locked = context.last_command_sent.lock()
-            .map_err(|e| {
+    /// Envía un comando a uno o varios nodos Redis, gestionando la redirección si es necesario.
+    ///
+    /// # Argumentos
+    /// * `response` - Respuesta recibida que puede indicar redirección.
+    /// * `connect_node_sender` - Canal para enviar streams a nuevos nodos.
+    /// * `context` - Contexto de conexión.
+    ///
+    /// # Errores
+    /// Retorna un error si falla el envío o la conexión.
+    fn send_command_to_nodes(
+        response: Vec<String>,
+        connect_node_sender: MpscSender<TcpStream>,
+        context: NodeConnectionContext,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // Extraigo el último comando enviado
+        let last_line_cloned = {
+            let locked = context.last_command_sent.lock().map_err(|e| {
                 eprintln!("Error locking last_command_sent mutex: {}", e);
                 std::io::Error::new(std::io::ErrorKind::Other, "Mutex lock failed")
             })?;
-        locked.clone()
-    };
+            locked.clone()
+        };
 
-    let new_node_address = response.get(2)
-        .ok_or_else(|| {
-            eprintln!("No new node address in response");
-            std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid response")
-        })?.to_string();
+        let new_node_address = response
+            .get(2)
+            .ok_or_else(|| {
+                eprintln!("No new node address in response");
+                std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid response")
+            })?
+            .to_string();
 
-    println!("Last command executed: {:#?}", last_line_cloned);
-    println!("Redirecting to node: {}", new_node_address);
+        println!("Last command executed: {:#?}", last_line_cloned);
+        println!("Redirecting to node: {}", new_node_address);
 
-    if let Some(sender) = context.writer_registry.get(&new_node_address) {
-        println!("Using existing writer for node {}", new_node_address);
-        sender.send(last_line_cloned.clone())
-            .map_err(|e| {
+        if let Some(sender) = context.writer_registry.get(&new_node_address) {
+            println!("Using existing writer for node {}", new_node_address);
+            sender.send(last_line_cloned.clone()).map_err(|e| {
                 eprintln!("Failed to send command to node {}: {}", new_node_address, e);
                 std::io::Error::new(std::io::ErrorKind::Other, "Send failed")
             })?;
-    } else {
-        println!("Creating new connection for node {}", new_node_address);
+        } else {
+            println!("Creating new connection for node {}", new_node_address);
 
-        let parts: Vec<&str> = "connect".split_whitespace().collect();
-        let resp_command = redis_parser::format_resp_command(&parts);
+            let parts: Vec<&str> = "connect".split_whitespace().collect();
+            let resp_command = redis_parser::format_resp_command(&parts);
 
-        let stream = TcpStream::connect(new_node_address.clone())
-            .map_err(|e| {
+            let stream = TcpStream::connect(new_node_address.clone()).map_err(|e| {
                 eprintln!("Error connecting to new node: {}", e);
                 e
             })?;
 
-        let writer_sender = Self::spawn_writer_channel(
-            new_node_address.clone(),
-            stream.try_clone()?,
-            &context.writer_registry.clone(),
-        );
+            let writer_sender = Self::spawn_writer_channel(
+                new_node_address.clone(),
+                stream.try_clone()?,
+                &context.writer_registry.clone(),
+            );
 
-        writer_sender.send(resp_command)?;
+            writer_sender.send(resp_command)?;
 
-        connect_node_sender.send(stream.try_clone()?)
-            .map_err(|e| {
+            connect_node_sender.send(stream.try_clone()?).map_err(|e| {
                 eprintln!("Failed to send connected node stream: {}", e);
                 std::io::Error::new(std::io::ErrorKind::Other, "Send failed")
             })?;
 
-        std::thread::sleep(std::time::Duration::from_millis(2));
+            std::thread::sleep(std::time::Duration::from_millis(2));
 
-        // Si hay documento en el último comando, vuelvo a hacer subscribe
-        if let Some(doc_name) = extract_document_name(&last_line_cloned) {
-            let subscribe_command = format!(
-                "*2\r\n$9\r\nsubscribe\r\n${}\r\n{}\r\n",
-                doc_name.len(),
-                doc_name
-            );
-            writer_sender.send(subscribe_command)
-                .map_err(|e| {
+            // Si hay documento en el último comando, vuelvo a hacer subscribe
+            if let Some(doc_name) = extract_document_name(&last_line_cloned) {
+                let subscribe_command = format!(
+                    "*2\r\n$9\r\nsubscribe\r\n${}\r\n{}\r\n",
+                    doc_name.len(),
+                    doc_name
+                );
+                writer_sender.send(subscribe_command).map_err(|e| {
                     eprintln!("Error sending subscribe command: {}", e);
                     std::io::Error::new(std::io::ErrorKind::Other, "Send failed")
                 })?;
-        }
+            }
 
-        writer_sender.send(last_line_cloned)
-            .map_err(|e| {
+            writer_sender.send(last_line_cloned).map_err(|e| {
                 eprintln!("Error resending last command: {}", e);
                 std::io::Error::new(std::io::ErrorKind::Other, "Send failed")
             })?;
-    }
+        }
 
-    Ok(())
-}
+        Ok(())
+    }
 }
 
 impl From<&LocalClient> for NodeConnectionContext {
@@ -517,7 +669,7 @@ impl From<&LocalClient> for NodeConnectionContext {
         NodeConnectionContext {
             last_command_sent: Arc::clone(&client.last_command_sent),
             ui_sender: client.ui_sender.clone(),
-            writer_registry: client.writer_registry.clone()
+            writer_registry: client.writer_registry.clone(),
         }
     }
 }
