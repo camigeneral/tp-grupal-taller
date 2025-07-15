@@ -10,7 +10,7 @@ use super::file_editor::FileEditorModel;
 use super::list_files::FileListView;
 use crate::components::file_editor::FileEditorOutputMessage;
 use crate::components::structs::document_value_info::DocumentValueInfo;
-use crate::document::Documento;
+use crate::document::Document;
 use components::file_editor::FileEditorMessage;
 use components::list_files::FileFilterAction;
 use components::types::FileType;
@@ -31,7 +31,7 @@ pub struct FileWorkspace {
 
     current_file_type: FileType,
 
-    files: HashMap<(String, FileType), Documento>,
+    files: HashMap<(String, FileType), Document>,
 }
 
 /// Enum que define los diferentes mensajes que puede recibir el componente `FileWorkspace`.
@@ -177,7 +177,7 @@ impl SimpleComponent for FileWorkspace {
                         let text_content = items.join("\n");
                         self.files.insert(
                             (file.clone(), file_type.clone()),
-                            Documento::Texto(items.clone()),
+                            Document::Text(items.clone()),
                         );
                         self.file_editor_ctrl
                             .sender()
@@ -195,7 +195,7 @@ impl SimpleComponent for FileWorkspace {
                         }
                         self.files.insert(
                             (file.clone(), file_type.clone()),
-                            Documento::Calculo(items.clone()),
+                            Document::Spreadsheet(items.clone()),
                         );
                         let sheet_content = items.join("\n");
                         self.file_editor_ctrl
@@ -229,9 +229,9 @@ impl SimpleComponent for FileWorkspace {
 
             FileWorkspaceMsg::AddFile(file_name, file_type) => {
                 let doc = if file_type == FileType::Sheet {
-                    Documento::Calculo(vec!["".to_string(); 100])
+                    Document::Spreadsheet(vec!["".to_string(); 100])
                 } else {
-                    Documento::Texto(vec!["".to_string()])
+                    Document::Text(vec!["".to_string()])
                 };
                 self.files
                     .insert((file_name.clone(), file_type.clone()), doc);
@@ -263,7 +263,7 @@ impl SimpleComponent for FileWorkspace {
                     if doc_info.index >= 0 {
                         let parsed_index = doc_info.index as usize;
                         match doc {
-                            Documento::Calculo(data) => {
+                            Document::Spreadsheet(data) => {
                                 if parsed_index < data.len() {
                                     data[parsed_index] = val.clone();
                                 } else {
@@ -273,7 +273,7 @@ impl SimpleComponent for FileWorkspace {
                                     data[parsed_index] = val.clone();
                                 }
                             }
-                            Documento::Texto(lines) => {
+                            Document::Text(lines) => {
                                 if parsed_index < lines.len() {
                                     lines[parsed_index] = val.clone();
                                 } else {
@@ -302,9 +302,9 @@ impl SimpleComponent for FileWorkspace {
                 // Limpiar y actualizar self.files solo con los nombres y tipos
                 for (name, tipo) in &archivos_tipos {
                     let doc = if *tipo == FileType::Sheet {
-                        Documento::Calculo(vec![])
+                        Document::Spreadsheet(vec![])
                     } else {
-                        Documento::Texto(vec![])
+                        Document::Text(vec![])
                     };
                     self.files.insert((name.clone(), tipo.clone()), doc);
                 }

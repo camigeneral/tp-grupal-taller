@@ -451,7 +451,7 @@ fn handle_client(
                         e
                     ));
                 } else {
-                    logger.log("Documentos persistidos exitosamente después de comando SET");
+                    logger.log("Documents persistidos exitosamente después de comando SET");
                 }
             } else {
                 notify_microservice(Arc::clone(&ctx), doc.clone(), client_id.to_string(), true);
@@ -786,9 +786,9 @@ pub fn publish_update(
             }
         }
     } else {
-        println!("Documento no encontrado: {}", document_id);
+        println!("Document no encontrado: {}", document_id);
         logger.log(&format!(
-            "Documento {} no encontrado al intentar publicar actualización",
+            "Document {} no encontrado al intentar publicar actualización",
             document_id
         ));
     }

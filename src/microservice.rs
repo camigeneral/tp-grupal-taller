@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 #[path = "document.rs"]
 mod document;
-use document::Documento;
+use document::Document;
 #[allow(unused_imports)]
 use std::time::Duration;
 
@@ -43,8 +43,8 @@ pub struct Microservice {
     /// Se mantiene para referencia y debugging.
     last_command_sent: Arc<Mutex<String>>,
 
-    /// Documentos almacenados en memoria recibidos de los nodos Redis.
-    documents: Arc<Mutex<HashMap<String, Documento>>>,
+    /// Documents almacenados en memoria recibidos de los nodos Redis.
+    documents: Arc<Mutex<HashMap<String, Document>>>,
 
     /// Mapeo de documentos a stream_ids para saber a qué stream enviar cada documento.
     document_streams: Arc<Mutex<HashMap<String, String>>>,
@@ -181,9 +181,9 @@ impl Microservice {
         Ok(())
     }
 
-    fn get_document_data(doc_name: &String, documento: &Documento) -> String {
+    fn get_document_data(doc_name: &String, documento: &Document) -> String {
         match documento {
-            Documento::Texto(lines) => {
+            Document::Text(lines) => {
                 let mut data = format!("{}/++/", doc_name);
                 for linea in lines {
                     data.push_str(linea);
@@ -191,7 +191,7 @@ impl Microservice {
                 }
                 data
             }
-            Documento::Calculo(lines) => {
+            Document::Spreadsheet(lines) => {
                 let mut data = format!("{}/++/", doc_name);
                 for linea in lines {
                     data.push_str(linea);
@@ -280,7 +280,7 @@ impl Microservice {
     ) {
         let cloned_node_streams = Arc::clone(&self.node_streams);
         let cloned_last_command = Arc::clone(&self.last_command_sent);
-        let cloned_documents: Arc<Mutex<HashMap<String, Documento>>> = Arc::clone(&self.documents);
+        let cloned_documents: Arc<Mutex<HashMap<String, Document>>> = Arc::clone(&self.documents);
         let cloned_document_streams = Arc::clone(&self.document_streams);
         let logger = self.logger.clone();
 
@@ -323,7 +323,7 @@ impl Microservice {
         reciever: Receiver<TcpStream>,
         node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
         last_command_sent: Arc<Mutex<String>>,
-        documents: Arc<Mutex<HashMap<String, Documento>>>,
+        documents: Arc<Mutex<HashMap<String, Document>>>,
         document_streams: Arc<Mutex<HashMap<String, String>>>,
         logger: Logger,
     ) -> std::io::Result<()> {
@@ -374,7 +374,7 @@ impl Microservice {
         mut microservice_socket: TcpStream,
         _connect_node_sender: MpscSender<TcpStream>,
         _node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
-        documents: Arc<Mutex<HashMap<String, Documento>>>,
+        documents: Arc<Mutex<HashMap<String, Document>>>,
         _document_streams: Arc<Mutex<HashMap<String, String>>>,
         last_command_sent: Arc<Mutex<String>>,
         log_clone: Logger,
@@ -398,8 +398,8 @@ impl Microservice {
                     if let Ok(docs) = documents.lock() {
                         if let Some(documento) = docs.get(&document) {
                             let doc_content = match documento {
-                                Documento::Texto(lines) => lines.join(","),
-                                Documento::Calculo(lines) => lines.join(","),
+                                Document::Text(lines) => lines.join(","),
+                                Document::Spreadsheet(lines) => lines.join(","),
                             };
                             let message_parts = &[
                                 "status",
@@ -446,7 +446,7 @@ impl Microservice {
                     stream_id,
                 } => {
                     log_clone.log(&format!(
-                        "Documento recibido: {} con {} líneas del stream {}",
+                        "Document recibido: {} con {} líneas del stream {}",
                         document,
                         content.len(),
                         stream_id
@@ -459,7 +459,7 @@ impl Microservice {
                                 .filter(|s| !s.is_empty())
                                 .map(|s| s.to_string())
                                 .collect();
-                            docs.insert(document.clone(), Documento::Texto(lines));
+                            docs.insert(document.clone(), Document::Text(lines));
                         } else {
                             let mut rows: Vec<String> = content
                                 .split("/--/")
@@ -472,7 +472,7 @@ impl Microservice {
                             while rows.len() < 100 {
                                 rows.push(String::new());
                             }
-                            docs.insert(document.clone(), Documento::Calculo(rows));
+                            docs.insert(document.clone(), Document::Spreadsheet(rows));
                         }
                     } else {
                         println!("Error obteniendo lock de documents");
@@ -499,7 +499,7 @@ impl Microservice {
                             };
 
                             match documento {
-                                Documento::Texto(lines) => {
+                                Document::Text(lines) => {
                                     if content.contains("<enter>") {
                                         let parts: Vec<&str> = content.split("<enter>").collect();
 
@@ -533,7 +533,7 @@ impl Microservice {
                                         lines.push(content.clone());
                                     }
                                 }
-                                Documento::Calculo(lines) => {
+                                Document::Spreadsheet(lines) => {
                                     if parsed_index < lines.len() {
                                         lines[parsed_index] = content.clone();
                                     } else {
@@ -545,7 +545,7 @@ impl Microservice {
                                 }
                             }
                         } else {
-                            log_clone.log(&format!("Documento no encontrado: {}", file));
+                            log_clone.log(&format!("Document no encontrado: {}", file));
                         }
                         {
                             let write_parts = vec!["write", &index, &content, "to", &file];

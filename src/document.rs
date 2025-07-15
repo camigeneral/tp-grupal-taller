@@ -1,66 +1,11 @@
 #[derive(Debug, Clone, PartialEq)]
-#[allow(dead_code)]
-pub enum Documento {
-    Texto(Vec<String>),
-    Calculo(Vec<String>),
+pub enum Document {
+    Text(Vec<String>),
+    Spreadsheet(Vec<String>),
 }
 
-impl Default for Documento {
+impl Default for Document {
     fn default() -> Self {
-        Documento::Texto(Vec::new())
-    }
-}
-
-#[allow(dead_code)]
-impl Documento {
-    pub fn as_texto_mut(&mut self) -> Option<&mut Vec<String>> {
-        match self {
-            Documento::Texto(ref mut v) => Some(v),
-            _ => None,
-        }
-    }
-    pub fn as_texto(&self) -> Option<&Vec<String>> {
-        match self {
-            Documento::Texto(ref v) => Some(v),
-            _ => None,
-        }
-    }
-    pub fn len(&self) -> usize {
-        match self {
-            Documento::Texto(v) => v.len(),
-            Documento::Calculo(m) => m.len(),
-        }
-    }
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-    pub fn join(&self, sep: &str) -> String {
-        match self {
-            Documento::Texto(v) => v.join(sep),
-            Documento::Calculo(m) => m.join(sep),
-        }
-    }
-    pub fn iter(&self) -> Option<std::slice::Iter<'_, String>> {
-        match self {
-            Documento::Texto(v) => Some(v.iter()),
-            _ => None,
-        }
-    }
-    pub fn insert(&mut self, idx: usize, val: String) {
-        if let Some(v) = self.as_texto_mut() {
-            v.insert(idx, val);
-        }
-    }
-    pub fn push(&mut self, val: String) {
-        if let Some(v) = self.as_texto_mut() {
-            v.push(val);
-        }
-    }
-    pub fn get_mut(&mut self, idx: usize) -> Option<&mut String> {
-        if let Some(v) = self.as_texto_mut() {
-            v.get_mut(idx)
-        } else {
-            None
-        }
+        Document::Text(Vec::new())
     }
 }
