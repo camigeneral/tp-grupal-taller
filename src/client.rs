@@ -310,8 +310,17 @@ impl LocalClient {
             }
         }
     }
-    /*fn handle_files( response: Vec<String>) { ... }
-    fn handle_error( response: Vec<String>) { ... }
+    fn handle_files( response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) { 
+        let archivos = if response.len() > 1 {
+            response[1..].to_vec()
+        } else {
+            vec![]
+        };
+        if let Some(sender) = &ui_sender {
+            let _ = sender.send(AppMsg::UpdateFilesList(archivos));
+        }
+     }
+    /*fn handle_error( response: Vec<String>) { ... }
     fn handle_unknown( cmd: String, response: Vec<String>) { ... } */
 
     fn listen_to_redis_response(        
@@ -364,8 +373,8 @@ impl LocalClient {
                 RedisClientResponseType::Ask => Self::handle_ask(response, cloned_connect_node_sender, cloned_node_streams, cloned_last_command.clone()),
                 RedisClientResponseType::Status => Self::handle_status(response, local_addr.to_string(), cloned_ui_sender),
                 RedisClientResponseType::Write => Self::handle_write(response, cloned_ui_sender),
-                /*RedisClientResponseType::Files => Self::handle_files(response),
-                RedisClientResponseType::Error => Self::handle_error(response),
+                RedisClientResponseType::Files => Self::handle_files(response, cloned_ui_sender),
+                /*RedisClientResponseType::Error => Self::handle_error(response),
                 RedisClientResponseType::Other(cmd) => Self::handle_unknown(cmd, response), */
                 _ => {}
             }
