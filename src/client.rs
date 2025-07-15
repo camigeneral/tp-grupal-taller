@@ -10,6 +10,7 @@ use std::sync::mpsc::{channel, Receiver, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use utils::extract_document_name;
+use redis_types::RedisClientResponseType;
 
 #[path = "utils/redis_parser.rs"]
 mod redis_parser;
@@ -21,6 +22,7 @@ struct NodeConnectionParams {
     pub ui_sender: Option<UiSender<AppMsg>>,
     pub address: String,
 }
+
 
 pub struct LocalClient {
     address: String,
@@ -183,7 +185,7 @@ impl LocalClient {
             let cloned_own_sender = sender.clone();
 
             thread::spawn(move || {
-                if let Err(e) = listen_to_redis_response(
+                if let Err(e) = Self::listen_to_redis_response(
                     stream,
                     cloned_sender,
                     cloned_own_sender,
@@ -197,7 +199,7 @@ impl LocalClient {
 
         Ok(())
     }
-    
+
     fn read_comming_messages(&mut self) -> std::io::Result<()> {
         let rx_ui = match &self.rx_ui {
             Some(rx) => rx,
@@ -236,6 +238,196 @@ impl LocalClient {
                     return Ok(());
                 }
             }
+        }
+        Ok(())
+    }
+
+    fn handle_ask(
+        response: Vec<String>,
+        connect_node_sender: MpscSender<TcpStream>,
+        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+        last_command_sent: Arc<Mutex<String>>
+    ) { 
+         if response.len() < 3 {
+            println!("Nodo de redireccion no disponible");
+        } else {
+            let _ = send_command_to_nodes(
+                connect_node_sender.clone(),
+                node_streams.clone(),
+                last_command_sent.clone(),
+                response,
+            );
+        }
+     }
+    /* fn handle_status(&self, response: Vec<String>) { ... }
+    fn handle_write(&self, response: Vec<String>) { ... }
+    fn handle_files(&self, response: Vec<String>) { ... }
+    fn handle_error(&self, response: Vec<String>) { ... }
+    fn handle_unknown(&self, cmd: String, response: Vec<String>) { ... } */
+
+    fn listen_to_redis_response(        
+        client_socket: TcpStream,
+        ui_sender: Option<UiSender<AppMsg>>,
+        connect_node_sender: MpscSender<TcpStream>,
+        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+        last_command_sent: Arc<Mutex<String>>,
+    ) -> std::io::Result<()> {
+        let client_socket_cloned = match client_socket.try_clone() {
+            Ok(clone) => clone,
+            Err(e) => {
+                eprintln!("Error al clonar el socket del cliente: {}", e);
+                return Err(std::io::Error::other("Socket clone failed"));
+            }
+        };
+
+        let mut reader: BufReader<TcpStream> = BufReader::new(client_socket);
+        let cloned_last_command: Arc<Mutex<String>> = Arc::clone(&last_command_sent.clone());
+
+        loop {
+            let (response, _) = match redis_parser::parse_resp_command(&mut reader) {
+                Ok((parts, s)) => (parts, s),
+                Err(e) => {
+                    eprintln!("Error al leer línea desde el socket: {}", e);
+                    break;
+                }
+            };
+
+            if response.is_empty() {
+                break;
+            }
+
+            let local_addr = match client_socket_cloned.local_addr() {
+                Ok(addr) => addr,
+                Err(e) => {
+                    eprintln!("Error al obtener la dirección local: {}", e);
+                    return Err(e);
+                }
+            };
+            let cloned_sender = ui_sender.clone();
+
+            println!("Respuesta de redis: {}", response.join(" "));
+
+            let response_type = RedisClientResponseType::from(response[0].as_str());            
+            let cloned_node_streams = Arc::clone(&node_streams);
+            let cloned_connect_node_sender = connect_node_sender.clone();
+
+            match response_type {
+                RedisClientResponseType::Ask => Self::handle_ask(response, cloned_connect_node_sender, cloned_node_streams, cloned_last_command.clone()),
+                /* RedisClientResponseType::Status => Self::handle_status(response),
+                RedisClientResponseType::Write => Self::handle_write(response),
+                RedisClientResponseType::Files => Self::handle_files(response),
+                RedisClientResponseType::Error => Self::handle_error(response),
+                RedisClientResponseType::Other(cmd) => Self::handle_unknown(cmd, response), */
+                _ => {}
+            }
+
+            /* match first_response.as_str() {
+                s if s.starts_with("-ERR") => {
+                    let error_message = if response.len() > 1 {
+                        response[1..].join(" ")
+                    } else {
+                        "Error desconocido".to_string()
+                    };
+                    if let Some(sender) = &ui_sender {
+                        let _ = sender.send(AppMsg::Error(format!(
+                            "Hubo un problema: {}",
+                            error_message
+                        )));
+                    }
+                }
+                "ASK" => {
+                    if response.len() < 3 {
+                        println!("Nodo de redireccion no disponible");
+                    } else {
+                        let _ = send_command_to_nodes(
+                            connect_node_sender.clone(),
+                            node_streams.clone(),
+                            last_command_sent.clone(),
+                            response,
+                        );
+                    }
+                }
+                "STATUS" => {
+                    let socket = response[2].clone();
+                    let doc = response[1].clone();
+                    let content = response[3].clone();
+                    if socket != local_addr.to_string() {
+                        continue;
+                    }
+
+                    if let Some(sender) = &ui_sender {
+                        let mut document = DocumentValueInfo::new(content, 0);
+                        document.decode_text();
+                        let _ = sender.send(AppMsg::ManageSubscribeResponse(
+                            doc.to_string(),
+                            "1".to_string(),
+                            document.value.to_string(),
+                        ));
+                    }
+                }
+
+                "WRITE" => {
+                    if let Some(sender) = &ui_sender {
+                        let index = match response[1].parse::<i32>() {
+                            Ok(i) => i,
+                            Err(_) => {
+                                eprintln!("Error parsing index from response: {:?}", response[1]);
+                                break;
+                            }
+                        };
+
+                        let text = response[2].to_string();
+                        let file = response[4].to_string();
+
+                        let split_text = text.split("<enter>").collect::<Vec<_>>();
+
+                        if split_text.len() == 2 {
+                            let (before_newline, after_newline) = (split_text[0], split_text[1]);
+
+                            for (offset, content) in [(0, before_newline), (1, after_newline)] {
+                                let mut doc_info =
+                                    DocumentValueInfo::new(content.to_string(), index + offset);
+                                doc_info.file = file.clone();
+                                doc_info.decode_text();
+                                let _ = sender.send(AppMsg::RefreshData(doc_info));
+                            }
+                        } else {
+                            let mut doc_info = DocumentValueInfo::new(text, index);
+                            doc_info.file = file.clone();
+                            doc_info.decode_text();
+                            let _ = sender.send(AppMsg::RefreshData(doc_info));
+                        }
+                    }
+                }
+
+                "FILES" => {
+                    let archivos = if response.len() > 1 {
+                        response[1..].to_vec()
+                    } else {
+                        vec![]
+                    };
+                    if let Some(sender) = &ui_sender {
+                        let _ = sender.send(AppMsg::UpdateFilesList(archivos));
+                    }
+                }
+                _ => {
+                    if let Some(sender) = &ui_sender {
+                        let _ = sender.send(AppMsg::ManageResponse(response[0].clone()));
+                    }
+                    if let Ok(last_command) = last_command_sent.lock() {
+                        // Verifica si el comando fue SET y extrae el nombre del archivo
+                        if last_command.to_uppercase().contains("SET") {
+                            let lines: Vec<&str> = last_command.split("\r\n").collect();
+                            if lines.len() >= 5 {
+                                let file_name = lines[4];
+                                if let Some(sender) = &ui_sender {
+                                    let _ = sender.send(AppMsg::AddFile(file_name.to_string()));
+                                }
+                            }
+                        }
+                    }
+                }
+            } */
         }
         Ok(())
     }
@@ -390,158 +582,6 @@ pub fn client_run(
     Ok(())
 }
  */
-fn listen_to_redis_response(
-    client_socket: TcpStream,
-    ui_sender: Option<UiSender<AppMsg>>,
-    connect_node_sender: MpscSender<TcpStream>,
-    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
-    last_command_sent: Arc<Mutex<String>>,
-) -> std::io::Result<()> {
-    let client_socket_cloned = match client_socket.try_clone() {
-        Ok(clone) => clone,
-        Err(e) => {
-            eprintln!("Error al clonar el socket del cliente: {}", e);
-            return Err(std::io::Error::other("Socket clone failed"));
-        }
-    };
-
-    let mut reader: BufReader<TcpStream> = BufReader::new(client_socket);
-
-    loop {
-        let (response, _) = match redis_parser::parse_resp_command(&mut reader) {
-            Ok((parts, s)) => (parts, s),
-            Err(e) => {
-                eprintln!("Error al leer línea desde el socket: {}", e);
-                break;
-            }
-        };
-
-        if response.is_empty() {
-            break;
-        }
-
-        let local_addr = match client_socket_cloned.local_addr() {
-            Ok(addr) => addr,
-            Err(e) => {
-                eprintln!("Error al obtener la dirección local: {}", e);
-                return Err(e);
-            }
-        };
-
-        println!("Respuesta de redis: {}", response.join(" "));
-
-        let first_response = response[0].to_uppercase();
-
-        match first_response.as_str() {
-            s if s.starts_with("-ERR") => {
-                let error_message = if response.len() > 1 {
-                    response[1..].join(" ")
-                } else {
-                    "Error desconocido".to_string()
-                };
-                if let Some(sender) = &ui_sender {
-                    let _ = sender.send(AppMsg::Error(format!(
-                        "Hubo un problema: {}",
-                        error_message
-                    )));
-                }
-            }
-            "ASK" => {
-                if response.len() < 3 {
-                    println!("Nodo de redireccion no disponible");
-                } else {
-                    let _ = send_command_to_nodes(
-                        connect_node_sender.clone(),
-                        node_streams.clone(),
-                        last_command_sent.clone(),
-                        response,
-                    );
-                }
-            }
-            "STATUS" => {
-                let socket = response[2].clone();
-                let doc = response[1].clone();
-                let content = response[3].clone();
-                if socket != local_addr.to_string() {
-                    continue;
-                }
-
-                if let Some(sender) = &ui_sender {
-                    let mut document = DocumentValueInfo::new(content, 0);
-                    document.decode_text();
-                    let _ = sender.send(AppMsg::ManageSubscribeResponse(
-                        doc.to_string(),
-                        "1".to_string(),
-                        document.value.to_string(),
-                    ));
-                }
-            }
-
-            "WRITE" => {
-                if let Some(sender) = &ui_sender {
-                    let index = match response[1].parse::<i32>() {
-                        Ok(i) => i,
-                        Err(_) => {
-                            eprintln!("Error parsing index from response: {:?}", response[1]);
-                            break;
-                        }
-                    };
-
-                    let text = response[2].to_string();
-                    let file = response[4].to_string();
-
-                    let split_text = text.split("<enter>").collect::<Vec<_>>();
-
-                    if split_text.len() == 2 {
-                        let (before_newline, after_newline) = (split_text[0], split_text[1]);
-
-                        for (offset, content) in [(0, before_newline), (1, after_newline)] {
-                            let mut doc_info =
-                                DocumentValueInfo::new(content.to_string(), index + offset);
-                            doc_info.file = file.clone();
-                            doc_info.decode_text();
-                            let _ = sender.send(AppMsg::RefreshData(doc_info));
-                        }
-                    } else {
-                        let mut doc_info = DocumentValueInfo::new(text, index);
-                        doc_info.file = file.clone();
-                        doc_info.decode_text();
-                        let _ = sender.send(AppMsg::RefreshData(doc_info));
-                    }
-                }
-            }
-
-            "FILES" => {
-                let archivos = if response.len() > 1 {
-                    response[1..].to_vec()
-                } else {
-                    vec![]
-                };
-                if let Some(sender) = &ui_sender {
-                    let _ = sender.send(AppMsg::UpdateFilesList(archivos));
-                }
-            }
-            _ => {
-                if let Some(sender) = &ui_sender {
-                    let _ = sender.send(AppMsg::ManageResponse(response[0].clone()));
-                }
-                if let Ok(last_command) = last_command_sent.lock() {
-                    // Verifica si el comando fue SET y extrae el nombre del archivo
-                    if last_command.to_uppercase().contains("SET") {
-                        let lines: Vec<&str> = last_command.split("\r\n").collect();
-                        if lines.len() >= 5 {
-                            let file_name = lines[4];
-                            if let Some(sender) = &ui_sender {
-                                let _ = sender.send(AppMsg::AddFile(file_name.to_string()));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    Ok(())
-}
 
 fn send_command_to_nodes(
     connect_node_sender: MpscSender<TcpStream>,
