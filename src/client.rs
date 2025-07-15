@@ -136,61 +136,77 @@ impl LocalClient {
         self.read_comming_messages();
     }
 
+    fn get_resp_command(&self, parts: Vec<&str>, command: &str) -> String {
+        if parts.is_empty() {
+            return String::new();
+        }
+        let cmd = parts[0];
+        if cmd.eq_ignore_ascii_case("AUTH")
+            || cmd.eq_ignore_ascii_case("subscribe")
+            || cmd.eq_ignore_ascii_case("unsubscribe")
+            || cmd.eq_ignore_ascii_case("get_files")
+            || cmd.eq_ignore_ascii_case("set")
+        {
+            format_resp_command(&parts)
+        } else if cmd.to_uppercase().contains("WRITE") {
+            let splited_command: Vec<&str> = command.split('|').collect();
+            let client_command = format_resp_command(&splited_command).to_string();
+            let key = splited_command.get(4).unwrap_or(&"");
+            format_resp_publish(key, &client_command)
+        } else {
+            let key = parts.get(1).unwrap_or(&"");
+            format_resp_publish(key, command)
+        }
+    }
+
+    fn set_last_command(&self, resp_command: String)->  std::io::Result<()>  {
+        let mut last_command = match self.last_command_sent.lock() {
+            Ok(locked) => locked,
+            Err(e) => {
+                eprintln!("Error al bloquear el mutex de last_command_sent: {}", e);
+                return Err(std::io::Error::other("Mutex lock failed"));
+            }
+        };
+        *last_command = resp_command.clone();
+        Ok(())
+    }
+    
     fn read_comming_messages(&mut self) -> std::io::Result<()> {
         let rx_ui = match &self.rx_ui {
             Some(rx) => rx,
             None => return Ok(()),
         };
 
+        let redis_sender = match &self.redis_sender {
+            Some(tx) => tx,
+            None => return Ok(()),
+        };
+
         for command in rx_ui {
             let trimmed_command = command.to_string().trim().to_lowercase();
+            let parts: Vec<&str> = command.split_whitespace().collect();
             if trimmed_command == "close" {
-                println!("Desconectando del servidor");
-                let parts: Vec<&str> = trimmed_command.split_whitespace().collect();
+                println!("Desconectando del servidor");            
                 let resp_command = redis_parser::format_resp_publish(parts[0], parts.get(1).unwrap_or(&""));
 
                 println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
 
-                if let Err(e) = self.redis_socket.write_all(resp_command.as_bytes()) {
+                if let Err(e) = redis_sender.send(resp_command) {
                     eprintln!("Error al escribir en el socket: {}", e);
-                    return Err(e);
+                    return Ok(());
                 }
                 break;
             } else {
-                println!("Enviando: {:?}", command);
+                println!("Enviando: {:?}", command);            
+                let resp_command = self.get_resp_command(parts, &command);
 
-                let parts: Vec<&str> = command.split_whitespace().collect();
-                let resp_command = if parts[0] == "AUTH"
-                    || parts[0] == "subscribe"
-                    || parts[0] == "unsubscribe"
-                    || parts[0] == "get_files"
-                    || parts[0] == "set"
-                {
-                    format_resp_command(&parts)
-                } else if parts[0].contains("WRITE") {
-                    let splited_command: Vec<&str> = command.split("|").collect();
-                    let client_command = format_resp_command(&splited_command).clone().to_string();
-                    format_resp_publish(splited_command[4], &client_command)
-                } else {
-                    format_resp_publish(parts.get(1).unwrap_or(&""), &command)
-                };
-
-                {
-                    let mut last_command = match self.last_command_sent.lock() {
-                        Ok(locked) => locked,
-                        Err(e) => {
-                            eprintln!("Error al bloquear el mutex de last_command_sent: {}", e);
-                            return Err(std::io::Error::other("Mutex lock failed"));
-                        }
-                    };
-                    *last_command = resp_command.clone();
-                }
-
+                let _ = self.set_last_command(resp_command.clone());
+                
                 println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
 
-                if let Err(e) = self.redis_socket.write_all(resp_command.as_bytes()) {
+                if let Err(e) = redis_sender.send(resp_command) {
                     eprintln!("Error al escribir en el socket: {}", e);
-                    return Err(e);
+                    return Ok(());
                 }
             }
         }
