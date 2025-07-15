@@ -64,7 +64,7 @@ pub enum RedisClientResponseType {
     Write,
     Files,
     Error,
-    Other(String),
+    Other,
 }
 
 impl From<&str> for RedisClientResponseType {
@@ -75,7 +75,7 @@ impl From<&str> for RedisClientResponseType {
             "WRITE" => Self::Write,
             "FILES" => Self::Files,
             s if s.starts_with("-ERR") => Self::Error,
-            _ => Self::Other(s.to_string()),
+            _ => Self::Other,
         }
     }
 }
