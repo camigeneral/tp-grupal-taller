@@ -92,7 +92,10 @@ fn start_server(
     peer_nodes: PeerNodeMap,
 ) -> std::io::Result<()> {
     let config_path = "redis.conf";
-    let logger = logger::Logger::init(logger::Logger::get_log_path_from_config(config_path), port);
+    let logger = logger::Logger::init(
+        logger::Logger::get_log_path_from_config(config_path, "server_log_path="),
+        port,
+    );
 
     let local_node = redis_node_handler::create_local_node(port)?;
 

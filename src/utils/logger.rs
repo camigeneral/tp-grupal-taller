@@ -48,13 +48,18 @@ impl Logger {
         let _ = self.sender.send(message.to_string());
     }
 
-    pub fn get_log_path_from_config(config_path: &str) -> String {
+    pub fn get_log_path_from_config(config_path: &str, key: &str) -> String {
         let config = std::fs::read_to_string(config_path).unwrap_or_default();
         for line in config.lines() {
-            if let Some(path) = line.strip_prefix("log_path=") {
+            if let Some(path) = line.strip_prefix(key) {
                 return path.trim().to_string();
             }
         }
-        "server.log".to_string()
+        // Valor por defecto
+        match key {
+            "server_log_path=" => "server.log".to_string(),
+            "microservice_log_path=" => "microservice.log".to_string(),
+            _ => "server.log".to_string(),
+        }
     }
 }
