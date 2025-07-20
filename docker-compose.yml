@@ -1,0 +1,34 @@
+services:
+  node1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: redis_node1
+    command: ["4000"]
+    ports:
+      - "7001:4000"
+    networks: [rediscluster]
+
+  node2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: redis_node2
+    command: ["4001"]
+    ports:
+      - "7002:4001"
+    networks: [rediscluster]
+
+  node3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: redis_node3
+    command: ["4002"]
+    ports:
+      - "7003:4002"
+    networks: [rediscluster]
+
+networks:
+  rediscluster:
+    driver: bridge
