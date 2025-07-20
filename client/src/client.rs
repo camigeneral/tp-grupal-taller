@@ -2,7 +2,7 @@ extern crate relm4;
 use self::relm4::Sender as UiSender;
 use crate::app::AppMsg;
 use crate::components::structs::document_value_info::DocumentValueInfo;
-use rusty_docs::redis_parser::{format_resp_command, format_resp_publish};
+use rusty_docs::resp_parser::{format_resp_command, format_resp_publish};
 use types::RedisClientResponseType;
 use std::collections::HashMap;
 use std::io::{BufReader, BufWriter, Write};
@@ -10,7 +10,7 @@ use std::net::TcpStream;
 use std::sync::mpsc::{channel, Receiver, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use rusty_docs::redis_parser;
+use rusty_docs::resp_parser;
 
 /// Registro de canales de escritura asociados a nodos.
 ///
@@ -214,7 +214,7 @@ impl LocalClient {
     pub fn run(&mut self) {
         self.set_redis_sender();
 
-        let initial_command = redis_parser::format_resp_command(&["Cliente"]);
+        let initial_command = resp_parser::format_resp_command(&["Cliente"]);
         if let Some(redis_sender) = &self.redis_sender {
             let _ = redis_sender.send(initial_command);
         }
@@ -328,7 +328,7 @@ impl LocalClient {
             if trimmed_command == "close" {
                 println!("Desconectando del servidor");
                 let resp_command =
-                    redis_parser::format_resp_publish(parts[0], parts.get(1).unwrap_or(&""));
+                    resp_parser::format_resp_publish(parts[0], parts.get(1).unwrap_or(&""));
 
                 println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
 
@@ -526,7 +526,7 @@ impl LocalClient {
         let cloned_last_command: Arc<Mutex<String>> = Arc::clone(&params.last_command_sent.clone());
 
         loop {
-            let (response, _) = match redis_parser::parse_resp_command(&mut reader) {
+            let (response, _) = match resp_parser::parse_resp_command(&mut reader) {
                 Ok((parts, s)) => (parts, s),
                 Err(e) => {
                     eprintln!("Error al leer línea desde el socket: {}", e);
@@ -616,7 +616,7 @@ impl LocalClient {
             println!("Creating new connection for node {}", new_node_address);
 
             let parts: Vec<&str> = "connect".split_whitespace().collect();
-            let resp_command = redis_parser::format_resp_command(&parts);
+            let resp_command = resp_parser::format_resp_command(&parts);
 
             let stream = TcpStream::connect(new_node_address.clone()).map_err(|e| {
                 eprintln!("Error connecting to new node: {}", e);
