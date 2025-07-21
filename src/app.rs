@@ -98,7 +98,7 @@ impl SimpleComponent for AppModel {
         set_width_request: 800,
         set_default_height: 600,
         #[wrap(Some)]
-        set_titlebar = model.header_cont.widget(),
+        set_titlebar = model.header_cont.widget(),        
 
         #[name="main_container"]
         gtk::Box {
@@ -196,6 +196,8 @@ impl SimpleComponent for AppModel {
                 #[watch]
                 set_visible: !model.is_logged_in
             },
+
+            append: model.loading_modal.widget(),
 
         },
 
