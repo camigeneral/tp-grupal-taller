@@ -7,6 +7,7 @@ use self::gtk4::{
 use crate::components::structs::document_value_info::DocumentValueInfo;
 use crate::components::{
     error_modal::ErrorModal,
+    loading_modal::{LoadingModalMsg, LoadingModalModel},
     login::{LoginForm, LoginMsg, LoginOutput},
 };
 use app::gtk4::glib::Propagation;
@@ -46,6 +47,7 @@ pub struct AppModel {
     error_modal: Controller<ErrorModal>,
     new_file_popover: Option<gtk::Popover>,
     file_name: String,
+    loading_modal: Controller<LoadingModalModel>,
 }
 
 #[derive(Debug)]
@@ -214,8 +216,10 @@ impl SimpleComponent for AppModel {
         );
         let error_modal = ErrorModal::builder()
             .transient_for(&root)
-            .launch(())
+            .launch(()) 
             .detach();
+
+        let loading_modal = LoadingModalModel::builder().launch(()).detach();
 
         let header_model = NavbarModel::builder().launch(()).forward(
             sender.input_sender(),
@@ -263,6 +267,7 @@ impl SimpleComponent for AppModel {
             error_modal,
             new_file_popover: None,
             file_name: "".to_string(),
+            loading_modal,
         };
 
         let sender_clone = sender.clone();
