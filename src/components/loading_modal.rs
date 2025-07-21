@@ -1,12 +1,12 @@
 extern crate gtk4;
 extern crate relm4;
 
-use self::gtk4::prelude::{OrientableExt, WidgetExt};
-use self::relm4::{
-    gtk, Component, ComponentController, ComponentParts, ComponentSender, Controller,
-    RelmWidgetExt, SimpleComponent,
+use self::gtk4::prelude::{BoxExt, OrientableExt, WidgetExt};
+use self::relm4::{  
+    gtk, ComponentParts, ComponentSender,  SimpleComponent,
 };
 
+#[derive(Debug)]
 pub struct LoadingModalModel{
     is_visible: bool
 }
