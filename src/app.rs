@@ -228,7 +228,7 @@ impl SimpleComponent for AppModel {
             |output| match output {
                 NavbarOutput::ToggleConnectionRequested => AppMsg::Connect,
                 NavbarOutput::CreateFileRequested(file_id, content) => {
-                    AppMsg::CreateFile(file_id, content, "txt".to_string()) // Por defecto, tipo "txt"
+                    AppMsg::CreateFile(file_id, content, "txt".to_string())
                 }
             },
         );
