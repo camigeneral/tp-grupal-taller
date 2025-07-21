@@ -1,13 +1,13 @@
 extern crate gtk4;
 extern crate relm4;
 
-use self::gtk4::prelude::{BoxExt, OrientableExt, WidgetExt};
+use self::gtk4::prelude::{BoxExt, OrientableExt, WidgetExt  };
 use self::relm4::{  
-    gtk, ComponentParts, ComponentSender,  SimpleComponent,
+    gtk, ComponentParts, ComponentSender, SimpleComponent,
 };
 
 #[derive(Debug)]
-pub struct LoadingModalModel{
+pub struct LoadingModalModel {
     is_visible: bool
 }
 
@@ -26,26 +26,71 @@ impl SimpleComponent for LoadingModalModel {
     view! {
         #[name = "overlay"]
         gtk::Overlay {
-            #[name = "background"]
+            #[name = "main_content"]
             gtk::Box {
+                set_hexpand: true,
+                set_vexpand: true,
+            },
+
+            add_overlay = &gtk::Box {
                 set_hexpand: true,
                 set_vexpand: true,
                 set_valign: gtk::Align::Fill,
                 set_halign: gtk::Align::Fill,
-                set_css_classes: &["loading-modal-background"],
+                set_css_classes: &["loading-modal-overlay"],
+
+                #[watch]
+                set_visible: model.is_visible,
 
                 gtk::Box {
+                    set_hexpand: true,
+                    set_vexpand: true,
                     set_valign: gtk::Align::Center,
                     set_halign: gtk::Align::Center,
-                    set_orientation: gtk::Orientation::Vertical,
-                    set_spacing: 12,
 
-                    gtk::Spinner {
-                        set_spinning: true,
-                        set_size_request: (60, 60),
-                    },
-                    gtk::Label {
-                        set_label: "Generando por IA",
+                    gtk::Box {
+                        set_css_classes: &["loading-modal"],
+                        set_orientation: gtk::Orientation::Vertical,
+                        set_spacing: 20,
+                        set_width_request: 320,
+                        set_height_request: 220,
+
+                        gtk::Box {
+                            set_orientation: gtk::Orientation::Vertical,
+                            set_spacing: 20,
+                            set_valign: gtk::Align::Center,
+                            set_halign: gtk::Align::Center,
+
+                            gtk::Label {
+                                set_label: "🤖",
+                                set_css_classes: &["ai-icon"],
+                                set_halign: gtk::Align::Center,
+                            },
+
+                            gtk::Spinner {
+                                set_spinning: true,
+                                set_size_request: (40, 40),
+                                set_halign: gtk::Align::Center,
+                            },
+                            
+                            gtk::Box {
+                                set_orientation: gtk::Orientation::Vertical,
+                                set_spacing: 8,
+                                set_halign: gtk::Align::Center,
+
+                                gtk::Label {
+                                    set_label: "Generando contenido",
+                                    set_css_classes: &["loading-title"],
+                                    set_halign: gtk::Align::Center,
+                                },
+                                
+                                gtk::Label {
+                                    set_label: "La IA está trabajando en tu solicitud...",
+                                    set_css_classes: &["loading-subtitle"],
+                                    set_halign: gtk::Align::Center,
+                                },
+                            },
+                        }
                     }
                 }
             }
@@ -59,6 +104,7 @@ impl SimpleComponent for LoadingModalModel {
     ) -> ComponentParts<Self> {
         let model = LoadingModalModel { is_visible: true };
         let widgets = view_output!();
+        
         ComponentParts { model, widgets }
     }
 
