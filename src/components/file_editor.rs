@@ -2,7 +2,7 @@ extern crate gtk4;
 extern crate relm4;
 use crate::components::text_editor::TextEditorOutputMessage;
 
-use self::gtk4::prelude::{BoxExt, ButtonExt, OrientableExt, WidgetExt, EditableExt};
+use self::gtk4::prelude::{BoxExt, ButtonExt, OrientableExt, WidgetExt};
 use self::relm4::{
     gtk, Component, ComponentController, ComponentParts, ComponentSender, Controller,
     RelmWidgetExt, SimpleComponent,
@@ -133,6 +133,9 @@ impl SimpleComponent for FileEditorModel {
             .forward(sender.input_sender(), |msg| match msg {
                 TextEditorOutputMessage::GoBack => FileEditorMessage::ResetEditor,
                 TextEditorOutputMessage::ContentAdded(doc_info) => {
+                    FileEditorMessage::ContentAdded(doc_info)
+                }
+                TextEditorOutputMessage::SendPrompt(doc_info) => {
                     FileEditorMessage::ContentAdded(doc_info)
                 }
             });
