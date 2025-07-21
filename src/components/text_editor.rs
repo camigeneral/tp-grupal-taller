@@ -43,6 +43,7 @@ pub enum TextEditorOutputMessage {
     /// Mensaje que indica que se debe volver a la vista anterior.
     GoBack,
     ContentAdded(DocumentValueInfo),
+    SendPrompt(DocumentValueInfo)
 }
 
 #[relm4::component(pub)]
@@ -174,7 +175,11 @@ impl SimpleComponent for TextEditorModel {
         match message {
             TextEditorMessage::SendPrompt => {
                 if let Some((line, offset)) = self.cursor_position.borrow().clone() {
-                    println!("Sending prompt: {} {} {}", line, offset, self.prompt)
+                    let mut document = DocumentValueInfo::new(self.content.clone(), line);                    
+                    document.offset = offset;
+                    document.prompt = self.prompt.clone();
+                    document.file = self.file_name.clone();
+                    let _ =  sender.output(TextEditorOutputMessage::SendPrompt(document));                    
                 }
             }
             TextEditorMessage::SetPrompt(prompt) => {
