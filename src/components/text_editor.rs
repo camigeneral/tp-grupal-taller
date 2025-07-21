@@ -1,7 +1,7 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::prelude::{
-    BoxExt, Cast, EventControllerExt, OrientableExt, TextBufferExt, TextViewExt, WidgetExt,
+    BoxExt, Cast, EventControllerExt, OrientableExt, TextBufferExt, TextViewExt, WidgetExt, EditableExt, TextMarkExt
 };
 use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
 use crate::components::structs::document_value_info::DocumentValueInfo;
@@ -23,6 +23,7 @@ pub struct TextEditorModel {
     /// Indica si el contenido del archivo ha sido modificado manualmente en el editor.
     content_changed_manually: bool,
     programmatic_update: Rc<RefCell<bool>>, // Shared reference
+    cursor_position: Rc<RefCell<Option<(i32, i32)>>>, // línea y offset
 }
 
 /// Enum que define los posibles mensajes que el editor de archivos puede recibir.
@@ -30,6 +31,7 @@ pub struct TextEditorModel {
 pub enum TextEditorMessage {
     ContentAdded(DocumentValueInfo),
     UpdateFile(String, i32, String),
+    SendPrompt(String),
     ResetEditor,
 }
 
@@ -54,6 +56,16 @@ impl SimpleComponent for TextEditorModel {
             set_margin_all: 12,
             set_hexpand: true,
             set_vexpand: true,
+            gtk::Box {
+                set_orientation: gtk::Orientation::Vertical,
+                set_spacing: 5,
+                #[name = "prompt"]
+                gtk::Entry {
+                    connect_changed[sender] => move |entry| {
+                        sender.input(TextEditorMessage::SendPrompt(entry.text().to_string()));
+                    }
+                },                    
+            },
             gtk::ScrolledWindow {
                 set_vexpand: true,
                 #[wrap(Some)]
@@ -76,6 +88,7 @@ impl SimpleComponent for TextEditorModel {
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let programmatic_update = Rc::new(RefCell::new(false));
+        let cursor_position = Rc::new(RefCell::new(None));
 
         let mut model = TextEditorModel {
             file_name,
@@ -83,6 +96,7 @@ impl SimpleComponent for TextEditorModel {
             content,
             content_changed_manually: true,
             programmatic_update: programmatic_update.clone(),
+            cursor_position: cursor_position.clone(),
 
             buffer: gtk::TextBuffer::new(None),
         };
@@ -90,15 +104,23 @@ impl SimpleComponent for TextEditorModel {
         model.buffer = gtk::TextBuffer::builder().text(&model.content).build();
 
         let sender = sender.clone();
+        let buffer = model.buffer.clone();
+        let cursor_position_clone = cursor_position.clone();
+
+        buffer.connect_mark_set(move |_buffer, iter, _mark| {
+            let line = iter.line();
+            let offset = iter.line_offset();
+            *cursor_position_clone.borrow_mut() = Some((line, offset));            
+        });
 
         let sender_insert = sender.clone();
         let widgets = view_output!();
 
         let key_controller = gtk4::EventControllerKey::new();
 
-        key_controller.connect_key_pressed(move |_controller, key, _keycode, _state| {
+        key_controller.connect_key_pressed(move |controller, key, _keycode, _state| {
             if key == gtk4::gdk::Key::Return || key == gtk4::gdk::Key::KP_Enter {
-                if let Some(widget) = _controller.widget() {
+                if let Some(widget) = controller.widget() {
                     if let Ok(text_view) = widget.downcast::<gtk4::TextView>() {
                         let buffer = text_view.buffer();
                         let insert_mark = buffer.get_insert();
@@ -138,6 +160,9 @@ impl SimpleComponent for TextEditorModel {
 
     fn update(&mut self, message: TextEditorMessage, sender: ComponentSender<Self>) {
         match message {
+            TextEditorMessage::SendPrompt(prompt) => {
+                println!("Prompt: {}", prompt)
+            }
             TextEditorMessage::ContentAdded(mut doc_info) => {
                 if !self.content_changed_manually {
                     return;
