@@ -128,6 +128,7 @@ impl SimpleComponent for FileWorkspace {
                     FileEditorOutputMessage::ContentAddedSpreadSheet(doc_info) => {
                         FileWorkspaceMsg::ContentAddedSpreadSheet(doc_info)
                     }
+                    _ => {FileWorkspaceMsg::Ignore}
                 },
             );
 
