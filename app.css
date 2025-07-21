@@ -128,6 +128,73 @@ window {
     transition: background-color 200ms ease;
 }
 
+.loading-modal-overlay {
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 0;
+}
+
+
+.loading-modal {
+    background: white;
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    min-width: 320px;
+    min-height: 220px;
+}
+
+.ai-icon {
+    font-size: 32px;
+    margin-bottom: 4px;
+}
+
+.loading-title {
+    color: #2c3e50;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 2px;
+}
+
+.loading-subtitle {
+    color: #7f8c8d;
+    font-size: 14px;
+    font-weight: 400;
+    opacity: 0.8;
+}
+
+.loading-dots {
+    color: #3498db;
+    font-size: 16px;
+    font-weight: bold;
+    margin-top: 8px;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.loading-modal-overlay {
+    transition: opacity 250ms ease-in-out;
+}
+
+.loading-modal {
+    transition: all 250ms cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+.loading-modal:hover {
+    box-shadow: 0 16px 64px rgba(0, 0, 0, 0.5);
+}
+
+.loading-modal {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+}
+
+.ai-icon {
+    transition: transform 200ms ease-in-out;
+}
+
+.ai-icon:hover {
+    transform: scale(1.1);
+}
+
 .file_button:hover {
     background-color: #f0f0f0;
 }
