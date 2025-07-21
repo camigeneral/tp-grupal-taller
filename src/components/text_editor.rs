@@ -1,7 +1,7 @@
 extern crate gtk4;
 extern crate relm4;
 use self::gtk4::prelude::{
-    BoxExt, Cast, EventControllerExt, OrientableExt, TextBufferExt, TextViewExt, WidgetExt, EditableExt, TextMarkExt
+    BoxExt, Cast, EventControllerExt, OrientableExt, TextBufferExt, TextViewExt, WidgetExt, EditableExt, ButtonExt
 };
 use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
 use crate::components::structs::document_value_info::DocumentValueInfo;
@@ -22,6 +22,7 @@ pub struct TextEditorModel {
     buffer: gtk::TextBuffer,
     /// Indica si el contenido del archivo ha sido modificado manualmente en el editor.
     content_changed_manually: bool,
+    prompt: String,
     programmatic_update: Rc<RefCell<bool>>, // Shared reference
     cursor_position: Rc<RefCell<Option<(i32, i32)>>>, // línea y offset
 }
@@ -31,7 +32,8 @@ pub struct TextEditorModel {
 pub enum TextEditorMessage {
     ContentAdded(DocumentValueInfo),
     UpdateFile(String, i32, String),
-    SendPrompt(String),
+    SetPrompt(String),
+    SendPrompt,
     ResetEditor,
 }
 
@@ -57,14 +59,24 @@ impl SimpleComponent for TextEditorModel {
             set_hexpand: true,
             set_vexpand: true,
             gtk::Box {
-                set_orientation: gtk::Orientation::Vertical,
+                set_orientation: gtk::Orientation::Horizontal,
                 set_spacing: 5,
                 #[name = "prompt"]
                 gtk::Entry {
                     connect_changed[sender] => move |entry| {
-                        sender.input(TextEditorMessage::SendPrompt(entry.text().to_string()));
+                        sender.input(TextEditorMessage::SetPrompt(entry.text().to_string()));
                     }
-                },                    
+                },
+                gtk::Button {
+                    set_label: "Generar con IA",
+                    connect_clicked[sender] => move |_| {
+                        sender.input(TextEditorMessage::SendPrompt);
+                        
+                    },
+                    add_css_class: "back-button",
+                    add_css_class: "button",
+                },
+                                    
             },
             gtk::ScrolledWindow {
                 set_vexpand: true,
@@ -94,10 +106,10 @@ impl SimpleComponent for TextEditorModel {
             file_name,
             num_contributors,
             content,
+            prompt: "".to_string(),
             content_changed_manually: true,
             programmatic_update: programmatic_update.clone(),
             cursor_position: cursor_position.clone(),
-
             buffer: gtk::TextBuffer::new(None),
         };
 
@@ -160,8 +172,13 @@ impl SimpleComponent for TextEditorModel {
 
     fn update(&mut self, message: TextEditorMessage, sender: ComponentSender<Self>) {
         match message {
-            TextEditorMessage::SendPrompt(prompt) => {
-                println!("Prompt: {}", prompt)
+            TextEditorMessage::SendPrompt => {
+                if let Some((line, offset)) = self.cursor_position.borrow().clone() {
+                    println!("Sending prompt: {} {} {}", line, offset, self.prompt)
+                }
+            }
+            TextEditorMessage::SetPrompt(prompt) => {
+                self.prompt = prompt;
             }
             TextEditorMessage::ContentAdded(mut doc_info) => {
                 if !self.content_changed_manually {
