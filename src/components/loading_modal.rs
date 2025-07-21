@@ -102,7 +102,7 @@ impl SimpleComponent for LoadingModalModel {
         root: Self::Root,
         _sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let model = LoadingModalModel { is_visible: true };
+        let model = LoadingModalModel { is_visible: false };
         let widgets = view_output!();
         
         ComponentParts { model, widgets }
