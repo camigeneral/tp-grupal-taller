@@ -2,7 +2,7 @@ extern crate gtk4;
 extern crate relm4;
 use crate::components::text_editor::TextEditorOutputMessage;
 
-use self::gtk4::prelude::{BoxExt, ButtonExt, OrientableExt, WidgetExt};
+use self::gtk4::prelude::{BoxExt, ButtonExt, OrientableExt, WidgetExt, EditableExt};
 use self::relm4::{
     gtk, Component, ComponentController, ComponentParts, ComponentSender, Controller,
     RelmWidgetExt, SimpleComponent,
@@ -47,6 +47,7 @@ pub enum FileEditorMessage {
     ContentAddedSpreadSheet(DocumentValueInfo),
     UpdateFile(String, i32, String, FileType),
     UpdateFileContent(String, i32, String, FileType),
+    SendPrompt(String),
     ResetEditor,
 }
 
@@ -55,6 +56,7 @@ pub enum FileEditorMessage {
 pub enum FileEditorOutputMessage {
     ContentAdded(DocumentValueInfo),
     ContentAddedSpreadSheet(DocumentValueInfo),
+    SendPrompt(String, String),
     /// Mensaje que indica que se debe volver a la vista anterior.
     GoBack,
 }
@@ -153,6 +155,9 @@ impl SimpleComponent for FileEditorModel {
 
     fn update(&mut self, message: FileEditorMessage, sender: ComponentSender<Self>) {
         match message {
+            FileEditorMessage::SendPrompt(prompt) => {
+                let _ = sender.output(FileEditorOutputMessage::SendPrompt(prompt, self.file_name.clone()));
+            }
             FileEditorMessage::ContentAddedSpreadSheet(doc_info) => {
                 let _ = sender.output(FileEditorOutputMessage::ContentAddedSpreadSheet(doc_info));
             }
