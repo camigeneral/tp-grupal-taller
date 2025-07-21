@@ -423,7 +423,7 @@ impl SimpleComponent for AppModel {
                         doc_info.index, doc_info.value, doc_info.timestamp, doc_info.file
                     );
                 }            
-                //sender.input(AppMsg::ExecuteCommand);
+                sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::AddContentSpreadSheet(doc_info) => {
                 self.command = format!(
