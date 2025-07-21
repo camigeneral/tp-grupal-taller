@@ -15,7 +15,7 @@ fn main() {
         },
         "contents": [{
             "parts": [{
-                "text": "¿Cuál es la capital de Francia?"
+                "text": ""
             }]
         }]
         
