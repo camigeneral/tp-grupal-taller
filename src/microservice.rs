@@ -51,6 +51,7 @@ pub struct Microservice {
 
     /// Ruta al archivo de log donde se registran los eventos del microservicio.
     logger: Logger,
+    llm_sender: Option<MpscSender<String>>,    
 }
 
 impl Microservice {
@@ -76,7 +77,27 @@ impl Microservice {
             documents: Arc::new(Mutex::new(HashMap::new())),
             document_streams: Arc::new(Mutex::new(HashMap::new())),
             logger,
+            llm_sender: None,            
         })
+    }
+
+    fn connect_to_llm(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let llm_address = format!("127.0.0.1:4030");
+        let (tx, rx) = channel::<String>();
+
+        self.llm_sender = Some(tx);
+        self.logger.log(&format!(
+            "Microservicio conectandose al server de llm en {:?}",
+            llm_address
+        ));
+        thread::spawn(move || {
+            let mut socket = TcpStream::connect(llm_address.clone()).expect("No se pudo conectar al LLM");
+            for prompt in rx {                
+                socket.write_all(prompt.as_bytes()).unwrap();                            
+            }
+        });
+
+        Ok(())
     }
 
     /// Inicia el microservicio y establece las conexiones con los nodos Redis.
@@ -97,7 +118,7 @@ impl Microservice {
     ///
     /// * `Ok(())` - El microservicio se inició correctamente.
     /// * `Err(Box<dyn std::error::Error>)` - Error si no se puede conectar al nodo Redis o establecer las conexiones.
-    pub fn start(&self, redis_port: u16) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn start(&mut self, redis_port: u16) -> Result<(), Box<dyn std::error::Error>> {
         let main_address = format!("127.0.0.1:{}", redis_port);
 
         println!("Conectándome al server de redis en {:?}", main_address);
@@ -108,6 +129,7 @@ impl Microservice {
         ));
         let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
 
+        self.connect_to_llm()?;
         let redis_socket = socket.try_clone()?;
         let redis_socket_clone_for_hashmap = socket.try_clone()?;
 
@@ -558,7 +580,7 @@ impl Microservice {
                     }
                 }
                 MicroserviceMessage::Prompt { line, offset, prompt, file, content } => {
-                    
+
 
                 },
                 MicroserviceMessage::Error(_) => {}
@@ -593,6 +615,6 @@ impl Microservice {
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config_path = "redis.conf";
-    let microservice = Microservice::new(config_path)?;
+    let mut microservice = Microservice::new(config_path)?;
     microservice.start(4000)
 }
