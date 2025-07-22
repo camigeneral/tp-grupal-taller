@@ -61,7 +61,7 @@ impl MicroserviceMessage {
                 let content = parts[2].to_string();
                 let file = parts[3].to_string();
                 let prompt = parts[4].to_string();
-                let offset = parts[4].to_string();
+                let offset = parts[5].to_string();
                 MicroserviceMessage::Prompt { 
                     line, 
                     offset, 
