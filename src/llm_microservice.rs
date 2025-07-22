@@ -71,7 +71,7 @@ fn handle_requests(mut stream: TcpStream)  {
     }
 }
 fn main() -> std::io::Result<()> {
-   let listener = TcpListener::bind("127.0.0.4030")?;
+   let listener = TcpListener::bind("127.0.0.1:4030")?;
    println!("Servidor para la llm levantado");
    for stream in listener.incoming() {
     match stream {
