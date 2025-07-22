@@ -134,6 +134,7 @@ window {
     padding: 32px;
     min-width: 320px;
     min-height: 220px;
+    border: 1px solid #7f8c8d;
 }
 
 .ai-icon {
@@ -153,10 +154,6 @@ window {
     font-size: 14px;
     font-weight: 400;
     opacity: 0.8;
-}
-
-.loading-modal-overlay {
-    transition: opacity 250ms ease-in-out;
 }
 
 .loading-modal {

@@ -29,8 +29,7 @@ impl SimpleComponent for LoadingModalModel {
             set_modal: true,
             set_resizable: false,
             set_default_size: (400, 200),
-            set_decorated: false,
-            set_title: Some("Generando contenido"),
+            set_decorated: false,            
             #[watch]
             set_visible: model.is_visible,
             set_css_classes: &["loading-modal"],
