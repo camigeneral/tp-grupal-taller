@@ -7,14 +7,17 @@ COPY redis_server/ redis_server/
 COPY microservice/ microservice/
 COPY client/ client/
 COPY rusty_docs/ rusty_docs/
-COPY redis_server/config_files/ redis_server/config_files/
-COPY redis_server/rdb_files/ redis_server/rdb_files/
 
+RUN rustup target add x86_64-unknown-linux-musl
 
-RUN cargo build --release --bin redis_server
+RUN cargo build --release --bin redis_server --target x86_64-unknown-linux-musl
 
-FROM debian:bookworm-slim
+FROM alpine:latest
 
-COPY --from=builder /app/target/release/redis_server /usr/local/bin/redis_server
+RUN apk add --no-cache ca-certificates
+
+COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/redis_server /usr/local/bin/redis_server
+
+COPY redis_server/conf_files /usr/local/bin/conf_files
 
 CMD ["redis_server", "4000"]

@@ -12,6 +12,8 @@ pub mod resp_parser;
 
 pub mod shared;
 
+pub mod utils;
+
 // /// Módulo que contiene la información y la estructura del nodo local.
 // ///
 // /// Define la estructura `LocalNode`, que representa al nodo actual dentro del clúster.
