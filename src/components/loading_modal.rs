@@ -1,9 +1,9 @@
 extern crate gtk4;
 extern crate relm4;
 
-use self::gtk4::prelude::{BoxExt, OrientableExt, WidgetExt  };
+use self::gtk4::prelude::{BoxExt, OrientableExt, WidgetExt, GtkWindowExt };
 use self::relm4::{  
-    gtk, ComponentParts, ComponentSender, SimpleComponent,
+    gtk, ComponentParts, ComponentSender, SimpleComponent
 };
 
 #[derive(Debug)]
@@ -24,75 +24,67 @@ impl SimpleComponent for LoadingModalModel {
     type Output = ();
 
     view! {
-        #[name = "overlay"]
-        gtk::Overlay {
-            #[name = "main_content"]
+        #[root]
+        gtk::Window {            
+            set_modal: true,
+            set_resizable: false,
+            set_default_size: (400, 200),
+            set_decorated: false,
+            set_title: Some("Generando contenido"),
+            #[watch]
+            set_visible: model.is_visible,
+            set_css_classes: &["loading-modal"],
+              
             gtk::Box {
                 set_hexpand: true,
                 set_vexpand: true,
-            },
-
-            add_overlay = &gtk::Box {
-                set_hexpand: true,
-                set_vexpand: true,
-                set_valign: gtk::Align::Fill,
-                set_halign: gtk::Align::Fill,
-                set_css_classes: &["loading-modal-overlay"],
-
-                #[watch]
-                set_visible: model.is_visible,
+                set_valign: gtk::Align::Center,
+                set_halign: gtk::Align::Center,
 
                 gtk::Box {
-                    set_hexpand: true,
-                    set_vexpand: true,
-                    set_valign: gtk::Align::Center,
-                    set_halign: gtk::Align::Center,
+                    set_orientation: gtk::Orientation::Vertical,
+                    set_spacing: 20,
+                    set_width_request: 320,
+                    set_height_request: 220,
 
                     gtk::Box {
-                        set_css_classes: &["loading-modal"],
                         set_orientation: gtk::Orientation::Vertical,
                         set_spacing: 20,
-                        set_width_request: 320,
-                        set_height_request: 220,
+                        set_valign: gtk::Align::Center,
+                        set_halign: gtk::Align::Center,
 
+                        gtk::Label {
+                            set_label: "🤖",
+                            set_css_classes: &["ai-icon"],
+                            set_halign: gtk::Align::Center,
+                        },
+
+                        gtk::Spinner {
+                            set_spinning: true,
+                            set_size_request: (40, 40),
+                            set_halign: gtk::Align::Center,
+                        },
+                        
                         gtk::Box {
                             set_orientation: gtk::Orientation::Vertical,
-                            set_spacing: 20,
-                            set_valign: gtk::Align::Center,
+                            set_spacing: 8,
                             set_halign: gtk::Align::Center,
 
                             gtk::Label {
-                                set_label: "🤖",
-                                set_css_classes: &["ai-icon"],
-                                set_halign: gtk::Align::Center,
-                            },
-
-                            gtk::Spinner {
-                                set_spinning: true,
-                                set_size_request: (40, 40),
+                                set_label: "Generando contenido",
+                                set_css_classes: &["loading-title"],
                                 set_halign: gtk::Align::Center,
                             },
                             
-                            gtk::Box {
-                                set_orientation: gtk::Orientation::Vertical,
-                                set_spacing: 8,
+                            gtk::Label {
+                                set_label: "La IA está trabajando en tu solicitud...",
+                                set_css_classes: &["loading-subtitle"],
                                 set_halign: gtk::Align::Center,
-
-                                gtk::Label {
-                                    set_label: "Generando contenido",
-                                    set_css_classes: &["loading-title"],
-                                    set_halign: gtk::Align::Center,
-                                },
-                                
-                                gtk::Label {
-                                    set_label: "La IA está trabajando en tu solicitud...",
-                                    set_css_classes: &["loading-subtitle"],
-                                    set_halign: gtk::Align::Center,
-                                },
                             },
-                        }
+                        },
                     }
                 }
+                
             }
         }
     }
