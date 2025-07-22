@@ -557,6 +557,10 @@ impl Microservice {
                         log_clone.log("Error obteniendo lock de documents para write");
                     }
                 }
+                MicroserviceMessage::Prompt { line, offset, prompt, file, content } => {
+                    
+
+                },
                 MicroserviceMessage::Error(_) => {}
                 _ => {}
             }
