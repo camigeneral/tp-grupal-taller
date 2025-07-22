@@ -196,9 +196,6 @@ impl SimpleComponent for AppModel {
                 #[watch]
                 set_visible: !model.is_logged_in
             },
-
-            append: model.loading_modal.widget(),
-
         },
 
     }
@@ -221,7 +218,8 @@ impl SimpleComponent for AppModel {
             .launch(()) 
             .detach();
 
-        let loading_modal = LoadingModalModel::builder().launch(()).detach();
+        let loading_modal = LoadingModalModel::builder()
+        .transient_for(&root).launch(()).detach();
 
         let header_model = NavbarModel::builder().launch(()).forward(
             sender.input_sender(),
@@ -415,7 +413,8 @@ impl SimpleComponent for AppModel {
                         "PROMPT|{}|{}|{}|{}|{}",
                         doc_info.index, doc_info.value, doc_info.file, doc_info.prompt, doc_info.offset
                     );
-                    sender.input(AppMsg::ExecuteCommand);
+                    self.loading_modal.emit(LoadingModalMsg::Show);
+                    //sender.input(AppMsg::ExecuteCommand);
                     return;
                 } else {
                     self.command = format!(
@@ -552,7 +551,6 @@ impl SimpleComponent for AppModel {
             }
 
             AppMsg::ReloadFile(file_id, content) => {
-                // Determinar el tipo de archivo basado en la extensión
                 let file_type = if file_id.ends_with(".xlsx") {
                     FileType::Sheet
                 } else {
@@ -560,7 +558,6 @@ impl SimpleComponent for AppModel {
                 };
                 let mut doc_file = DocumentValueInfo::new(content, 0);
                 doc_file.decode_text();
-                // Actualizar directamente el FileWorkspace con el nuevo contenido
                 self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(
                     file_id.clone(),
                     "1".to_string(), // qty_subs
