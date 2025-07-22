@@ -129,7 +129,7 @@ impl Microservice {
         ));
         let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
 
-        self.connect_to_llm()?;
+        //self.connect_to_llm()?;
         let redis_socket = socket.try_clone()?;
         let redis_socket_clone_for_hashmap = socket.try_clone()?;
 
@@ -579,8 +579,7 @@ impl Microservice {
                         log_clone.log("Error obteniendo lock de documents para write");
                     }
                 }
-                MicroserviceMessage::Prompt { line, offset, prompt, file, content } => {
-
+                MicroserviceMessage::Prompt { line, offset, prompt, file, content } => {                    
 
                 },
                 MicroserviceMessage::Error(_) => {}
