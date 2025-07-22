@@ -413,7 +413,7 @@ impl SimpleComponent for AppModel {
                 if !doc_info.prompt.is_empty() {
                     self.command = format!(
                         "PROMPT|{}|{}|{}|{}|{}",
-                        doc_info.index, doc_info.value, doc_info.timestamp, doc_info.file, doc_info.prompt
+                        doc_info.index, doc_info.value, doc_info.file, doc_info.prompt, doc_info.offset
                     );
                     sender.input(AppMsg::ExecuteCommand);
                     return;
