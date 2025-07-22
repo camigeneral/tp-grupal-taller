@@ -2,11 +2,11 @@ extern crate serde_json;
 extern crate curl;
 
 use std::net::{TcpListener, TcpStream};
-
 use curl::easy::{Easy, List};
 use serde_json::json;
 
-fn handle_requests(mut stream: TcpStream)  {
+
+fn get_gemini_respond() -> Vec<u8> {
     let api_key = "_";
 
     let body = json!({
@@ -47,10 +47,12 @@ fn handle_requests(mut stream: TcpStream)  {
         transfer.perform().unwrap();
     }
 
-    let response_str = String::from_utf8_lossy(&response_data);
-    println!("Respuesta completa:\n{}", response_str);
+    response_data.clone()
+}
 
-    // Extraer solo la respuesta de Gemini, manejando posibles errores
+fn handle_requests(mut stream: TcpStream)  {
+    let gemini_resp = &get_gemini_respond();
+    let response_str = String::from_utf8_lossy(gemini_resp);
     match serde_json::from_str::<serde_json::Value>(&response_str) {
         Ok(parsed) => {
             if let Some(text) = parsed["candidates"]
