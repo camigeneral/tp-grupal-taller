@@ -132,8 +132,7 @@ impl SimpleComponent for FileWorkspace {
                     }
                     FileEditorOutputMessage::SendPrompt(doc) => {
                         FileWorkspaceMsg::SendPrompt(doc)
-                    }
-                    _ => {FileWorkspaceMsg::Ignore}
+                    }                    
                 },
             );
 
