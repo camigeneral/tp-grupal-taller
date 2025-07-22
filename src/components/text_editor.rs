@@ -25,6 +25,7 @@ pub struct TextEditorModel {
     prompt: String,
     programmatic_update: Rc<RefCell<bool>>, // Shared reference
     cursor_position: Rc<RefCell<Option<(i32, i32)>>>, // línea y offset
+    selection_mode: SelectionMode,
 }
 
 /// Enum que define los posibles mensajes que el editor de archivos puede recibir.
@@ -35,7 +36,16 @@ pub enum TextEditorMessage {
     SetPrompt(String),
     SendPrompt,
     ResetEditor,
+    SetSelectionMode(SelectionMode)
+
 }
+
+#[derive(Debug, Clone, PartialEq)]
+enum SelectionMode {
+    Cursor,
+    WholeFile,
+}
+
 
 /// Enum que define los posibles mensajes de salida del editor de archivos.
 #[derive(Debug)]
@@ -43,7 +53,7 @@ pub enum TextEditorOutputMessage {
     /// Mensaje que indica que se debe volver a la vista anterior.
     GoBack,
     ContentAdded(DocumentValueInfo),
-    SendPrompt(DocumentValueInfo)
+    SendPrompt(DocumentValueInfo),
 }
 
 #[relm4::component(pub)]
@@ -68,6 +78,23 @@ impl SimpleComponent for TextEditorModel {
                         sender.input(TextEditorMessage::SetPrompt(entry.text().to_string()));
                     }
                 },
+                #[name = "mode_dropdown"]
+                gtk::DropDown::from_strings(&["Posición cursor", "Todo el archivo"]) {
+                    set_selected: match model.selection_mode {
+                        SelectionMode::Cursor => 0,
+                        SelectionMode::WholeFile => 1,
+                    },
+                    connect_selected_notify[sender] => move |dropdown| {
+                        let index = dropdown.selected();
+                        let mode = match index {
+                            0 => SelectionMode::Cursor,
+                            1 => SelectionMode::WholeFile,
+                            _ => SelectionMode::Cursor,
+                        };
+                        sender.input(TextEditorMessage::SetSelectionMode(mode));
+                    }
+                },
+
                 gtk::Button {
                     set_label: "Generar con IA",
                     connect_clicked[sender] => move |_| {
@@ -112,6 +139,7 @@ impl SimpleComponent for TextEditorModel {
             programmatic_update: programmatic_update.clone(),
             cursor_position: cursor_position.clone(),
             buffer: gtk::TextBuffer::new(None),
+            selection_mode: SelectionMode::Cursor,
         };
 
         model.buffer = gtk::TextBuffer::builder().text(&model.content).build();
@@ -181,6 +209,9 @@ impl SimpleComponent for TextEditorModel {
                     document.file = self.file_name.clone();
                     let _ =  sender.output(TextEditorOutputMessage::SendPrompt(document));                    
                 }
+            }
+            TextEditorMessage::SetSelectionMode(mode) => {
+                self.selection_mode = mode;
             }
             TextEditorMessage::SetPrompt(prompt) => {
                 self.prompt = prompt;
