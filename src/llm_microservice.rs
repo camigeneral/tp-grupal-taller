@@ -1,10 +1,12 @@
 extern crate serde_json;
 extern crate curl;
 
+use std::net::{TcpListener, TcpStream};
+
 use curl::easy::{Easy, List};
 use serde_json::json;
 
-fn handle_requests()  {
+fn handle_requests(mut stream: TcpStream)  {
     let api_key = "_";
 
     let body = json!({
@@ -66,6 +68,18 @@ fn handle_requests()  {
         }
     }
 }
-fn main() {
-   
+fn main() -> std::io::Result<()> {
+   let listener = TcpListener::bind("127.0.0.4030")?;
+   println!("Servidor para la llm levantado");
+   for stream in listener.incoming() {
+    match stream {
+        Ok(stream) => {
+            handle_requests(stream);
+        }
+        Err(e) => {
+            println!("error: {}", e);
+        }
+    }
+   }
+   Ok(())
 }
