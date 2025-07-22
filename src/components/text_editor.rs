@@ -41,7 +41,7 @@ pub enum TextEditorMessage {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum SelectionMode {
+pub enum SelectionMode {
     Cursor,
     WholeFile,
 }
