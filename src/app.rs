@@ -410,8 +410,8 @@ impl SimpleComponent for AppModel {
 
             AppMsg::SendPrompt(doc_info) => {
                 self.command = format!(
-                    "PROMPT|{}|{}|{}|{}|{}",
-                    doc_info.index, doc_info.value, doc_info.file, doc_info.prompt, doc_info.offset
+                    "PROMPT|{}|{}|{}|{}|{}|{}",
+                    doc_info.index, doc_info.value, doc_info.file, doc_info.prompt, doc_info.offset, doc_info.selection_mode
                 );
                 self.loading_modal.emit(LoadingModalMsg::Show);
                 sender.input(AppMsg::ExecuteCommand);

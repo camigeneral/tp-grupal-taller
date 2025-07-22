@@ -25,6 +25,7 @@ pub enum MicroserviceMessage {
         prompt: String,        
         file: String,
         content: String,
+        selection_mode: String,
     },
     Error(String),
     Unknown(String),
@@ -62,12 +63,14 @@ impl MicroserviceMessage {
                 let file = parts[3].to_string();
                 let prompt = parts[4].to_string();
                 let offset = parts[5].to_string();
+                let selection_mode = parts[6].to_string();
                 MicroserviceMessage::Prompt { 
                     line, 
                     offset, 
                     prompt, 
                     file,
-                    content 
+                    content,
+                    selection_mode
                 }             
             },
 
