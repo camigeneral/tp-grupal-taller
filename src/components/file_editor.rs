@@ -136,7 +136,7 @@ impl SimpleComponent for FileEditorModel {
                     FileEditorMessage::ContentAdded(doc_info)
                 }
                 TextEditorOutputMessage::SendPrompt(doc_info) => {
-                    FileEditorMessage::ContentAdded(doc_info)
+                    FileEditorMessage::SendPrompt(doc_info)
                 }
             });
 
