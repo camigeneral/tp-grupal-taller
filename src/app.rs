@@ -414,7 +414,7 @@ impl SimpleComponent for AppModel {
                     doc_info.index, doc_info.value, doc_info.file, doc_info.prompt, doc_info.offset
                 );
                 self.loading_modal.emit(LoadingModalMsg::Show);
-                //sender.input(AppMsg::ExecuteCommand);
+                sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::AddContent(doc_info) => {
                 println!("Doc info: {:#?}", doc_info);            
