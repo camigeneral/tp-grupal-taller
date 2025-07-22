@@ -4,7 +4,7 @@ extern crate curl;
 use curl::easy::{Easy, List};
 use serde_json::json;
 
-fn main() {
+fn handle_requests()  {
     let api_key = "_";
 
     let body = json!({
@@ -65,4 +65,7 @@ fn main() {
             println!("Error al parsear la respuesta JSON: {e}");
         }
     }
+}
+fn main() {
+   
 }
