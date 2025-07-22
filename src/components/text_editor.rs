@@ -1,5 +1,6 @@
 extern crate gtk4;
 extern crate relm4;
+
 use self::gtk4::prelude::{
     BoxExt, Cast, EventControllerExt, OrientableExt, TextBufferExt, TextViewExt, WidgetExt, EditableExt, ButtonExt
 };
@@ -44,6 +45,15 @@ pub enum TextEditorMessage {
 pub enum SelectionMode {
     Cursor,
     WholeFile,
+}
+
+impl ToString for SelectionMode {
+    fn to_string(&self) -> String {
+        match self {
+            SelectionMode::Cursor => "cursor".to_string(),
+            SelectionMode::WholeFile=> "whole-file".to_string(),            
+        }
+    }
 }
 
 
@@ -207,6 +217,7 @@ impl SimpleComponent for TextEditorModel {
                     document.offset = offset;
                     document.prompt = self.prompt.clone();
                     document.file = self.file_name.clone();
+                    document.selection_mode = self.selection_mode.to_string();
                     let _ =  sender.output(TextEditorOutputMessage::SendPrompt(document));                    
                 }
             }
