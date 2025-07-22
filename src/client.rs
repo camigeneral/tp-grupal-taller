@@ -239,24 +239,36 @@ impl LocalClient {
         if parts.is_empty() {
             return String::new();
         }
+    
         let cmd = parts[0];
-        if cmd.eq_ignore_ascii_case("AUTH")
-            || cmd.eq_ignore_ascii_case("subscribe")
-            || cmd.eq_ignore_ascii_case("unsubscribe")
-            || cmd.eq_ignore_ascii_case("get_files")
-            || cmd.eq_ignore_ascii_case("set")
-        {
-            format_resp_command(&parts)
-        } else if cmd.to_uppercase().contains("WRITE") {
-            let splited_command: Vec<&str> = command.split('|').collect();
-            let client_command = format_resp_command(&splited_command).to_string();
-            let key = splited_command.get(4).unwrap_or(&"");
-            format_resp_publish(key, &client_command)
-        } else {
-            let key = parts.get(1).unwrap_or(&"");
-            format_resp_publish(key, command)
+    
+        const SIMPLE_COMMANDS: [&str; 5] = ["AUTH", "SUBSCRIBE", "UNSUBSCRIBE", "GET_FILES", "SET"];
+    
+        if SIMPLE_COMMANDS.iter().any(|c| cmd.eq_ignore_ascii_case(c)) {
+            return format_resp_command(&parts);
         }
+    
+        let cmd_upper = cmd.to_ascii_uppercase();
+    
+        if cmd_upper.contains("WRITE") {
+            let splited_command: Vec<&str> = command.split('|').collect();
+            let client_command = format_resp_command(&splited_command);
+            let key = splited_command.get(4).unwrap_or(&"");
+            return format_resp_publish(key, &client_command);
+        }
+    
+        if cmd_upper.contains("PROMPT") {
+            println!("command: {:#?}", command);
+            let splited_command: Vec<&str> = command.split('|').collect();
+            let client_command = format_resp_command(&splited_command);
+            let key = splited_command.get(3).unwrap_or(&"");
+            return format_resp_publish(key, &client_command);
+        }
+    
+        let key = parts.get(1).unwrap_or(&"");
+        format_resp_publish(key, command)
     }
+    
 
     /// Actualiza el último comando enviado, almacenándolo de forma segura.
     ///
