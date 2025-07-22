@@ -50,6 +50,7 @@ pub enum FileWorkspaceMsg {
     AddFile(String, FileType),
 
     UpdateFile(DocumentValueInfo),
+    SendPrompt(DocumentValueInfo),
     ContentAddedSpreadSheet(DocumentValueInfo),
     UpdateFilesList(Vec<(String, FileType)>),
 }
@@ -60,6 +61,7 @@ pub enum FileWorkspaceOutputMessage {
     UnsubscribeFile(String),
     ContentAdded(DocumentValueInfo),
     ContentAddedSpreadSheet(DocumentValueInfo),
+    SendPrompt(DocumentValueInfo),
     FilesLoaded,
 }
 
@@ -128,6 +130,9 @@ impl SimpleComponent for FileWorkspace {
                     FileEditorOutputMessage::ContentAddedSpreadSheet(doc_info) => {
                         FileWorkspaceMsg::ContentAddedSpreadSheet(doc_info)
                     }
+                    FileEditorOutputMessage::SendPrompt(doc) => {
+                        FileWorkspaceMsg::SendPrompt(doc)
+                    }
                     _ => {FileWorkspaceMsg::Ignore}
                 },
             );
@@ -159,7 +164,9 @@ impl SimpleComponent for FileWorkspace {
             FileWorkspaceMsg::ContentAdded(doc_info) => {
                 let _ = sender.output(FileWorkspaceOutputMessage::ContentAdded(doc_info));
             }
-
+            FileWorkspaceMsg::SendPrompt(doc_info) => {
+                let _ = sender.output(FileWorkspaceOutputMessage::SendPrompt(doc_info));
+            }
             FileWorkspaceMsg::SubscribeFile(file) => {
                 sender
                     .output(FileWorkspaceOutputMessage::SubscribeFile(file.clone()))

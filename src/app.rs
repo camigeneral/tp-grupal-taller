@@ -84,6 +84,7 @@ pub enum AppMsg {
     FilesLoaded,
     ReloadFile(String, String),
     AddFile(String),
+    SendPrompt(DocumentValueInfo)
 }
 
 #[relm4::component(pub)]
@@ -241,6 +242,7 @@ impl SimpleComponent for AppModel {
                     AppMsg::AddContentSpreadSheet(doc_info)
                 }
                 FileWorkspaceOutputMessage::FilesLoaded => AppMsg::FilesLoaded,
+                FileWorkspaceOutputMessage::SendPrompt(doc_info) => AppMsg::SendPrompt(doc_info)
             },
         );
 
@@ -405,23 +407,22 @@ impl SimpleComponent for AppModel {
                 self.command = format!("set {} {}", file_id, content);
                 sender.input(AppMsg::ExecuteCommand);
             }
-            AppMsg::AddContent(doc_info) => {
-                println!("Doc info: {:#?}", doc_info);
 
-                if !doc_info.prompt.is_empty() {
-                    self.command = format!(
-                        "PROMPT|{}|{}|{}|{}|{}",
-                        doc_info.index, doc_info.value, doc_info.file, doc_info.prompt, doc_info.offset
-                    );
-                    self.loading_modal.emit(LoadingModalMsg::Show);
-                    //sender.input(AppMsg::ExecuteCommand);
-                    return;
-                } else {
-                    self.command = format!(
-                        "WRITE|{}|{}|{}|{}",
-                        doc_info.index, doc_info.value, doc_info.timestamp, doc_info.file
-                    );
-                }            
+            AppMsg::SendPrompt(doc_info) => {
+                self.command = format!(
+                    "PROMPT|{}|{}|{}|{}|{}",
+                    doc_info.index, doc_info.value, doc_info.file, doc_info.prompt, doc_info.offset
+                );
+                self.loading_modal.emit(LoadingModalMsg::Show);
+                //sender.input(AppMsg::ExecuteCommand);
+            }
+            AppMsg::AddContent(doc_info) => {
+                println!("Doc info: {:#?}", doc_info);            
+                self.command = format!(
+                    "WRITE|{}|{}|{}|{}",
+                    doc_info.index, doc_info.value, doc_info.timestamp, doc_info.file
+                );
+
                 sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::AddContentSpreadSheet(doc_info) => {
