@@ -27,6 +27,14 @@ pub enum MicroserviceMessage {
         content: String,
         selection_mode: String,
     },
+
+    PromptResponse {
+        line: String,                
+        file: String,
+        response: String,       
+        selection_mode: String,
+ 
+    },
     Error(String),
     Unknown(String),
 }
@@ -37,6 +45,7 @@ impl MicroserviceMessage {
             return MicroserviceMessage::Unknown("Empty message".to_string());
         }
 
+        println!("parts: {:#?}", parts);
         match parts[0].to_uppercase().as_str() {
             "CLIENT-SUBSCRIBED" if parts.len() >= 3 => MicroserviceMessage::ClientSubscribed {
                 document: parts[1].clone(),
@@ -56,6 +65,20 @@ impl MicroserviceMessage {
                     content,
                     file,
                 }
+            }    
+            "LLM-RESPONSE" if parts.len() >= 2 => {
+
+                if parts.len() == 3 {                    
+                    let response = parts[2].to_string();
+                    let file = parts[1].to_string();    
+                    return MicroserviceMessage::PromptResponse { line: "0".to_string(), file, response, selection_mode: "whole-file".to_string() } ;
+                } else {
+                    let response = parts[3].to_string();
+                    let line_parts : Vec<&str> = parts[2].split(':').collect();
+                    let file = parts[1].to_string();    
+                    return MicroserviceMessage::PromptResponse { line: line_parts[1].to_string(), file, response, selection_mode: "whole-file".to_string() } ;
+                }
+                
             }
             "PROMPT" if parts.len() >= 3 => {
                 let line = parts[1].to_string();
