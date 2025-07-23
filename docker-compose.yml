@@ -1,34 +1,33 @@
 services:
-  node1:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: redis_node1
-    command: ["4000"]
+  redis-node-0:
+    image: redis-node
+    container_name: redis-node-0
+    working_dir: /usr/local/bin
     ports:
-      - "7001:4000"
-    networks: [rediscluster]
+      - "4000:4000"
+    volumes:
+      - ./redis_server/conf_files:/usr/local/bin/redis_server/conf_files
+      - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
+    command: ["redis_server_bin", "4000"]
 
-  node2:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: redis_node2
-    command: ["4001"]
+  redis-node-1:
+    image: redis-node
+    container_name: redis-node-1
+    working_dir: /usr/local/bin
     ports:
-      - "7002:4001"
-    networks: [rediscluster]
+      - "4001:4001"
+    volumes:
+      - ./redis_server/conf_files:/usr/local/bin/redis_server/conf_files
+      - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
+    command: ["redis_server_bin", "4001"]
 
-  node3:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: redis_node3
-    command: ["4002"]
+  redis-node-2:
+    image: redis-node
+    container_name: redis-node-2
+    working_dir: /usr/local/bin
     ports:
-      - "7003:4002"
-    networks: [rediscluster]
-
-networks:
-  rediscluster:
-    driver: bridge
+      - "4002:4002"
+    volumes:
+      - ./redis_server/conf_files:/usr/local/bin/redis_server/conf_files
+      - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
+    command: ["redis_server_bin", "4002"]

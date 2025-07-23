@@ -16,8 +16,8 @@ FROM alpine:latest
 
 RUN apk add --no-cache ca-certificates
 
-COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/redis_server /usr/local/bin/redis_server
+COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/redis_server /usr/local/bin/redis_server_bin
 
-COPY redis_server/conf_files /usr/local/bin/conf_files
+COPY redis_server/conf_files /usr/local/bin/redis_server/conf_files
 
-CMD ["redis_server", "4000"]
+CMD ["redis_server_bin", "4000"]

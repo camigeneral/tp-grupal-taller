@@ -1,6 +1,6 @@
 extern crate rusty_docs;
 use rusty_docs::resp_parser::{parse_replica_command, write_response, CommandResponse};
-use rusty_docs::utils::get_resource_path;
+use utils::get_resource_path;
 use crate::persist_documents;
 use commands::redis;
 use encryption::{encrypt_message, ENCRYPTION, KEY};
@@ -32,15 +32,15 @@ pub enum RedisMessage {
 
 pub fn get_config_path(port: usize) -> Result<String, std::io::Error> {
     let file_name = match port {
-        4000 => "conf_files/redis0.conf",
-        4001 => "conf_files/redis1.conf",
-        4002 => "conf_files/redis2.conf",
-        4003 => "conf_files/redis3.conf",
-        4004 => "conf_files/redis4.conf",
-        4005 => "conf_files/redis5.conf",
-        4006 => "conf_files/redis6.conf",
-        4007 => "conf_files/redis7.conf",
-        4008 => "conf_files/redis8.conf",
+        4000 => "redis_server/conf_files/redis0.conf",
+        4001 => "redis_server/conf_files/redis1.conf",
+        4002 => "redis_server/conf_files/redis2.conf",
+        4003 => "redis_server/conf_files/redis3.conf",
+        4004 => "redis_server/conf_files/redis4.conf",
+        4005 => "redis_server/conf_files/redis5.conf",
+        4006 => "redis_server/conf_files/redis6.conf",
+        4007 => "redis_server/conf_files/redis7.conf",
+        4008 => "redis_server/conf_files/redis8.conf",
         _ => {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -52,28 +52,6 @@ pub fn get_config_path(port: usize) -> Result<String, std::io::Error> {
     Ok(get_resource_path(file_name))
 }
 
-
-// pub fn get_config_path(port: usize) -> Result<String, std::io::Error> {
-//     let config_path = match port {
-//         4000 => "redis_server/conf_files/redis0.conf",
-//         4001 => "redis_server/conf_files/redis1.conf",
-//         4002 => "redis_server/conf_files/redis2.conf",
-//         4003 => "redis_server/conf_files/redis3.conf",
-//         4004 => "redis_server/conf_files/redis4.conf",
-//         4005 => "redis_server/conf_files/redis5.conf",
-//         4006 => "redis_server/conf_files/redis6.conf",
-//         4007 => "redis_server/conf_files/redis7.conf",
-//         4008 => "redis_server/conf_files/redis8.conf",
-//         _ => {
-//             return Err(std::io::Error::new(
-//                 std::io::ErrorKind::InvalidData,
-//                 "Port not recognized",
-//             ))
-//         }
-//     };
-
-//     Ok(config_path.to_string())
-// }
 
 pub fn create_local_node(port: usize) -> Result<Arc<Mutex<LocalNode>>, std::io::Error> {
     let config_path = get_config_path(port)?;
@@ -101,7 +79,6 @@ pub fn start_node_connection(
     let cloned_nodes = Arc::clone(peer_nodes);
 
     let config_path = get_config_path(port)?;
-
     let cloned_local_node = Arc::clone(local_node);
     let cloned_document_subscribers = Arc::clone(document_subscribers);
     let cloned_shared_documents = Arc::clone(shared_documents);
