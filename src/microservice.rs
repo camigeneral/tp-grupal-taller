@@ -82,7 +82,7 @@ impl Microservice {
         })
     }
 
-    fn connect_to_llm(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    fn connect_to_llm(&mut self, microservice_socket: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
         let llm_address = format!("127.0.0.1:4030");
         let (tx, rx) = channel::<String>();
 
@@ -94,15 +94,30 @@ impl Microservice {
         thread::spawn(move || {
             let mut socket = TcpStream::connect(llm_address.clone()).expect("No se pudo conectar al LLM");
             let mut reader = BufReader::new(socket.try_clone().unwrap());
-        
+
             for prompt in rx {
+                let mut socket_clone: TcpStream = microservice_socket.try_clone().unwrap();
+
                 socket.write_all(prompt.as_bytes()).unwrap();                
-        
+            
                 let mut response = String::new();
-                reader.read_line(&mut response).unwrap(); 
-        
-                println!("Respuesta del LLM: {}", response.trim());
+                reader.read_line(&mut response).unwrap();  
+                
+                let parts: Vec<&str> = response.split(' ').collect();
+                let document = parts[1];
+                let message = redis_parser::format_resp_command(&parts);
+                let resp = redis_parser::format_resp_publish(document, &message);                
+                if let Err(e) = socket_clone.write_all(resp.as_bytes()) {
+                    println!(
+                        "Error al enviar mensaje de actualizacion de archivo: {}",
+                        e
+                    );
+                } else {
+                    let _ = socket_clone.flush();
+                }
+                println!("Respuesta del LLM: {}", resp);
             }
+            
         });
         
 
@@ -137,8 +152,8 @@ impl Microservice {
             main_address
         ));
         let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
-
-        self.connect_to_llm()?;
+        let redis_socket_for_llm = socket.try_clone()?;
+        self.connect_to_llm(redis_socket_for_llm)?;
         let redis_socket = socket.try_clone()?;
         let redis_socket_clone_for_hashmap = socket.try_clone()?;
 
