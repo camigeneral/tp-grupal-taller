@@ -139,6 +139,10 @@ fn handle_requests(mut stream: TcpStream) {
             }
             Ok(_) => {
                 println!("Prompt recibido: {}", input_prompt.trim());
+                if input_prompt.trim().is_empty() {
+                    println!("Prompt vacio: {}", input_prompt.trim());
+                    break;
+                }
                 let gemini_resp = get_gemini_respond(input_prompt.trim());
                 let response_str = String::from_utf8_lossy(&gemini_resp);
 
@@ -150,7 +154,8 @@ fn handle_requests(mut stream: TcpStream) {
                             .and_then(|p| p["text"].as_str())
                         {
                             println!("Respuesta: {}", text);
-                            if let Err(e) = stream.write_all(format!("{text}\n").as_bytes()) {
+                            let resp = text.trim().trim_end_matches("\n");
+                            if let Err(e) = stream.write_all(format!("{resp}\n").as_bytes()) {
                                 eprintln!("Error escribiendo al cliente: {}", e);
                                 break;
                             }
