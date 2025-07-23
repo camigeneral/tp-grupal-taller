@@ -45,7 +45,6 @@ impl MicroserviceMessage {
             return MicroserviceMessage::Unknown("Empty message".to_string());
         }
 
-        println!("parts: {:#?}", parts);
         match parts[0].to_uppercase().as_str() {
             "CLIENT-SUBSCRIBED" if parts.len() >= 3 => MicroserviceMessage::ClientSubscribed {
                 document: parts[1].clone(),
@@ -67,7 +66,6 @@ impl MicroserviceMessage {
                 }
             }    
             "LLM-RESPONSE" if parts.len() >= 2 => {
-
                 if parts.len() == 3 {                    
                     let response = parts[2].to_string();
                     let file = parts[1].to_string();    
@@ -76,7 +74,7 @@ impl MicroserviceMessage {
                     let response = parts[3].to_string();
                     let line_parts : Vec<&str> = parts[2].split(':').collect();
                     let file = parts[1].to_string();    
-                    return MicroserviceMessage::PromptResponse { line: line_parts[1].to_string(), file, response, selection_mode: "whole-file".to_string() } ;
+                    return MicroserviceMessage::PromptResponse { line: line_parts[1].to_string(), file, response, selection_mode: "cursor".to_string() } ;
                 }
                 
             }
