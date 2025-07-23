@@ -5,6 +5,7 @@ use std::io::Write;
 use std::net::TcpListener;
 use std::net::TcpStream;
 use std::io::BufRead;
+use std::io::BufWriter;
 #[allow(unused_imports)]
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
@@ -94,31 +95,56 @@ impl Microservice {
         thread::spawn(move || {
             let mut socket = TcpStream::connect(llm_address.clone()).expect("No se pudo conectar al LLM");
             let mut reader = BufReader::new(socket.try_clone().unwrap());
-
+            let mut socket_clone = BufWriter::new(microservice_socket.try_clone().unwrap());
+        
             for prompt in rx {
-                let mut socket_clone: TcpStream = microservice_socket.try_clone().unwrap();
-
-                socket.write_all(prompt.as_bytes()).unwrap();                
-            
+                let prompt = format!("{}\n", prompt);
+                if let Err(e) = socket.write_all(prompt.as_bytes()) {
+                    eprintln!("Error escribiendo al LLM: {}", e);
+                    break;
+                }
+                if let Err(e) = socket.flush() {
+                    eprintln!("Error flusheando al LLM: {}", e);
+                    break;
+                }
+        
                 let mut response = String::new();
-                reader.read_line(&mut response).unwrap();  
-                
-                let parts: Vec<&str> = response.split(' ').collect();
+                if let Err(e) = reader.read_line(&mut response) {
+                    eprintln!("Error leyendo del LLM: {}", e);
+                    break;
+                }
+        
+                let parts: Vec<&str> = response.split(' ')
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+        
+                if parts.len() < 2 {
+                    eprintln!("Respuesta malformada del LLM: {:?}", response);
+                    continue;
+                }
+        
                 let document = parts[1];
                 let message = redis_parser::format_resp_command(&parts);
-                let resp = redis_parser::format_resp_publish(document, &message);                
+                let resp = redis_parser::format_resp_publish(document, &message);
+        
                 if let Err(e) = socket_clone.write_all(resp.as_bytes()) {
-                    println!(
-                        "Error al enviar mensaje de actualizacion de archivo: {}",
-                        e
-                    );
+                    eprintln!("Error escribiendo a Redis (socket_clone): {}", e);
+                    break;
                 } else {
-                    let _ = socket_clone.flush();
+                    println!("Escribiendo: {resp}");
                 }
-                println!("Respuesta del LLM: {}", resp);
+                if let Err(e) = socket_clone.flush() {
+                    eprintln!("Error flusheando a Redis (socket_clone): {}", e);
+                    break;
+                }
+        
+                println!("Respuesta del LLM reenviada a Redis: {}", resp);
             }
-            
+        
+            println!("Loop de comunicación con LLM terminado.");
         });
+        
         
 
         Ok(())
@@ -644,6 +670,25 @@ impl Microservice {
                         }
                     }
                 },
+                MicroserviceMessage::PromptResponse { line, file, response, selection_mode } => {
+                    println!("entro aca: response {response}, selection_mode_ {selection_mode}");
+                    if let Ok(mut docs) = documents.lock() {
+                        if let Some(document) = docs.get_mut(&file) {
+                            match document {
+                                Document::Text(_lines) => {
+                                    if selection_mode == "whole-file" {
+                                        let mut new_lines = Vec::new();                                        
+                                        new_lines.extend(response.split("<enter>").map(String::from));
+                                        docs.insert(file, Document::Text(new_lines.to_vec()));                                        
+                                    }
+                                }                                
+                                _ => {}
+                            }
+
+                            
+                        }
+                    }
+                }
                 MicroserviceMessage::Error(_) => {}
                 _ => {}
             }
