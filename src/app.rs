@@ -86,7 +86,8 @@ pub enum AppMsg {
     FilesLoaded,
     ReloadFile(String, String),
     AddFile(String),
-    SendPrompt(DocumentValueInfo)
+    SendPrompt(DocumentValueInfo),
+    UpdateAllFileData(String, Vec<String>)
 }
 
 #[relm4::component(pub)]
@@ -411,8 +412,8 @@ impl SimpleComponent for AppModel {
 
             AppMsg::SendPrompt(doc_info) => {
                 self.command = format!(
-                    "PROMPT|{}|{}|{}|{}|{}|{}",
-                    doc_info.index, doc_info.value, doc_info.file, doc_info.prompt, doc_info.offset, doc_info.selection_mode
+                    "PROMPT|{}|{}|{}|{}|{}",
+                    doc_info.index, doc_info.file, doc_info.prompt, doc_info.offset, doc_info.selection_mode
                 );
                 self.loading_modal.emit(LoadingModalMsg::Show);
                 sender.input(AppMsg::ExecuteCommand);
@@ -474,9 +475,23 @@ impl SimpleComponent for AppModel {
                 }
             }
             AppMsg::RefreshData(doc_info) => {
-                println!("doc a actualizar: {:#?}", doc_info);
                 self.files_manager_cont
                     .emit(FileWorkspaceMsg::UpdateFile(doc_info));
+            }
+
+            AppMsg::UpdateAllFileData(file, content) => {
+
+                let mut updated_content: Vec<String> = Vec::new();
+
+                for coded_text in content {
+                    let mut document = DocumentValueInfo::new(coded_text, 0);
+                    document.decode_text();
+                    updated_content.push(document.value.trim_end_matches('\r').to_string().clone());
+                }
+
+                self.loading_modal.emit(LoadingModalMsg::Hide);
+                self.files_manager_cont
+                    .emit(FileWorkspaceMsg::UpdateAllFileData(file, updated_content));
             }
 
             AppMsg::CloseApplication => {
