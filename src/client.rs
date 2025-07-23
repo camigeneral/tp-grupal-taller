@@ -455,21 +455,7 @@ impl LocalClient {
             }
         }
     }
-    /// Maneja respuestas de tipo FILES, actualizando la lista de archivos en la UI.
-    ///
-    /// # Argumentos
-    /// * `response` - Respuesta recibida.
-    /// * `ui_sender` - Canal para enviar mensajes a la UI.
-    fn handle_files(response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) {
-        let archivos = if response.len() > 1 {
-            response[1..].to_vec()
-        } else {
-            vec![]
-        };
-        if let Some(sender) = &ui_sender {
-            let _ = sender.send(AppMsg::UpdateFilesList(archivos));
-        }
-    }
+
     /// Maneja respuestas de tipo ERROR, mostrando mensajes de error en la UI.
     ///
     /// # Argumentos
@@ -576,8 +562,7 @@ impl LocalClient {
                 RedisClientResponseType::Status => {
                     Self::handle_status(response, local_addr.to_string(), cloned_ui_sender)
                 }
-                RedisClientResponseType::Write => Self::handle_write(response, cloned_ui_sender),
-                RedisClientResponseType::Files => Self::handle_files(response, cloned_ui_sender),
+                RedisClientResponseType::Write => Self::handle_write(response, cloned_ui_sender),                
                 RedisClientResponseType::Error => Self::handle_error(response, cloned_ui_sender),
                 RedisClientResponseType::Other => {
                     Self::handle_unknown(response, cloned_ui_sender, cloned_last_command.clone())

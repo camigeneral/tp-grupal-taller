@@ -62,8 +62,7 @@ pub type WriteClient<T> = Arc<Mutex<HashMap<String, T>>>;
 pub enum RedisClientResponseType {
     Ask,
     Status,
-    Write,
-    Files,
+    Write,    
     Error,
     Other,
 }
@@ -74,8 +73,7 @@ impl From<&str> for RedisClientResponseType {
         match s.to_uppercase().as_str() {
             "ASK" => Self::Ask,
             "STATUS" => Self::Status,
-            "WRITE" => Self::Write,
-            "FILES" => Self::Files,
+            "WRITE" => Self::Write,            
             s if s.starts_with("-ERR") => Self::Error,
             _ => Self::Other,
         }
