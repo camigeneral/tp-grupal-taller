@@ -23,8 +23,7 @@ pub enum MicroserviceMessage {
         line: String,
         offset: String,
         prompt: String,        
-        file: String,
-        content: String,
+        file: String,        
         selection_mode: String,
     },
 
@@ -79,18 +78,16 @@ impl MicroserviceMessage {
                 
             }
             "PROMPT" if parts.len() >= 3 => {
-                let line = parts[1].to_string();
-                let content = parts[2].to_string();
-                let file = parts[3].to_string();
-                let prompt = parts[4].to_string();
-                let offset = parts[5].to_string();
-                let selection_mode = parts[6].to_string();
+                let line = parts[1].to_string();                
+                let file = parts[2].to_string();
+                let prompt = parts[3].to_string();
+                let offset = parts[4].to_string();
+                let selection_mode = parts[5].to_string();
                 MicroserviceMessage::Prompt { 
                     line, 
                     offset, 
                     prompt, 
-                    file,
-                    content,
+                    file,                    
                     selection_mode
                 }             
             },
