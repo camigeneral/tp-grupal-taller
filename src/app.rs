@@ -4,6 +4,8 @@ use self::gtk4::{
     prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, PopoverExt, WidgetExt},
     CssProvider,
 };
+use std::fs;
+use std::collections::HashSet;
 use crate::components::structs::document_value_info::DocumentValueInfo;
 use crate::components::{
     error_modal::ErrorModal,
@@ -80,7 +82,7 @@ pub enum AppMsg {
     CreateSpreadsheetDocument,
     AddContent(DocumentValueInfo),
     AddContentSpreadSheet(DocumentValueInfo),
-    UpdateFilesList(Vec<String>),
+    UpdateFilesList,
     FilesLoaded,
     ReloadFile(String, String),
     AddFile(String),
@@ -383,8 +385,7 @@ impl SimpleComponent for AppModel {
                 }
             }
             AppMsg::GetFiles => {
-                self.command = "get_files redis".to_string();
-                sender.input(AppMsg::ExecuteCommand);
+                sender.input(AppMsg::UpdateFilesList);
             }
             AppMsg::ManageSubscribeResponse(file, qty_subs, content) => {
                 let file_type = if file.ends_with(".xlsx") {
@@ -534,8 +535,35 @@ impl SimpleComponent for AppModel {
                 ));
             }
 
-            AppMsg::UpdateFilesList(archivos) => {
-                let archivos_tipos: Vec<(String, FileType)> = archivos
+            AppMsg::UpdateFilesList => {
+                let mut doc_names: HashSet<String> = HashSet::new();
+                if let Ok(entries) = fs::read_dir("./rdb_files") {
+                    for entry in entries.map_while(Result::ok) {
+                        let path = entry.path();
+                        let fname = path
+                            .file_name()
+                            .and_then(|f| f.to_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if fname.starts_with("redis_node_") && fname.ends_with(".rdb") {
+                            if let Ok(file) = fs::File::open(&path) {
+                                use std::io::{BufRead, BufReader};
+                                let reader = BufReader::new(file);
+                                for line in reader.lines().flatten() {
+                                    if let Some((doc_name, _)) = line.split_once("/++/") {
+                                        if !doc_name.trim().is_empty() {
+                                            doc_names.insert(doc_name.trim().to_string());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            
+                let mut doc_names_vec: Vec<String> = doc_names.into_iter().collect();
+                doc_names_vec.sort();
+                let archivos_tipos: Vec<(String, FileType)> = doc_names_vec
                     .into_iter()
                     .filter(|name| !name.is_empty())
                     .map(|name| {
