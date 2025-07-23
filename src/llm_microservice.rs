@@ -13,18 +13,31 @@ fn get_gemini_respond(prompt: &str) -> Vec<u8> {
     let body = json!({
         "system_instruction": {
             "parts": [{
-                "text": "Respondé únicamente con la respuesta solicitada. No agregues introducciones, explicaciones, comentarios, aclaraciones ni conclusiones. \
-No uses frases como 'Claro', 'Aquí está', 'Como modelo de lenguaje', etc. \
-Respondé únicamente con el texto generado. \
-Usá <space> para representar espacios y <enter> para representar saltos de línea. \
-Insertá texto solo donde se indique.\n\
-Si es 'whole-file', significa que debés generar o modificar el contenido completo del documento según el nombre del mismo, SIN IMPORTAR QUE YA TENGA CONTENIDO, HAY QUE REEMPLAZARLO. \
-En ese caso, devolvé el texto entero modificado, respetando los saltos de línea usando <enter>. \
+                "text": "Respondé únicamente con la respuesta solicitada. No agregues introducciones, explicaciones, comentarios, aclaraciones ni conclusiones. 
+No uses frases como 'Claro', 'Aquí está', 'Como modelo de lenguaje', etc. 
+Respondé únicamente con el texto generado. 
+Usá <space> para representar espacios y <enter> para representar saltos de línea. 
+Insertá texto solo donde se indique.
+
+SI TE LLEGA UN OFFSET, ES POR CARACTER **DEL TEXTO YA DECODIFICADO**, ES DECIR: reemplazá <space> por un espacio, y <enter> por salto de línea, Y SOBRE ESE TEXTO, insertá la respuesta exactamente en el offset indicado.
+
+SI EL OFFSET ESTÁ EN MEDIO DE UNA PALABRA, SEPARÁ LA PALABRA EN DOS Y AGREGÁ <space> ANTES Y DESPUÉS DE TU RESPUESTA.
+
+Después de insertar, volvé a codificar el texto de salida con <space> y <enter>.
+
+Si es 'whole-file', significa que debés generar o modificar el contenido completo del documento según el nombre del mismo, SIN IMPORTAR QUE YA TENGA CONTENIDO, HAY QUE REEMPLAZARLO. 
+En ese caso, devolvé el texto entero modificado, respetando los saltos de línea usando <enter>. 
+EJEMPLO: 
+input_prompt: archivo:'receta.txt', linea: 2, offset: 3, contenido: 'hola<space>como<space>estan', prompt: 'dame una capital de un pais', aplicacion: 'cursor'
+→ respuesta esperada:
+LLM-RESPONSE|receta.txt|2|hol<space>Roma<space>a<space>como<space>estan
+
 IMPORTANTE: tenes que devolver la respuesta en el siguiente formato con las siguientes condiciones: 
-Si es whole-file, devolvelo asi LLM-RESPONSE|nombre_archivo|contenido_generado. 
-Si no es whole-file, devolvelo asi LLM-RESPONSE|nombre_archivo|linea|contenido_generado. 
-SIEMPRE RESPETA ESE FORMATO.
-Podés generar varios párrafos si es necesario, separados por <enter>."
+- Si es whole-file, devolvelo asi: `LLM-RESPONSE|nombre_archivo|contenido_generado` 
+- Si no es whole-file, devolvelo asi: `LLM-RESPONSE|nombre_archivo|linea|contenido_generado` 
+
+SIEMPRE RESPETA ESE FORMATO. Podés generar varios párrafos si es necesario, separados por <enter>.
+"
             }]
         },
         "contents": [{
@@ -63,8 +76,33 @@ Podés generar varios párrafos si es necesario, separados por <enter>."
 }
 
 fn handle_requests(mut stream: TcpStream) {
-    let mut reader = BufReader::new(stream.try_clone().unwrap());
+    
+    /* let input_prompt = "archivo:'receta.txt', linea: 2, offset: 5, contenido: 'hola<space>queondacomo<space>estan', prompt: 'generame una receta corta', aplicacion: 'whole-file'";
+    let gemini_resp = get_gemini_respond(input_prompt.trim());
+    let response_str = String::from_utf8_lossy(&gemini_resp);
 
+    match serde_json::from_str::<serde_json::Value>(&response_str) {
+        Ok(parsed) => {
+            if let Some(text) = parsed["candidates"]
+                .get(0)
+                .and_then(|c| c["content"]["parts"].get(0))
+                .and_then(|p| p["text"].as_str())
+            {
+                println!("Respuesta: {}", text);
+                /* if let Err(e) = stream.write_all(format!("{text}\n").as_bytes()) {
+                    eprintln!("Error escribiendo al cliente: {}", e);
+                    
+                } */
+            } else {
+                println!("Error: no se pudo extraer texto de Gemini");                            
+            }
+        }
+        Err(e) => {
+            println!("{}", format!("Error parseando JSON: {}\n", e));
+            
+        }} */
+
+    let mut reader = BufReader::new(stream.try_clone().unwrap());
     loop {
         let mut input_prompt = String::new();
         match reader.read_line(&mut input_prompt) {
@@ -110,6 +148,7 @@ fn handle_requests(mut stream: TcpStream) {
 fn main() -> std::io::Result<()> {
    let listener = TcpListener::bind("127.0.0.1:4030")?;
    println!("Servidor para la llm levantado");
+   //handle_requests();
    for stream in listener.incoming() {
     match stream {
         Ok(stream) => {
