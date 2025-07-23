@@ -138,7 +138,7 @@ impl Microservice {
         ));
         let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
 
-        //self.connect_to_llm()?;
+        self.connect_to_llm()?;
         let redis_socket = socket.try_clone()?;
         let redis_socket_clone_for_hashmap = socket.try_clone()?;
 
@@ -419,9 +419,10 @@ impl Microservice {
         if let Ok(peer_addr) = microservice_socket.peer_addr() {
             println!("Escuchando respuestas del nodo: {}", peer_addr);
         }
-
+        
         let mut reader = BufReader::new(microservice_socket.try_clone()?);
         loop {
+            let llm_sender_clone = llm_sender.clone();
             let (parts, _) = redis_parser::parse_resp_command(&mut reader)?;
             if parts.is_empty() {
                 break;
@@ -607,16 +608,21 @@ impl Microservice {
                             };
                             match document {
                                 Document::Text(lines) => {
-                                    let final_prompt;
-                                    let line =  lines[parsed_index].clone();
-                                    if selection_mode == "cursor" {                                    
-                                        final_prompt = format!("{line}|{prompt}|{offset}");
+                                    let content = if selection_mode == "whole-file" {
+                                        lines.join("<enter>")
                                     } else {
-                                        final_prompt = format!("whole-file|{prompt}|");
-                                    }           
-                                    
-                                    println!("final_prompt {final_prompt}");                         
-                                }
+                                        lines.get(parsed_index - 1).cloned().unwrap_or_default()
+                                    };                            
+                                    let final_prompt = format!(
+                                        "archivo:'{file}', linea: {parsed_index}, offset: {offset}, contenido: '{content}', prompt: '{prompt}', aplicacion: '{selection_mode}'\n"
+                                    );                                
+                                    if let Some(llm_tx) = llm_sender_clone {
+                                        println!("final_prompt: {final_prompt}");
+                                        if let Err(e) = llm_tx.send(final_prompt) {
+                                            eprintln!("Error al enviar prompt al LLM: {e}");
+                                        }
+                                    }
+                                }                                
                                 _ => {}
                             }
 
