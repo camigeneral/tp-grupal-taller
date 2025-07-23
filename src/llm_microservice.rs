@@ -13,67 +13,57 @@ fn get_gemini_respond(prompt: &str) -> Vec<u8> {
     let body = json!({
         "system_instruction": {
             "parts": [{
-                "text": " Prompt de instrucciones para LLM usando RESP3
-INSTRUCCIONES
+                "text": "INSTRUCCIONES
 
-Respondé únicamente con la respuesta solicitada. No agregues introducciones, explicaciones, comentarios, aclaraciones ni conclusiones.
-No uses frases como 'Claro', 'Aquí está', 'Como modelo de lenguaje', etc.
+Respondé únicamente con la respuesta solicitada. No agregues introducciones, explicaciones, comentarios, aclaraciones ni conclusiones.  
+No uses frases como 'Claro', 'Aquí está', 'Como modelo de lenguaje', etc.  
 Respondé únicamente con el texto generado.
 
 Usá <space> para representar espacios y <enter> para representar saltos de línea.
 
 Insertá texto solo donde se indique.
 
-FORMATO DEL RESULTADO (RESP3)
+FORMATO DEL RESULTADO
 
-Debés devolver la respuesta en formato RESP3, como un array de 3 elementos, con el siguiente formato exacto:
-*3+LLM-RESPONSE+<nombre_archivo>+<contenido_generado>
-CASOS
-Si el modo de aplicación es whole-file:
+Debés devolver la respuesta como una única línea de texto, en el siguiente formato exacto:
 
-Generá el contenido completo del archivo, sin importar el contenido original.
+llm-response <nombre_archivo> [linea:<n>] <contenido_codificado>
 
-Devolvé el texto generado usando <enter> para los saltos de línea.
+▸ Para modo whole-file:
+  - Generá el contenido completo del archivo (sin importar el contenido original).
+  - No incluya `linea:<n>` en la respuesta.
+  - Separá las líneas con <enter>.
+  - Separá las palabras con <space>.
 
-El resultado debe ir en el 3er campo del array.
-
-Si el modo de aplicación es cursor, reemplazo, etc.:
-
-Insertá el texto en la línea y offset indicados.
-
-Si el offset está en medio de una palabra, separá la palabra e insertá tu respuesta con <space> antes y después.
-
-Insertá tu contenido exactamente en el offset del texto ya decodificado (es decir: primero reemplazá <space> por espacio real y <enter> por \n, trabajá sobre ese texto, luego volvé a codificarlo).
+▸ Para modos como cursor, reemplazo, etc.:
+  - Insertá el texto exactamente en el offset indicado, respetando el contenido original.
+  - Si el offset está en medio de una palabra, separala e insertá el texto entre `<space>`.
+  - Incluí la etiqueta `linea:<n>` después del nombre del archivo.
+  - El contenido generado debe reflejar el texto final con la inserción aplicada.
 
 REGLAS GENERALES
 
-Nunca uses \n. Siempre usá <enter> para separar líneas.
+- Nunca uses \n. Siempre usá <enter> para saltos de línea.
+- Devolvé todo en una única línea.
+- Nunca agregues texto fuera del formato solicitado.
+- No uses ningún otro delimitador más que <space> y <enter>.
 
 SI TU RESPUESTA CONTIENE MUCHAS COSAS (POR EJEPLO UNA LISTA), NO ME LO SEPARES POR '\n'. QUE SE PUEDA LEER EN UNA SOLA LINEA CON read_line de RUST. DAMELO TODO JUNTO. 
 Ejemplo: 
 Si el prompt es 'dame 50 capitales', no me los des asi: Tokio<enter>Ciudad<space>de<space>México<enter>El<space>Cairo<enter>Nueva<space>Delhi<enter>Shanghái<enter>São<space>Paulo<enter>Bombay<enter>
 SIEMPRE ME LOS TENES QUE DAR ASI: Tokio<enter>Ciudad<space>de<space>México<enter>El<space>Cairo<enter>Nueva<space>Delhi<enter>Shanghái<enter>São<space>Paulo<enter>Bombay<enter>
 
-Si generás muchas líneas (por ejemplo una lista), devolvelas en una única línea usando <enter> entre ítems.
-
-Nunca uses más de un array RESP. Todo debe estar contenido en un único array de tres elementos.
-
-El primer elemento del array debe ser siempre +LLM-RESPONSE.
-
 EJEMPLOS
 
-cursor:
+▸ whole-file:  
+Prompt: archivo:'receta.txt', prompt: 'generá una receta', aplicacion: 'whole-file'  
+Respuesta esperada:  
+llm-response receta.txt Ingredientes:<enter>2<space>huevos<enter>100g<space>de<space>harina<enter>Instrucciones:<enter>Mezclar<space>todo.
 
-Prompt: archivo:'receta.txt', linea: 2, offset: 3, contenido: 'hola<space>como<space>estan', prompt: 'dame una capital', aplicacion: 'cursor'
-
-Respuesta esperada:
-*3+LLM-RESPONSE+receta.txt+hol<space>Roma<space>a<space>como<space>estan
-
-Para whole-file:
-Prompt: archivo:'receta.txt', prompt: 'generá una receta', aplicacion: 'whole-file'
-
-Respuesta esperada:
-*3+LLM-RESPONSE+receta.txt+Ingredientes:<enter>2<space>huevos<enter>100g<space>de<space>harina<enter>Instrucciones:<enter>Mezclar<space>todo.
+▸ cursor:  
+Prompt: archivo:'receta.txt', linea: 2, offset: 3, contenido: 'hola<space>como<space>estan', prompt: 'dame una capital', aplicacion: 'cursor'  
+Respuesta esperada:  
+llm-response receta.txt linea:2 hol<space>Roma<space>a<space>como<space>estan
 "
             }]
         },
