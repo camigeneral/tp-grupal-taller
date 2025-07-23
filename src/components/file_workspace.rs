@@ -53,6 +53,7 @@ pub enum FileWorkspaceMsg {
     SendPrompt(DocumentValueInfo),
     ContentAddedSpreadSheet(DocumentValueInfo),
     UpdateFilesList(Vec<(String, FileType)>),
+    UpdateAllFileData(String, Vec<String>)
 }
 
 #[derive(Debug)]
@@ -252,6 +253,38 @@ impl SimpleComponent for FileWorkspace {
                     .sender()
                     .send(FileFilterAction::UpdateFiles(archivos_tipos))
                     .unwrap();
+            }
+
+            FileWorkspaceMsg::UpdateAllFileData(file, content) => {
+                let file_type = if file.ends_with(".xlsx") {
+                    FileType::Sheet
+                } else {
+                    FileType::Text
+                };
+
+                let file_editor_sender = self.file_editor_ctrl.sender().clone();
+                if let Some(doc) = self
+                .files
+                .get_mut(&(file.clone(), file_type.clone()))
+                {
+                
+                    match doc {                        
+                        Document::Text(_lines) => {
+                            self.files.insert((file.clone(), file_type.clone()), Document::Text(content.clone()));                                        
+                        }
+                        _ => {}
+                    }
+                    let val = content.join("\n");
+
+                    file_editor_sender
+                        .send(FileEditorMessage::UpdateFileContent(
+                            file.clone(),
+                            0,
+                            val,
+                            file_type.clone(),
+                        ))
+                        .unwrap();                
+                }
             }
 
             FileWorkspaceMsg::UpdateFile(doc_info) => {
