@@ -98,7 +98,11 @@ impl Microservice {
             let mut socket_clone = BufWriter::new(microservice_socket.try_clone().unwrap());
         
             for prompt in rx {
-                let prompt = format!("{}\n", prompt);
+                
+                if prompt.trim().is_empty() {
+                    break;
+                }
+                let prompt = format!("{}\n", prompt.trim().trim_end_matches("\n"));
                 if let Err(e) = socket.write_all(prompt.as_bytes()) {
                     eprintln!("Error escribiendo al LLM: {}", e);
                     break;
@@ -256,7 +260,7 @@ impl Microservice {
     fn get_document_data(doc_name: &String, documento: &Document) -> String {
         match documento {
             Document::Text(lines) => {
-                let mut data = format!("{}/++/", doc_name);
+                let mut data: String = format!("");
                 for linea in lines {
                     data.push_str(linea);
                     data.push_str("/--/");
@@ -264,7 +268,7 @@ impl Microservice {
                 data
             }
             Document::Spreadsheet(lines) => {
-                let mut data = format!("{}/++/", doc_name);
+                let mut data: String = format!("");
                 for linea in lines {
                     data.push_str(linea);
                     data.push_str("/--/");
@@ -468,7 +472,7 @@ impl Microservice {
             if parts.is_empty() {
                 break;
             }
-            let message = MicroserviceMessage::from_parts(&parts);
+            let message: MicroserviceMessage = MicroserviceMessage::from_parts(&parts);
             match message {
                 MicroserviceMessage::ClientSubscribed {
                     document,
@@ -635,8 +639,7 @@ impl Microservice {
                         log_clone.log("Error obteniendo lock de documents para write");
                     }
                 }
-                MicroserviceMessage::Prompt { line, offset, prompt, file, content, selection_mode } => {                    
-                    println!("line: {line}, offset: {offset}, promt:{prompt}, file: {file}, content: {content}, selection_mode: {selection_mode}");
+                MicroserviceMessage::Prompt { line, offset, prompt, file, selection_mode } => {                                        
                     if let Ok(mut docs) = documents.lock() {
                         if let Some(document) = docs.get_mut(&file) {
                             let parsed_index = match line.parse::<usize>() {
@@ -656,7 +659,9 @@ impl Microservice {
                                     };                            
                                     let final_prompt = format!(
                                         "archivo:'{file}', linea: {parsed_index}, offset: {offset}, contenido: '{content}', prompt: '{prompt}', aplicacion: '{selection_mode}'\n"
-                                    );                                
+                                    );         
+                                    println!("final_prompt: {final_prompt}, sender: {:#?}", llm_sender_clone);
+                       
                                     if let Some(llm_tx) = llm_sender_clone {
                                         println!("final_prompt: {final_prompt}");
                                         if let Err(e) = llm_tx.send(final_prompt) {
@@ -680,6 +685,8 @@ impl Microservice {
                                         let mut new_lines = Vec::new();                                        
                                         new_lines.extend(response.split("<enter>").map(String::from));
                                         docs.insert(file, Document::Text(new_lines.to_vec()));                                        
+                                    } else {
+
                                     }
                                 }                                
                                 _ => {}
