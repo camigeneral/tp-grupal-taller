@@ -13,30 +13,67 @@ fn get_gemini_respond(prompt: &str) -> Vec<u8> {
     let body = json!({
         "system_instruction": {
             "parts": [{
-                "text": "Respondé únicamente con la respuesta solicitada. No agregues introducciones, explicaciones, comentarios, aclaraciones ni conclusiones. 
-No uses frases como 'Claro', 'Aquí está', 'Como modelo de lenguaje', etc. 
-Respondé únicamente con el texto generado. 
-Usá <space> para representar espacios y <enter> para representar saltos de línea. 
+                "text": " Prompt de instrucciones para LLM usando RESP3
+INSTRUCCIONES
+
+Respondé únicamente con la respuesta solicitada. No agregues introducciones, explicaciones, comentarios, aclaraciones ni conclusiones.
+No uses frases como 'Claro', 'Aquí está', 'Como modelo de lenguaje', etc.
+Respondé únicamente con el texto generado.
+
+Usá <space> para representar espacios y <enter> para representar saltos de línea.
+
 Insertá texto solo donde se indique.
 
-SI TE LLEGA UN OFFSET, ES POR CARACTER **DEL TEXTO YA DECODIFICADO**, ES DECIR: reemplazá <space> por un espacio, y <enter> por salto de línea, Y SOBRE ESE TEXTO, insertá la respuesta exactamente en el offset indicado.
+FORMATO DEL RESULTADO (RESP3)
 
-SI EL OFFSET ESTÁ EN MEDIO DE UNA PALABRA, SEPARÁ LA PALABRA EN DOS Y AGREGÁ <space> ANTES Y DESPUÉS DE TU RESPUESTA.
+Debés devolver la respuesta en formato RESP3, como un array de 3 elementos, con el siguiente formato exacto:
+*3+LLM-RESPONSE+<nombre_archivo>+<contenido_generado>
+CASOS
+Si el modo de aplicación es whole-file:
 
-Después de insertar, volvé a codificar el texto de salida con <space> y <enter>.
+Generá el contenido completo del archivo, sin importar el contenido original.
 
-Si es 'whole-file', significa que debés generar o modificar el contenido completo del documento según el nombre del mismo, SIN IMPORTAR QUE YA TENGA CONTENIDO, HAY QUE REEMPLAZARLO. 
-En ese caso, devolvé el texto entero modificado, respetando los saltos de línea usando <enter>. 
-EJEMPLO: 
-input_prompt: archivo:'receta.txt', linea: 2, offset: 3, contenido: 'hola<space>como<space>estan', prompt: 'dame una capital de un pais', aplicacion: 'cursor'
-→ respuesta esperada:
-LLM-RESPONSE|receta.txt|2|hol<space>Roma<space>a<space>como<space>estan
+Devolvé el texto generado usando <enter> para los saltos de línea.
 
-IMPORTANTE: tenes que devolver la respuesta en el siguiente formato con las siguientes condiciones: 
-- Si es whole-file, devolvelo asi: `LLM-RESPONSE|nombre_archivo|contenido_generado` 
-- Si no es whole-file, devolvelo asi: `LLM-RESPONSE|nombre_archivo|linea|contenido_generado` 
+El resultado debe ir en el 3er campo del array.
 
-SIEMPRE RESPETA ESE FORMATO. Podés generar varios párrafos si es necesario, separados por <enter>.
+Si el modo de aplicación es cursor, reemplazo, etc.:
+
+Insertá el texto en la línea y offset indicados.
+
+Si el offset está en medio de una palabra, separá la palabra e insertá tu respuesta con <space> antes y después.
+
+Insertá tu contenido exactamente en el offset del texto ya decodificado (es decir: primero reemplazá <space> por espacio real y <enter> por \n, trabajá sobre ese texto, luego volvé a codificarlo).
+
+REGLAS GENERALES
+
+Nunca uses \n. Siempre usá <enter> para separar líneas.
+
+SI TU RESPUESTA CONTIENE MUCHAS COSAS (POR EJEPLO UNA LISTA), NO ME LO SEPARES POR '\n'. QUE SE PUEDA LEER EN UNA SOLA LINEA CON read_line de RUST. DAMELO TODO JUNTO. 
+Ejemplo: 
+Si el prompt es 'dame 50 capitales', no me los des asi: Tokio<enter>Ciudad<space>de<space>México<enter>El<space>Cairo<enter>Nueva<space>Delhi<enter>Shanghái<enter>São<space>Paulo<enter>Bombay<enter>
+SIEMPRE ME LOS TENES QUE DAR ASI: Tokio<enter>Ciudad<space>de<space>México<enter>El<space>Cairo<enter>Nueva<space>Delhi<enter>Shanghái<enter>São<space>Paulo<enter>Bombay<enter>
+
+Si generás muchas líneas (por ejemplo una lista), devolvelas en una única línea usando <enter> entre ítems.
+
+Nunca uses más de un array RESP. Todo debe estar contenido en un único array de tres elementos.
+
+El primer elemento del array debe ser siempre +LLM-RESPONSE.
+
+EJEMPLOS
+
+cursor:
+
+Prompt: archivo:'receta.txt', linea: 2, offset: 3, contenido: 'hola<space>como<space>estan', prompt: 'dame una capital', aplicacion: 'cursor'
+
+Respuesta esperada:
+*3+LLM-RESPONSE+receta.txt+hol<space>Roma<space>a<space>como<space>estan
+
+Para whole-file:
+Prompt: archivo:'receta.txt', prompt: 'generá una receta', aplicacion: 'whole-file'
+
+Respuesta esperada:
+*3+LLM-RESPONSE+receta.txt+Ingredientes:<enter>2<space>huevos<enter>100g<space>de<space>harina<enter>Instrucciones:<enter>Mezclar<space>todo.
 "
             }]
         },
@@ -148,16 +185,17 @@ fn handle_requests(mut stream: TcpStream) {
 fn main() -> std::io::Result<()> {
    let listener = TcpListener::bind("127.0.0.1:4030")?;
    println!("Servidor para la llm levantado");
-   //handle_requests();
-   for stream in listener.incoming() {
-    match stream {
-        Ok(stream) => {
-            handle_requests(stream);
-        }
-        Err(e) => {
-            println!("error: {}", e);
+/*    handle_requests();*/
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => {
+                println!("Se conecto el microservicio");
+                handle_requests(stream);
+            }
+            Err(e) => {
+                println!("error: {}", e);
+            }
         }
     }
-   }
    Ok(())
 }
