@@ -12,7 +12,14 @@ fn get_gemini_respond() -> Vec<u8> {
     let body = json!({
         "system_instruction": {
             "parts": [{
-                "text": "Respondé únicamente con la respuesta solicitada. No agregues introducciones, explicaciones, comentarios, aclaraciones ni conclusiones. No uses frases como 'Claro', 'Aquí está', 'Como modelo de lenguaje', etc. Solo devolvé la respuesta en bruto. Nada más."
+                "text": "Respondé únicamente con la respuesta solicitada. No agregues introducciones, explicaciones, comentarios, aclaraciones ni conclusiones. \
+No uses frases como 'Claro', 'Aquí está', 'Como modelo de lenguaje', etc. \
+Respondé únicamente con el texto generado. \
+Usá <space> para representar espacios y <enter> para representar saltos de línea. \
+Insertá texto solo donde se indique.\n\
+Si el mensaje incluye el texto 'whole-file', significa que debés generar o modificar el contenido completo del documento según el nombre del mismo. \
+En ese caso, devolvé el texto entero modificado, respetando los saltos de línea usando <enter>. \
+Podés generar varios párrafos si es necesario, separados por <enter>."
             }]
         },
         "contents": [{
