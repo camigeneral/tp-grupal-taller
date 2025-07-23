@@ -4,6 +4,7 @@ use std::io::Write;
 #[allow(unused_imports)]
 use std::net::TcpListener;
 use std::net::TcpStream;
+use std::io::BufRead;
 #[allow(unused_imports)]
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
@@ -92,10 +93,18 @@ impl Microservice {
         ));
         thread::spawn(move || {
             let mut socket = TcpStream::connect(llm_address.clone()).expect("No se pudo conectar al LLM");
-            for prompt in rx {                
-                socket.write_all(prompt.as_bytes()).unwrap();                            
+            let mut reader = BufReader::new(socket.try_clone().unwrap());
+        
+            for prompt in rx {
+                socket.write_all(prompt.as_bytes()).unwrap();                
+        
+                let mut response = String::new();
+                reader.read_line(&mut response).unwrap(); 
+        
+                println!("Respuesta del LLM: {}", response.trim());
             }
         });
+        
 
         Ok(())
     }
@@ -479,7 +488,6 @@ impl Microservice {
                         content.len(),
                         stream_id
                     ));
-                    println!("Recibi comando DOC");
                     if let Ok(mut docs) = documents.lock() {
                         if document.ends_with(".txt") {
                             let lines: Vec<String> = content
@@ -587,6 +595,33 @@ impl Microservice {
                 }
                 MicroserviceMessage::Prompt { line, offset, prompt, file, content, selection_mode } => {                    
                     println!("line: {line}, offset: {offset}, promt:{prompt}, file: {file}, content: {content}, selection_mode: {selection_mode}");
+                    if let Ok(mut docs) = documents.lock() {
+                        if let Some(document) = docs.get_mut(&file) {
+                            let parsed_index = match line.parse::<usize>() {
+                                Ok(idx) => idx,
+                                Err(e) => {
+                                    println!("Error parseando índice: {}", e);
+                                    log_clone.log(&format!("Error parseando índice: {}", e));
+                                    continue;
+                                }
+                            };
+                            match document {
+                                Document::Text(lines) => {
+                                    let final_prompt;
+                                    let line =  lines[parsed_index].clone();
+                                    if selection_mode == "cursor" {                                    
+                                        final_prompt = format!("{line}|{prompt}|{offset}");
+                                    } else {
+                                        final_prompt = format!("whole-file|{prompt}|");
+                                    }           
+                                    
+                                    println!("final_prompt {final_prompt}");                         
+                                }
+                                _ => {}
+                            }
+
+                        }
+                    }
                 },
                 MicroserviceMessage::Error(_) => {}
                 _ => {}
