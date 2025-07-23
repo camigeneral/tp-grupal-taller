@@ -3,10 +3,11 @@ extern crate curl;
 
 use std::net::{TcpListener, TcpStream};
 use curl::easy::{Easy, List};
+use std::io::{BufReader,BufRead, Write};
 use serde_json::json;
 
 
-fn get_gemini_respond() -> Vec<u8> {
+fn get_gemini_respond(prompt: &str) -> Vec<u8> {
     let api_key = "AIzaSyDSyVJnHxJnUXDRnM7SxphBTwEPGtOjMEI";
 
     let body = json!({
@@ -28,7 +29,7 @@ Podés generar varios párrafos si es necesario, separados por <enter>."
         },
         "contents": [{
             "parts": [{
-                "text": ""
+                "text": format!("{}", prompt)
             }]
         }]
         
@@ -61,26 +62,51 @@ Podés generar varios párrafos si es necesario, separados por <enter>."
     response_data.clone()
 }
 
-fn handle_requests(mut stream: TcpStream)  {
-    let gemini_resp = &get_gemini_respond();
-    let response_str = String::from_utf8_lossy(gemini_resp);
-    match serde_json::from_str::<serde_json::Value>(&response_str) {
-        Ok(parsed) => {
-            if let Some(text) = parsed["candidates"]
-                .get(0)
-                .and_then(|c| c["content"]["parts"].get(0))
-                .and_then(|p| p["text"].as_str())
-            {
-                println!("→ Gemini responde: {}", text);
-            } else {
-                println!("No se pudo extraer la respuesta de Gemini.");
+fn handle_requests(mut stream: TcpStream) {
+    let mut reader = BufReader::new(stream.try_clone().unwrap());
+
+    loop {
+        let mut input_prompt = String::new();
+        match reader.read_line(&mut input_prompt) {
+            Ok(0) => {
+                println!("Conexión cerrada por el cliente");
+                break;
             }
-        }
-        Err(e) => {
-            println!("Error al parsear la respuesta JSON: {e}");
+            Ok(_) => {
+                println!("Prompt recibido: {}", input_prompt.trim());
+                let gemini_resp = get_gemini_respond(input_prompt.trim());
+                let response_str = String::from_utf8_lossy(&gemini_resp);
+
+                match serde_json::from_str::<serde_json::Value>(&response_str) {
+                    Ok(parsed) => {
+                        if let Some(text) = parsed["candidates"]
+                            .get(0)
+                            .and_then(|c| c["content"]["parts"].get(0))
+                            .and_then(|p| p["text"].as_str())
+                        {
+                            println!("Respuesta: {}", text);
+                            if let Err(e) = stream.write_all(format!("{text}\n").as_bytes()) {
+                                eprintln!("Error escribiendo al cliente: {}", e);
+                                break;
+                            }
+                        } else {
+                            println!("Error: no se pudo extraer texto de Gemini");                            
+                        }
+                    }
+                    Err(e) => {
+                        println!("{}", format!("Error parseando JSON: {}\n", e));
+                        
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Error leyendo del stream: {}", e);
+                break;
+            }
         }
     }
 }
+
 fn main() -> std::io::Result<()> {
    let listener = TcpListener::bind("127.0.0.1:4030")?;
    println!("Servidor para la llm levantado");
