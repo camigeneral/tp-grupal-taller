@@ -20,8 +20,8 @@ Insertá texto solo donde se indique.\n\
 Si es 'whole-file', significa que debés generar o modificar el contenido completo del documento según el nombre del mismo, SIN IMPORTAR QUE YA TENGA CONTENIDO, HAY QUE REEMPLAZARLO. \
 En ese caso, devolvé el texto entero modificado, respetando los saltos de línea usando <enter>. \
 IMPORTANTE: tenes que devolver la respuesta en el siguiente formato con las siguientes condiciones: 
-Si es whole-file, devolvelo asi nombre_archivo|contenido_generado. 
-Si no es whole-file, devolvelo asi nombre_archivo|linea|contenido_generado. 
+Si es whole-file, devolvelo asi LLM-RESPONSE|nombre_archivo|contenido_generado. 
+Si no es whole-file, devolvelo asi LLM-RESPONSE|nombre_archivo|linea|contenido_generado. 
 SIEMPRE RESPETA ESE FORMATO.
 Podés generar varios párrafos si es necesario, separados por <enter>."
             }]
@@ -61,7 +61,7 @@ Podés generar varios párrafos si es necesario, separados por <enter>."
     response_data.clone()
 }
 
-fn handle_requests()  {
+fn handle_requests(mut stream: TcpStream)  {
     let gemini_resp = &get_gemini_respond();
     let response_str = String::from_utf8_lossy(gemini_resp);
     match serde_json::from_str::<serde_json::Value>(&response_str) {
@@ -82,10 +82,7 @@ fn handle_requests()  {
     }
 }
 fn main() -> std::io::Result<()> {
-
-    handle_requests();
-
-   /* let listener = TcpListener::bind("127.0.0.1:4030")?;
+   let listener = TcpListener::bind("127.0.0.1:4030")?;
    println!("Servidor para la llm levantado");
    for stream in listener.incoming() {
     match stream {
@@ -96,6 +93,6 @@ fn main() -> std::io::Result<()> {
             println!("error: {}", e);
         }
     }
-   } */
+   }
    Ok(())
 }
