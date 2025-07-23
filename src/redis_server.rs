@@ -909,7 +909,7 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, String>
         let content = match line_result {
             Ok(l) => l,
             Err(e) => return Err(e.to_string()),
-        };
+        };        
 
         let parts: Vec<&str> = content.split("/++/").collect();
         if parts.len() != 2 {
@@ -920,7 +920,7 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, String>
         let messages_data = parts[1];
         documents.insert(document_id, messages_data.to_string());
     }
-    // println!("documentos: {:#?}", documents);
+    //println!("documentos: {:#?} file_path_ {file_path}", documents);
     Ok(documents)
 }
 
@@ -952,9 +952,9 @@ pub fn subscribe_microservice_to_all_docs(
             return;
         }
     };
-
-    for (doc_name, document) in docs_lock.iter() {
-        let subscribers = map.entry(doc_name.clone()).or_insert_with(Vec::new);
+    
+    for (doc_name, document) in docs_lock.iter() {        
+        let subscribers = map.entry(doc_name.clone()).or_insert_with(Vec::new);        
         if !subscribers.contains(&addr) {
             subscribers.push(addr.clone());
             println!(
