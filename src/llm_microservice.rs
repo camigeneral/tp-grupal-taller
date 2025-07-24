@@ -5,8 +5,7 @@ use std::net::{TcpListener, TcpStream};
 use curl::easy::{Easy, List};
 use std::io::{BufReader,BufRead, Write};
 use serde_json::json;
-#[path = "utils/string_helper.rs"]
-mod string_helper;
+
 
 fn get_gemini_respond(prompt: &str) -> Vec<u8> {
     let api_key = "AIzaSyDSyVJnHxJnUXDRnM7SxphBTwEPGtOjMEI";
@@ -159,7 +158,7 @@ llm-response salida.txt linea:0 <space>Hola<space>buen<space>día
         },
         "contents": [{
             "parts": [{
-                "text": format!("{}", string_helper::decode_text(prompt.to_string()))
+                "text": format!("{}", prompt.to_string())
             }]
         }]
         
