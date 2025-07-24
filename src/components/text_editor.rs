@@ -89,16 +89,16 @@ impl SimpleComponent for TextEditorModel {
                     }
                 },
                 #[name = "mode_dropdown"]
-                gtk::DropDown::from_strings(&["Posición cursor", "Todo el archivo"]) {
+                gtk::DropDown::from_strings(&["Todo el archivo", "Posición cursor"]) {
                     set_selected: match model.selection_mode {
-                        SelectionMode::Cursor => 0,
-                        SelectionMode::WholeFile => 1,
+                        SelectionMode::WholeFile => 0,
+                        SelectionMode::Cursor => 1,                        
                     },
                     connect_selected_notify[sender] => move |dropdown| {
                         let index = dropdown.selected();
                         let mode = match index {
-                            0 => SelectionMode::Cursor,
-                            1 => SelectionMode::WholeFile,
+                            1 => SelectionMode::Cursor,
+                            0 => SelectionMode::WholeFile,
                             _ => SelectionMode::Cursor,
                         };
                         sender.input(TextEditorMessage::SetSelectionMode(mode));
@@ -218,7 +218,8 @@ impl SimpleComponent for TextEditorModel {
                     document.prompt = self.prompt.clone();
                     document.file = self.file_name.clone();
                     document.selection_mode = self.selection_mode.to_string();
-                    let _ =  sender.output(TextEditorOutputMessage::SendPrompt(document));                    
+                    println!("{:#?}", document);
+                    //let _ =  sender.output(TextEditorOutputMessage::SendPrompt(document));                    
                 }
             }
             TextEditorMessage::SetSelectionMode(mode) => {
