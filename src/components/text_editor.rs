@@ -217,9 +217,8 @@ impl SimpleComponent for TextEditorModel {
                     document.offset = offset;
                     document.prompt = self.prompt.clone();
                     document.file = self.file_name.clone();
-                    document.selection_mode = self.selection_mode.to_string();
-                    println!("{:#?}", document);
-                    //let _ =  sender.output(TextEditorOutputMessage::SendPrompt(document));                    
+                    document.selection_mode = self.selection_mode.to_string();                    
+                    let _ =  sender.output(TextEditorOutputMessage::SendPrompt(document));                    
                 }
             }
             TextEditorMessage::SetSelectionMode(mode) => {
