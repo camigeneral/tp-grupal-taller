@@ -53,7 +53,8 @@ pub enum FileWorkspaceMsg {
     SendPrompt(DocumentValueInfo),
     ContentAddedSpreadSheet(DocumentValueInfo),
     UpdateFilesList(Vec<(String, FileType)>),
-    UpdateAllFileData(String, Vec<String>)
+    UpdateAllFileData(String, Vec<String>),
+    UpdateLineFile(String, DocumentValueInfo)
 }
 
 #[derive(Debug)]
@@ -337,7 +338,7 @@ impl SimpleComponent for FileWorkspace {
                     }
                 }
             }
-
+            
             FileWorkspaceMsg::UpdateFilesList(archivos_tipos) => {
                 // Limpiar y actualizar self.files solo con los nombres y tipos
                 for (name, tipo) in &archivos_tipos {
