@@ -5,7 +5,8 @@ use std::net::{TcpListener, TcpStream};
 use curl::easy::{Easy, List};
 use std::io::{BufReader,BufRead, Write};
 use serde_json::json;
-
+#[path = "utils/threadpool.rs"]
+mod threadpool;
 
 fn get_gemini_respond(prompt: &str) -> Vec<u8> {
     let api_key = "AIzaSyDSyVJnHxJnUXDRnM7SxphBTwEPGtOjMEI";
@@ -252,11 +253,14 @@ fn handle_requests(mut stream: TcpStream) {
 fn main() -> std::io::Result<()> {
    let listener = TcpListener::bind("127.0.0.1:4030")?;
    println!("Servidor para la llm levantado");
+   let pool = threadpool::ThreadPool::new(4);
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
                 println!("Se conecto el microservicio");
-                handle_requests(stream);
+                pool.execute(|| {
+                    handle_requests(stream);
+                });
             }
             Err(e) => {
                 println!("error: {}", e);
