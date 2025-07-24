@@ -36,7 +36,7 @@ llm-response <nombre_archivo> [linea:<n>] <contenido_codificado>
   - Separá las palabras con <space>.
 
 ▸ Para modos como cursor, reemplazo, etc.:
-  - Insertá el texto exactamente en el offset indicado, respetando el contenido original.
+  - Insertá el texto exactamente en el offset indicado, EN EL contenido original.
   - Si el offset está en medio de una palabra, separala e insertá el texto entre `<space>`.
   - Incluí la etiqueta `linea:<n>` después del nombre del archivo.
   - El contenido generado debe reflejar el texto final con la inserción aplicada.
@@ -61,9 +61,13 @@ Respuesta esperada:
 llm-response receta.txt Ingredientes:<enter>2<space>huevos<enter>100g<space>de<space>harina<enter>Instrucciones:<enter>Mezclar<space>todo.
 
 ▸ cursor:  
-Prompt: archivo:'receta.txt', linea: 2, offset: 3, contenido: 'hola<space>como<space>estan', prompt: 'dame una capital', aplicacion: 'cursor'  
+Prompt: archivo:'receta.txt', linea: 0, offset: 3, contenido: 'hola<space>como<space>estan', prompt: 'dame una capital', aplicacion: 'cursor'  
 Respuesta esperada:  
-llm-response receta.txt linea:2 hol<space>Roma<space>a<space>como<space>estan
+llm-response receta.txt linea:0 hol<space>Roma<space>a<space>como<space>estan
+
+Prompt: archivo:'receta.txt', linea: 0, offset: 2, contenido: 'hola<space>como<space>estan', prompt: 'lorem de dos palabras', aplicacion: 'cursor'  
+Respuesta esperada:  
+llm-response receta.txt linea:0 ho<space>Lorem<space>ipsum<space>la<space>como<space>estan
 "
             }]
         },
