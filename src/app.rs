@@ -87,7 +87,8 @@ pub enum AppMsg {
     ReloadFile(String, String),
     AddFile(String),
     SendPrompt(DocumentValueInfo),
-    UpdateAllFileData(String, Vec<String>)
+    UpdateAllFileData(String, Vec<String>),
+    UpdateLineFile(String, String, String)
 }
 
 #[relm4::component(pub)]
@@ -492,6 +493,23 @@ impl SimpleComponent for AppModel {
                 self.loading_modal.emit(LoadingModalMsg::Hide);
                 self.files_manager_cont
                     .emit(FileWorkspaceMsg::UpdateAllFileData(file, updated_content));
+            }
+
+            AppMsg::UpdateLineFile(file, line , content) => {
+                let parsed_index = match line.parse::<i32>() {
+                    Ok(idx) => idx,
+                    Err(e) => {
+                        println!("Error parseando índice: {}", e);
+                        return;                        
+                    }
+                };
+
+                let mut document = DocumentValueInfo::new(content, parsed_index);
+                document.file = file.clone();
+                document.decode_text();
+                self.loading_modal.emit(LoadingModalMsg::Hide);
+                self.files_manager_cont
+                    .emit(FileWorkspaceMsg::UpdateFile(document));
             }
 
             AppMsg::CloseApplication => {

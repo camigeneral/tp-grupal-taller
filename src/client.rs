@@ -471,9 +471,12 @@ impl LocalClient {
                 new_lines.extend(content.split("<enter>").map(String::from));
                 let _ = sender.send(AppMsg::UpdateAllFileData(file.to_string(), new_lines.to_vec()));
             } else {
-                /* let content = response[3].to_string();
+                let content = response[3].to_string();
                 let line_parts : Vec<&str> = response[2].split(':').collect();
-                let file = response[1].to_string();  */
+                let line = line_parts[1];
+                let file = response[1].to_string(); 
+                let _ = sender.send(AppMsg::UpdateLineFile(file.to_string(), line.to_string(), content));
+
             }           
         }
     }
