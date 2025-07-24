@@ -161,7 +161,7 @@ impl SimpleComponent for TextEditorModel {
         buffer.connect_mark_set(move |_buffer, iter, _mark| {
             let line = iter.line();
             let offset = iter.line_offset();
-            *cursor_position_clone.borrow_mut() = Some((line, offset));            
+            *cursor_position_clone.borrow_mut() = Some((line, offset));      
         });
 
         let sender_insert = sender.clone();
@@ -218,6 +218,7 @@ impl SimpleComponent for TextEditorModel {
                     document.prompt = self.prompt.clone();
                     document.file = self.file_name.clone();
                     document.selection_mode = self.selection_mode.to_string();                    
+
                     let _ =  sender.output(TextEditorOutputMessage::SendPrompt(document));                    
                 }
             }
