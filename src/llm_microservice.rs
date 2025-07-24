@@ -46,7 +46,7 @@ llm-response <nombre_archivo> [linea:<n>] <contenido_codificado>
   - No incluya `linea:<n>` en la respuesta.
   - Separá las líneas con <enter>.
   - Separá las palabras con <space>.
-  
+
 Ejemplos para aclarar:
 
 prompt: 'traduce al inglés' → Usar contenido original y traducirlo
@@ -201,32 +201,6 @@ llm-response salida.txt linea:0 <space>Hola<space>buen<space>día
 }
 
 fn handle_requests(mut stream: TcpStream) {
-    
-    /* let input_prompt = "archivo:'receta.txt', linea: 2, offset: 5, contenido: 'hola<space>queondacomo<space>estan', prompt: 'generame una receta corta', aplicacion: 'whole-file'";
-    let gemini_resp = get_gemini_respond(input_prompt.trim());
-    let response_str = String::from_utf8_lossy(&gemini_resp);
-
-    match serde_json::from_str::<serde_json::Value>(&response_str) {
-        Ok(parsed) => {
-            if let Some(text) = parsed["candidates"]
-                .get(0)
-                .and_then(|c| c["content"]["parts"].get(0))
-                .and_then(|p| p["text"].as_str())
-            {
-                println!("Respuesta: {}", text);
-                /* if let Err(e) = stream.write_all(format!("{text}\n").as_bytes()) {
-                    eprintln!("Error escribiendo al cliente: {}", e);
-                    
-                } */
-            } else {
-                println!("Error: no se pudo extraer texto de Gemini");                            
-            }
-        }
-        Err(e) => {
-            println!("{}", format!("Error parseando JSON: {}\n", e));
-            
-        }} */
-
     let mut reader = BufReader::new(stream.try_clone().unwrap());
     loop {
         let mut input_prompt = String::new();
@@ -278,7 +252,6 @@ fn handle_requests(mut stream: TcpStream) {
 fn main() -> std::io::Result<()> {
    let listener = TcpListener::bind("127.0.0.1:4030")?;
    println!("Servidor para la llm levantado");
-/*    handle_requests();*/
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
