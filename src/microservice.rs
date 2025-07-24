@@ -5,7 +5,6 @@ use std::io::Write;
 use std::net::TcpListener;
 use std::net::TcpStream;
 use std::io::BufRead;
-use std::io::BufWriter;
 #[allow(unused_imports)]
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
@@ -653,8 +652,9 @@ impl Microservice {
                                     } else {
                                         lines.get(parsed_index).cloned().unwrap_or_default()
                                     };                            
+
                                     let final_prompt = format!(
-                                        "archivo:'{file}', linea: {parsed_index}, offset: {offset}, contenido: '{content}', prompt: '{prompt}', aplicacion: '{selection_mode}'\n"
+                                        "archivo:'{file}', linea: {parsed_index}, offset: {offset}, contenido: '{content}', prompt: '{prompt}', aplicacion: '{selection_mode}'\n"                                        
                                     );         
                                     println!("final_prompt: {final_prompt}, sender: {:#?}", llm_sender_clone);
                        
@@ -676,14 +676,22 @@ impl Microservice {
                     if let Ok(mut docs) = documents.lock() {
                         if let Some(document) = docs.get_mut(&file) {
                             match document {
-                                Document::Text(_lines) => {
-                                    if selection_mode == "whole-file" {
-                                        let mut new_lines = Vec::new();                                        
-                                        new_lines.extend(response.split("<enter>").map(String::from));
-                                        docs.insert(file, Document::Text(new_lines.to_vec()));                                        
+                                Document::Text(lines) => {
+                                    let mut updated_lines: Vec<String> = Vec::new();
+                                    if selection_mode == "whole-file" {                                                                            
+                                        updated_lines.extend(response.split("<enter>").map(String::from));                                                                          
                                     } else {
-
+                                        let parsed_index = match line.parse::<usize>() {
+                                            Ok(idx) => idx,
+                                            Err(e) => {
+                                                eprintln!("Índice inválido en modo línea: {}", e);
+                                                return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Error al parsear índice: {}", e)));
+                                            }
+                                        };                                                                 
+                                        lines[parsed_index] = response.clone();
+                                        updated_lines = lines.clone();                                        
                                     }
+                                    docs.insert(file, Document::Text(updated_lines.to_vec()));                                        
                                 }                                
                                 _ => {}
                             }
