@@ -61,3 +61,5 @@ pub mod login;
 pub mod error_modal;
 
 pub mod structs;
+
+pub mod loading_modal;

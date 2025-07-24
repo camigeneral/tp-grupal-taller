@@ -50,8 +50,11 @@ pub enum FileWorkspaceMsg {
     AddFile(String, FileType),
 
     UpdateFile(DocumentValueInfo),
+    SendPrompt(DocumentValueInfo),
     ContentAddedSpreadSheet(DocumentValueInfo),
     UpdateFilesList(Vec<(String, FileType)>),
+    UpdateAllFileData(String, Vec<String>),
+    UpdateLineFile(String, DocumentValueInfo)
 }
 
 #[derive(Debug)]
@@ -60,6 +63,7 @@ pub enum FileWorkspaceOutputMessage {
     UnsubscribeFile(String),
     ContentAdded(DocumentValueInfo),
     ContentAddedSpreadSheet(DocumentValueInfo),
+    SendPrompt(DocumentValueInfo),
     FilesLoaded,
 }
 
@@ -128,6 +132,9 @@ impl SimpleComponent for FileWorkspace {
                     FileEditorOutputMessage::ContentAddedSpreadSheet(doc_info) => {
                         FileWorkspaceMsg::ContentAddedSpreadSheet(doc_info)
                     }
+                    FileEditorOutputMessage::SendPrompt(doc) => {
+                        FileWorkspaceMsg::SendPrompt(doc)
+                    }                    
                 },
             );
 
@@ -158,7 +165,9 @@ impl SimpleComponent for FileWorkspace {
             FileWorkspaceMsg::ContentAdded(doc_info) => {
                 let _ = sender.output(FileWorkspaceOutputMessage::ContentAdded(doc_info));
             }
-
+            FileWorkspaceMsg::SendPrompt(doc_info) => {
+                let _ = sender.output(FileWorkspaceOutputMessage::SendPrompt(doc_info));
+            }
             FileWorkspaceMsg::SubscribeFile(file) => {
                 sender
                     .output(FileWorkspaceOutputMessage::SubscribeFile(file.clone()))
@@ -247,6 +256,38 @@ impl SimpleComponent for FileWorkspace {
                     .unwrap();
             }
 
+            FileWorkspaceMsg::UpdateAllFileData(file, content) => {
+                let file_type = if file.ends_with(".xlsx") {
+                    FileType::Sheet
+                } else {
+                    FileType::Text
+                };
+
+                let file_editor_sender = self.file_editor_ctrl.sender().clone();
+                if let Some(doc) = self
+                .files
+                .get_mut(&(file.clone(), file_type.clone()))
+                {
+                
+                    match doc {                        
+                        Document::Text(_lines) => {
+                            self.files.insert((file.clone(), file_type.clone()), Document::Text(content.clone()));                                        
+                        }
+                        _ => {}
+                    }
+                    let val = content.join("\n");
+
+                    file_editor_sender
+                        .send(FileEditorMessage::UpdateFileContent(
+                            file.clone(),
+                            0,
+                            val,
+                            file_type.clone(),
+                        ))
+                        .unwrap();                
+                }
+            }
+
             FileWorkspaceMsg::UpdateFile(doc_info) => {
                 let file_type = if doc_info.file.ends_with(".xlsx") {
                     FileType::Sheet
@@ -297,7 +338,7 @@ impl SimpleComponent for FileWorkspace {
                     }
                 }
             }
-
+            
             FileWorkspaceMsg::UpdateFilesList(archivos_tipos) => {
                 // Limpiar y actualizar self.files solo con los nombres y tipos
                 for (name, tipo) in &archivos_tipos {

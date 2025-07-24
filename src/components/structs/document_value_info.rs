@@ -12,6 +12,9 @@ pub struct DocumentValueInfo {
     pub value: String,
     pub index: i32,
     pub timestamp: i64,
+    pub offset: i32,
+    pub prompt: String,
+    pub selection_mode: String,
 }
 
 impl DocumentValueInfo {
@@ -21,6 +24,9 @@ impl DocumentValueInfo {
             value,
             index,
             timestamp: get_timestamp_millis(),
+            offset: 0,
+            prompt: String::new(),
+            selection_mode: String::new()
         }
     }
 

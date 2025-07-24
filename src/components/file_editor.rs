@@ -47,6 +47,7 @@ pub enum FileEditorMessage {
     ContentAddedSpreadSheet(DocumentValueInfo),
     UpdateFile(String, i32, String, FileType),
     UpdateFileContent(String, i32, String, FileType),
+    SendPrompt(DocumentValueInfo),
     ResetEditor,
 }
 
@@ -55,6 +56,7 @@ pub enum FileEditorMessage {
 pub enum FileEditorOutputMessage {
     ContentAdded(DocumentValueInfo),
     ContentAddedSpreadSheet(DocumentValueInfo),
+    SendPrompt(DocumentValueInfo),
     /// Mensaje que indica que se debe volver a la vista anterior.
     GoBack,
 }
@@ -133,6 +135,9 @@ impl SimpleComponent for FileEditorModel {
                 TextEditorOutputMessage::ContentAdded(doc_info) => {
                     FileEditorMessage::ContentAdded(doc_info)
                 }
+                TextEditorOutputMessage::SendPrompt(doc_info) => {
+                    FileEditorMessage::SendPrompt(doc_info)
+                }
             });
 
         let model = FileEditorModel {
@@ -153,6 +158,9 @@ impl SimpleComponent for FileEditorModel {
 
     fn update(&mut self, message: FileEditorMessage, sender: ComponentSender<Self>) {
         match message {
+            FileEditorMessage::SendPrompt(prompt) => {
+                let _ = sender.output(FileEditorOutputMessage::SendPrompt(prompt));
+            }
             FileEditorMessage::ContentAddedSpreadSheet(doc_info) => {
                 let _ = sender.output(FileEditorOutputMessage::ContentAddedSpreadSheet(doc_info));
             }
