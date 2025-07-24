@@ -83,7 +83,7 @@ impl Microservice {
         })
     }
 
-    fn connect_to_llm(&mut self, microservice_socket: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
+    fn connect_to_llm(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let llm_address = format!("127.0.0.1:4030");
         let (tx, rx) = channel::<String>();
 
@@ -92,16 +92,17 @@ impl Microservice {
             "Microservicio conectandose al server de llm en {:?}",
             llm_address
         ));
+        let node_streams = Arc::clone(&self.node_streams); 
+
         thread::spawn(move || {
             let mut socket = TcpStream::connect(llm_address.clone()).expect("No se pudo conectar al LLM");
             let mut reader = BufReader::new(socket.try_clone().unwrap());
-            let mut socket_clone = BufWriter::new(microservice_socket.try_clone().unwrap());
-        
+
             for prompt in rx {
-                
                 if prompt.trim().is_empty() {
                     break;
                 }
+
                 let prompt = format!("{}\n", prompt.trim().trim_end_matches("\n"));
                 if let Err(e) = socket.write_all(prompt.as_bytes()) {
                     eprintln!("Error escribiendo al LLM: {}", e);
@@ -111,45 +112,41 @@ impl Microservice {
                     eprintln!("Error flusheando al LLM: {}", e);
                     break;
                 }
-        
+
                 let mut response = String::new();
                 if let Err(e) = reader.read_line(&mut response) {
                     eprintln!("Error leyendo del LLM: {}", e);
                     break;
                 }
-        
+
                 let parts: Vec<&str> = response.split(' ')
                     .map(|s| s.trim())
                     .filter(|s| !s.is_empty())
                     .collect();
-        
+
                 if parts.len() < 2 {
                     eprintln!("Respuesta malformada del LLM: {:?}", response);
                     continue;
                 }
-        
+
                 let document = parts[1];
                 let message = redis_parser::format_resp_command(&parts);
                 let resp = redis_parser::format_resp_publish(document, &message);
-        
-                if let Err(e) = socket_clone.write_all(resp.as_bytes()) {
-                    eprintln!("Error escribiendo a Redis (socket_clone): {}", e);
-                    break;
+
+                if let Ok(mut streams) = node_streams.lock() {
+                    for (id, stream) in streams.iter_mut() {
+                        if let Err(e) = stream.write_all(resp.as_bytes()) {
+                            eprintln!("Error escribiendo a nodo {}: {}", id, e);
+                        } else {
+                            println!("Respuesta del LLM enviada a nodo {}: {}", id, resp);
+                            let _ = stream.flush();
+                        }
+                    }
                 } else {
-                    println!("Escribiendo: {resp}");
+                    eprintln!("Error obteniendo lock de node_streams");
                 }
-                if let Err(e) = socket_clone.flush() {
-                    eprintln!("Error flusheando a Redis (socket_clone): {}", e);
-                    break;
-                }
-        
-                println!("Respuesta del LLM reenviada a Redis: {}", resp);
             }
-        
-            println!("Loop de comunicación con LLM terminado.");
         });
-        
-        
 
         Ok(())
     }
@@ -182,8 +179,7 @@ impl Microservice {
             main_address
         ));
         let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
-        let redis_socket_for_llm = socket.try_clone()?;
-        self.connect_to_llm(redis_socket_for_llm)?;
+        self.connect_to_llm()?;
         let redis_socket = socket.try_clone()?;
         let redis_socket_clone_for_hashmap = socket.try_clone()?;
 
@@ -655,7 +651,7 @@ impl Microservice {
                                     let content = if selection_mode == "whole-file" {
                                         lines.join("<enter>")
                                     } else {
-                                        lines.get(parsed_index - 1).cloned().unwrap_or_default()
+                                        lines.get(parsed_index).cloned().unwrap_or_default()
                                     };                            
                                     let final_prompt = format!(
                                         "archivo:'{file}', linea: {parsed_index}, offset: {offset}, contenido: '{content}', prompt: '{prompt}', aplicacion: '{selection_mode}'\n"
