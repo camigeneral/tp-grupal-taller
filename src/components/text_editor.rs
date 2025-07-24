@@ -118,6 +118,9 @@ impl SimpleComponent for TextEditorModel {
             },
             gtk::ScrolledWindow {
                 set_vexpand: true,
+                set_hexpand: true,
+                set_hscrollbar_policy: gtk::PolicyType::Automatic,  // Scroll horizontal automático
+                set_vscrollbar_policy: gtk::PolicyType::Automatic,
                 #[wrap(Some)]
                 #[name="textview"]
                 set_child = &gtk::TextView {
@@ -125,7 +128,7 @@ impl SimpleComponent for TextEditorModel {
                     add_css_class: "file-text-area",
                     set_visible: true,
 
-                    set_wrap_mode: gtk::WrapMode::Word,
+                    set_wrap_mode: gtk::WrapMode::None,
                     set_overwrite: false,
                 },
             }
@@ -242,8 +245,8 @@ impl SimpleComponent for TextEditorModel {
                 self.content_changed_manually = false;
 
                 self.file_name = file_name;
-                self.num_contributors = contributors;
-                self.content = content;
+                self.num_contributors = contributors;                
+                self.content = content;            
                 self.buffer.set_text(&format!("{}\n", self.content));
 
                 self.content_changed_manually = true;
