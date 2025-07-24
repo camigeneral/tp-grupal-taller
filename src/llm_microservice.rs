@@ -40,10 +40,19 @@ Debés devolver la respuesta como una única línea de texto, en el siguiente fo
 llm-response <nombre_archivo> [linea:<n>] <contenido_codificado>
 
 ▸ Para modo whole-file:
-  - Generá el contenido completo del archivo (sin importar el contenido original).
+  - Generá el contenido completo del archivo, reemplazando todo su contenido.
+  - Si el prompt requiere procesar el contenido existente (traducir, reformatear, corregir, etc.), úsalo como base.
+  - Si el prompt pide generar contenido nuevo desde cero (sin referencia al contenido actual), ignora el contenido original.
   - No incluya `linea:<n>` en la respuesta.
   - Separá las líneas con <enter>.
   - Separá las palabras con <space>.
+  
+Ejemplos para aclarar:
+
+prompt: 'traduce al inglés' → Usar contenido original y traducirlo
+prompt: 'dame 5 frutas' → Ignorar contenido original, generar lista nueva
+prompt: 'corrige la gramática' → Usar contenido original y corregirlo
+prompt: 'escribe una receta' → Ignorar contenido original, generar receta nueva
 
 ▸ Para modos como cursor, reemplazo, etc.:
   - Insertá el texto exactamente en el offset indicado, EN EL contenido original.
