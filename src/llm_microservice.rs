@@ -5,7 +5,8 @@ use std::net::{TcpListener, TcpStream};
 use curl::easy::{Easy, List};
 use std::io::{BufReader,BufRead, Write};
 use serde_json::json;
-
+#[path = "utils/string_helper.rs"]
+mod string_helper;
 
 fn get_gemini_respond(prompt: &str) -> Vec<u8> {
     let api_key = "AIzaSyDSyVJnHxJnUXDRnM7SxphBTwEPGtOjMEI";
@@ -22,6 +23,16 @@ Respondé únicamente con el texto generado.
 Usá <space> para representar espacios y <enter> para representar saltos de línea.
 
 Insertá texto solo donde se indique.
+
+IMPORTANTE SOBRE OFFSET: El offset se calcula sobre el contenido DECODIFICADO (después de reemplazar <space> con espacios reales, <enter> con \n, etc.)
+
+Ejemplo de cálculo de offset:
+Contenido codificado: 'hola<space>mundo'
+Contenido decodificado: 'hola mundo' (10 caracteres)
+- offset 0 = antes de 'h'
+- offset 4 = antes del espacio 
+- offset 5 = antes de 'm'
+- offset 10 = al final
 
 FORMATO DEL RESULTADO
 
@@ -53,8 +64,21 @@ Ejemplo:
 Si el prompt es 'dame 50 capitales', no me los des asi: Tokio<enter>Ciudad<space>de<space>México<enter>El<space>Cairo<enter>Nueva<space>Delhi<enter>Shanghái<enter>São<space>Paulo<enter>Bombay<enter>
 SIEMPRE ME LOS TENES QUE DAR ASI: Tokio<enter>Ciudad<space>de<space>México<enter>El<space>Cairo<enter>Nueva<space>Delhi<enter>Shanghái<enter>São<space>Paulo<enter>Bombay<enter>
 
-EJEMPLOS
+REGLAS SOBRE ESPACIOS
 
+Solo usa <space> donde corresponden espacios reales en el resultado final. No agregues <space> extra al inicio o final a menos que el contenido generado realmente requiera espacios en esas posiciones.
+
+Si el offset está en medio de una palabra, la palabra debe dividirse, y el contenido generado debe insertarse con un <space> antes y después:
+
+Ejemplo: ho<space>Siam<space>la
+
+Si el offset está en un límite claro de palabra (entre dos <space>), entonces:
+
+Insertar directamente: <space>NUEVO<space>.
+
+Si el contenido generado contiene múltiples palabras, todas deben estar separadas por <space> y no debe haber dobles <space> ni <space> mal ubicados.
+
+EJEMPLOS
 ▸ whole-file:  
 Prompt: archivo:'receta.txt', prompt: 'generá una receta', aplicacion: 'whole-file'  
 Respuesta esperada:  
@@ -68,12 +92,74 @@ llm-response receta.txt linea:0 hol<space>Roma<space>a<space>como<space>estan
 Prompt: archivo:'receta.txt', linea: 0, offset: 2, contenido: 'hola<space>como<space>estan', prompt: 'lorem de dos palabras', aplicacion: 'cursor'  
 Respuesta esperada:  
 llm-response receta.txt linea:0 ho<space>Lorem<space>ipsum<space>la<space>como<space>estan
+
+▸ cursor:
+Prompt: archivo:'saludo.txt', linea: 0, offset: 4, contenido: 'hola<space>mundo', prompt: 'insertar palabra sorpresa', aplicacion: 'cursor'
+Respuesta esperada:
+llm-response saludo.txt linea:0 hola<space>sorpresa<space>mundo
+
+Prompt: archivo:'saludo.txt', linea: 0, offset: 2, contenido: 'hola<space>mundo', prompt: 'insertar un número romano', aplicacion: 'cursor'
+Respuesta esperada:
+llm-response saludo.txt linea:0 ho<space>IV<space>la<space>mundo
+
+Prompt: archivo:'gatos.txt', linea: 1, offset: 7, contenido: 'Maine<space>coon<space>gato', prompt: 'añadir tipo de gato', aplicacion: 'cursor'
+Respuesta esperada:
+llm-response gatos.txt linea:1 Maine<space>co<space>Siamés<space>on<space>gato
+
+Prompt: archivo:'colores.txt', linea: 2, offset: 10, contenido: 'rojo<space>verde<space>azul', prompt: 'agregar un color primario', aplicacion: 'cursor'
+Respuesta esperada:
+llm-response colores.txt linea:2 rojo<space>verde<space>az<space>amarillo<space>ul
+
+Prompt: archivo:'test.txt', linea: 0, offset: 0, contenido: 'hola<space>como', prompt: 'insertar saludo inicial', aplicacion: 'cursor'
+Respuesta esperada:
+llm-response test.txt linea:0 <space>Hola<space>hola<space>como
+
+▸ whole-file:
+Prompt: archivo:'planetas.txt', prompt: 'dame los 4 primeros planetas', aplicacion: 'whole-file'
+Respuesta esperada:
+llm-response planetas.txt Mercurio<enter>Venus<enter>Tierra<enter>Marte
+
+Prompt: archivo:'razas.txt', prompt: 'tres razas de perro', aplicacion: 'whole-file'
+Respuesta esperada:
+llm-response razas.txt Labrador<space>Retriever<enter>Pastor<space>Alemán<enter>Bulldog<enter>
+
+Prompt: archivo:'frutas.txt', prompt: 'nombres de frutas', aplicacion: 'whole-file'
+Respuesta esperada:
+llm-response frutas.txt Manzana<enter>Pera<enter>Banana<enter>Frutilla<enter>Durazno
+
+Prompt: archivo:'notas.txt', prompt: 'lista de 7 notas musicales', aplicacion: 'whole-file'
+Respuesta esperada:
+llm-response notas.txt Do<enter>Re<enter>Mi<enter>Fa<enter>Sol<enter>La<enter>Si
+
+▸ cursor con offset dentro de palabra:
+Prompt: archivo:'texto.txt', linea: 0, offset: 5, contenido: 'gente<space>linda', prompt: 'insertar una palabra', aplicacion: 'cursor'
+Respuesta esperada:
+llm-response texto.txt linea:0 gente<space>bella<space>linda
+
+Prompt: archivo:'ideas.txt', linea: 0, offset: 8, contenido: 'gran<space>proyecto<space>final', prompt: 'inserta una palabra clave', aplicacion: 'cursor'
+Respuesta esperada:
+llm-response ideas.txt linea:0 gran<space>proye<space>clave<space>cto<space>final
+
+▸ cursor con palabras múltiples:
+Prompt: archivo:'data.txt', linea: 0, offset: 4, contenido: 'hola<space>como<space>va', prompt: 'dos nombres', aplicacion: 'cursor'
+Respuesta esperada:
+llm-response data.txt linea:0 hola<space>Juan<space>Ana<space>como<space>va
+
+▸ cursor con inserción al final:
+Prompt: archivo:'mensaje.txt', linea: 0, offset: 13, contenido: 'esto<space>es<space>un<space>mensaje', prompt: 'añadir palabra final', aplicacion: 'cursor'
+Respuesta esperada:
+llm-response mensaje.txt linea:0 esto<space>es<space>un<space>mensaje<space>final
+
+▸ cursor con inserción al principio:
+Prompt: archivo:'salida.txt', linea: 0, offset: 0, contenido: 'buen<space>día', prompt: 'insertar saludo', aplicacion: 'cursor'
+Respuesta esperada:
+llm-response salida.txt linea:0 <space>Hola<space>buen<space>día
 "
             }]
         },
         "contents": [{
             "parts": [{
-                "text": format!("{}", prompt)
+                "text": format!("{}", string_helper::decode_text(prompt.to_string()))
             }]
         }]
         
