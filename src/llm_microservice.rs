@@ -1,12 +1,14 @@
 extern crate serde_json;
 extern crate curl;
-
+use std::sync::Arc;
+use std::thread;
 use std::net::{TcpListener, TcpStream};
 use curl::easy::{Easy, List};
 use std::io::{BufReader,BufRead, Write};
 use serde_json::json;
 #[path = "utils/threadpool.rs"]
 mod threadpool;
+use threadpool::ThreadPool;
 
 fn get_gemini_respond(prompt: &str) -> Vec<u8> {
     let api_key = "AIzaSyDSyVJnHxJnUXDRnM7SxphBTwEPGtOjMEI";
@@ -201,8 +203,9 @@ llm-response salida.txt linea:0 <space>Hola<space>buen<space>día
     response_data.clone()
 }
 
-fn handle_requests(mut stream: TcpStream) {
+fn handle_requests(stream: TcpStream, thread_pool: Arc<ThreadPool>) {
     let mut reader = BufReader::new(stream.try_clone().unwrap());
+
     loop {
         let mut input_prompt = String::new();
         match reader.read_line(&mut input_prompt) {
@@ -211,36 +214,40 @@ fn handle_requests(mut stream: TcpStream) {
                 break;
             }
             Ok(_) => {
-                println!("Prompt recibido: {}", input_prompt.trim());
-                if input_prompt.trim().is_empty() {
-                    println!("Prompt vacio: {}", input_prompt.trim());
+                let prompt = input_prompt.trim().to_string();
+
+                if prompt.is_empty() {
+                    println!("Prompt vacío");
                     break;
                 }
-                let gemini_resp = get_gemini_respond(input_prompt.trim());
-                let response_str = String::from_utf8_lossy(&gemini_resp);
 
-                match serde_json::from_str::<serde_json::Value>(&response_str) {
-                    Ok(parsed) => {
-                        if let Some(text) = parsed["candidates"]
-                            .get(0)
-                            .and_then(|c| c["content"]["parts"].get(0))
-                            .and_then(|p| p["text"].as_str())
-                        {
-                            println!("Respuesta: {}", text);
-                            let resp = text.trim().trim_end_matches("\n");
-                            if let Err(e) = stream.write_all(format!("{resp}\n").as_bytes()) {
-                                eprintln!("Error escribiendo al cliente: {}", e);
-                                break;
+                let mut stream_clone = stream.try_clone().unwrap();
+                let prompt_clone = prompt.clone();
+
+                thread_pool.execute(move || {
+                    let gemini_resp = get_gemini_respond(&prompt_clone);
+                    let response_str = String::from_utf8_lossy(&gemini_resp);
+
+                    match serde_json::from_str::<serde_json::Value>(&response_str) {
+                        Ok(parsed) => {
+                            if let Some(text) = parsed["candidates"]
+                                .get(0)
+                                .and_then(|c| c["content"]["parts"].get(0))
+                                .and_then(|p| p["text"].as_str())
+                            {
+                                let resp = text.trim().trim_end_matches("\n");
+                                if let Err(e) = stream_clone.write_all(format!("{resp}\n").as_bytes()) {
+                                    eprintln!("Error escribiendo al cliente: {}", e);
+                                }
+                            } else {
+                                println!("Error: no se pudo extraer texto de Gemini");
                             }
-                        } else {
-                            println!("Error: no se pudo extraer texto de Gemini");                            
+                        }
+                        Err(e) => {
+                            println!("Error parseando JSON: {}", e);
                         }
                     }
-                    Err(e) => {
-                        println!("{}", format!("Error parseando JSON: {}\n", e));
-                        
-                    }
-                }
+                });
             }
             Err(e) => {
                 eprintln!("Error leyendo del stream: {}", e);
@@ -250,22 +257,18 @@ fn handle_requests(mut stream: TcpStream) {
     }
 }
 
+
 fn main() -> std::io::Result<()> {
-   let listener = TcpListener::bind("127.0.0.1:4030")?;
-   println!("Servidor para la llm levantado");
-   let pool = threadpool::ThreadPool::new(4);
+    let thread_pool = Arc::new(ThreadPool::new(4));
+    let listener = TcpListener::bind("127.0.0.1:4030")?;
+    
     for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
-                println!("Se conecto el microservicio");
-                pool.execute(|| {
-                    handle_requests(stream);
-                });
-            }
-            Err(e) => {
-                println!("error: {}", e);
-            }
-        }
+        let stream = stream?;
+        let pool = Arc::clone(&thread_pool);
+        thread::spawn(move || {
+            handle_requests(stream, pool);
+        });
     }
-   Ok(())
+    Ok(())
 }
+
