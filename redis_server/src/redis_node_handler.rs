@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-const PRINT_PINGS: bool = false;
+const PRINT_PINGS: bool = true;
 
 extern crate base64;
 use self::base64::{engine::general_purpose, Engine as _};
@@ -129,7 +129,8 @@ pub fn start_node_connection(
 
     for connection_port in node_ports {
         if connection_port != locked_local_node.port {
-            let node_address_to_connect = format!("127.0.0.1:{}", connection_port);
+            // let node_address_to_connect = format!("127.0.0.1:{}", connection_port);
+            let node_address_to_connect = get_node_address(connection_port);
             let peer_addr = node_address_to_connect.clone();
 
             match TcpStream::connect(&node_address_to_connect) {
@@ -304,9 +305,9 @@ fn handle_node(
 
         let command = &input[0];
 
-        // if command != "pong"  && command != "ping" || PRINT_PINGS {
-        //     println!("Recibido: {:?}", input);
-        // }
+        if command != "pong"  && command != "ping" || PRINT_PINGS {
+            println!("Recibido: {:?}", input);
+        }
 
         match command.as_str() {
             "node" => {
@@ -332,7 +333,9 @@ fn handle_node(
                 };
 
                 let node_listening_port = &input[1];
-                let node_address = format!("127.0.0.1:{}", node_listening_port);
+                // let node_address = format!("127.0.0.1:{}", node_listening_port);
+                let node_address = get_node_address(parsed_port);
+
 
                 let node_role = match input[2].trim().to_lowercase().as_str() {
                     "master" => NodeRole::Master,
@@ -351,7 +354,8 @@ fn handle_node(
                 };
 
                 if !lock_nodes.contains_key(&node_address) {
-                    let node_address_to_connect = format!("127.0.0.1:{}", node_listening_port);
+                    // let node_address_to_connect = format!("127.0.0.1:{}", node_listening_port);
+                    let node_address_to_connect = get_node_address(parsed_port);
                     let new_stream = match TcpStream::connect(&node_address_to_connect) {
                         Ok(s) => s,
                         Err(_) => continue,
@@ -474,7 +478,8 @@ fn handle_node(
                     let updated_epoch = locked_local_node.epoch + 1;
                     locked_local_node.epoch = updated_epoch;
                     for replica in locked_local_node.replica_nodes.clone() {
-                        let replica_address = format!("127.0.0.1:{}", replica);
+                        // let replica_address = format!("127.0.0.1:{}", replica);
+                        let replica_address = get_node_address(replica);
                         if let Some(replica_node) = locked_peer_nodes.get_mut(&replica_address) {
                             let message = format!(
                                 "update_epoch {} {}\n",
@@ -560,7 +565,8 @@ fn handle_node(
                             poisoned.into_inner()
                         }
                     };
-                    let address = format!("127.0.0.1:{}", port);
+                    // let address = format!("127.0.0.1:{}", port);
+                    let address = get_node_address(port);
 
                     if let Some(replica_node) = locked_peer_nodes.get_mut(&address) {
                         replica_node.epoch = epoch;
@@ -640,7 +646,8 @@ pub fn broadcast_to_replicas(
     println!("initial command {}", unparsed_command);
 
     for replica in replicas {
-        let key = format!("127.0.0.1:{}", replica);
+        // let key = format!("127.0.0.1:{}", replica);
+        let key = get_node_address(*replica);
         if let Some(peer_node) = locked_peer_nodes.get_mut(&key) {
             let stream = &mut peer_node.stream;
 
@@ -675,7 +682,17 @@ fn handle_replica_sync(
     shared_sets: &SetsMap,
     shared_documents: &RedisDocumentsMap,
 ) -> std::io::Result<()> {
-    let replica_addr = format!("127.0.0.1:{}", replica_port);
+    // let replica_addr = format!("127.0.0.1:{}", replica_port);
+    let parsed_port = match replica_port.parse::<usize>() {
+        Ok(v) => v,
+        Err(_) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Error al parsear puerto",
+            ));
+        }
+    };
+    let replica_addr = get_node_address(parsed_port);
     // Clonar conjuntos
     let cloned_sets = match shared_sets.lock() {
         Ok(locked_sets) => locked_sets.clone(),
@@ -928,7 +945,8 @@ fn detect_failed_node(
     let mut peer_state = NodeState::Fail;
     let mut promote_replica = false;
 
-    let inactive_address = format!("127.0.0.1:{}", inactive_port);
+    // let inactive_address = format!("127.0.0.1:{}", inactive_port);
+    let inactive_address = get_node_address(inactive_port);
     if let Some(inactive_node) = locked_peer_nodes.get_mut(&inactive_address) {
         match inactive_node.state {
             NodeState::Active => {
@@ -944,7 +962,8 @@ fn detect_failed_node(
                 {
                     promote_replica = true;
                     for replica in locked_local_node.replica_nodes.clone() {
-                        let replica_address = format!("127.0.0.1:{}", replica);
+                        // let replica_address = format!("127.0.0.1:{}", replica);
+                        let replica_address = get_node_address(replica);
                         if let Some(replica_node) = locked_peer_nodes.get_mut(&replica_address) {
                             // por las dudas verifico que no sea master y que este activo
                             if replica_node.state == NodeState::Active
@@ -1002,7 +1021,8 @@ fn set_failed_node(
     };
     let mut promote_replica = false;
 
-    let inactive_address = format!("127.0.0.1:{}", inactive_port);
+    // let inactive_address = format!("127.0.0.1:{}", inactive_port);
+    let inactive_address = get_node_address(inactive_port);
     if let Some(inactive_node) = locked_peer_nodes.get_mut(&inactive_address) {
         if inactive_state == NodeState::Fail {
             // lo marco como failed
@@ -1015,7 +1035,8 @@ fn set_failed_node(
             {
                 promote_replica = true;
                 for replica in locked_local_node.replica_nodes.clone() {
-                    let replica_address = format!("127.0.0.1:{}", replica);
+                    // let replica_address = format!("127.0.0.1:{}", replica);
+                    let replica_address = get_node_address(replica);
                     if let Some(replica_node) = locked_peer_nodes.get_mut(&replica_address) {
                         // por las dudas verifico que no sea master y que este activo
                         if replica_node.state == NodeState::Active
@@ -1050,7 +1071,8 @@ fn set_failed_node(
                     {
                         promote_replica = true;
                         for replica in locked_local_node.replica_nodes.clone() {
-                            let replica_address = format!("127.0.0.1:{}", replica);
+                            // let replica_address = format!("127.0.0.1:{}", replica);
+                            let replica_address = get_node_address(replica);
                             if let Some(replica_node) = locked_peer_nodes.get_mut(&replica_address)
                             {
                                 if replica_node.priority < locked_local_node.priority {
@@ -1124,4 +1146,10 @@ fn initialize_replica_promotion(
             }
         }
     }
+}
+
+
+fn get_node_address(port: usize) -> String {
+    let last_digit = port % 10;
+    format!("node{}:{}", last_digit, port)
 }

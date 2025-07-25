@@ -54,8 +54,8 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(_e) => return Err("Failed to parse arguments".into()),
     };
 
-    let node_address = format!("127.0.0.1:{}", port + 10000);
-    let client_address = format!("127.0.0.1:{}", port);
+    let node_address = format!("0.0.0.0:{}", port + 10000);
+    let client_address = format!("0.0.0.0:{}", port);
     let peer_nodes: PeerNodeMap = Arc::new(Mutex::new(HashMap::new()));
 
     start_server(&client_address, port, node_address, peer_nodes)?;
