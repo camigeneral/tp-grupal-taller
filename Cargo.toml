@@ -3,5 +3,9 @@ members = [
     "redis_server",
     "client",
     "microservice",
+    "llm_microservice",
     "rusty_docs"
 ]
+
+
+

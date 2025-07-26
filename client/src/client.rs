@@ -236,24 +236,36 @@ impl LocalClient {
         if parts.is_empty() {
             return String::new();
         }
+    
         let cmd = parts[0];
-        if cmd.eq_ignore_ascii_case("AUTH")
-            || cmd.eq_ignore_ascii_case("subscribe")
-            || cmd.eq_ignore_ascii_case("unsubscribe")
-            || cmd.eq_ignore_ascii_case("get_files")
-            || cmd.eq_ignore_ascii_case("set")
-        {
-            format_resp_command(&parts)
-        } else if cmd.to_uppercase().contains("WRITE") {
-            let splited_command: Vec<&str> = command.split('|').collect();
-            let client_command = format_resp_command(&splited_command).to_string();
-            let key = splited_command.get(4).unwrap_or(&"");
-            format_resp_publish(key, &client_command)
-        } else {
-            let key = parts.get(1).unwrap_or(&"");
-            format_resp_publish(key, command)
+    
+        const SIMPLE_COMMANDS: [&str; 4] = ["AUTH", "SUBSCRIBE", "UNSUBSCRIBE", "SET"];
+    
+        if SIMPLE_COMMANDS.iter().any(|c| cmd.eq_ignore_ascii_case(c)) {
+            return format_resp_command(&parts);
         }
+    
+        let cmd_upper = cmd.to_ascii_uppercase();
+    
+        if cmd_upper.contains("WRITE") {
+            let splited_command: Vec<&str> = command.split('|').collect();
+            let client_command = format_resp_command(&splited_command);
+            let key = splited_command.get(4).unwrap_or(&"");
+            return format_resp_publish(key, &client_command);
+        }
+    
+        if cmd_upper.contains("PROMPT") {
+            println!("command: {:#?}", command);
+            let splited_command: Vec<&str> = command.split('|').collect();
+            let client_command = format_resp_command(&splited_command);
+            let key = splited_command.get(2).unwrap_or(&"");
+            return format_resp_publish(key, &client_command);
+        }
+    
+        let key = parts.get(1).unwrap_or(&"");
+        format_resp_publish(key, command)
     }
+    
 
     /// Actualiza el último comando enviado, almacenándolo de forma segura.
     ///
@@ -440,21 +452,32 @@ impl LocalClient {
             }
         }
     }
-    /// Maneja respuestas de tipo FILES, actualizando la lista de archivos en la UI.
+
+    /// Maneja respuestas de tipo LLM-RESPONSE, actualizando el contenido del documento en la UI.
     ///
     /// # Argumentos
     /// * `response` - Respuesta recibida.
     /// * `ui_sender` - Canal para enviar mensajes a la UI.
-    fn handle_files(response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) {
-        let archivos = if response.len() > 1 {
-            response[1..].to_vec()
-        } else {
-            vec![]
-        };
+    fn handle_llm_response(response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) {
         if let Some(sender) = &ui_sender {
-            let _ = sender.send(AppMsg::UpdateFilesList(archivos));
+
+            if response.len() == 3 {
+                let content = response[2].to_string();
+                let file = response[1].to_string();  
+                let mut new_lines = Vec::new();                                        
+                new_lines.extend(content.split("<enter>").map(String::from));
+                let _ = sender.send(AppMsg::UpdateAllFileData(file.to_string(), new_lines.to_vec()));
+            } else {
+                let content = response[3].to_string();
+                let line_parts : Vec<&str> = response[2].split(':').collect();
+                let line = line_parts[1];
+                let file = response[1].to_string(); 
+                let _ = sender.send(AppMsg::UpdateLineFile(file.to_string(), line.to_string(), content));
+
+            }           
         }
     }
+
     /// Maneja respuestas de tipo ERROR, mostrando mensajes de error en la UI.
     ///
     /// # Argumentos
@@ -562,7 +585,7 @@ impl LocalClient {
                     Self::handle_status(response, local_addr.to_string(), cloned_ui_sender)
                 }
                 RedisClientResponseType::Write => Self::handle_write(response, cloned_ui_sender),
-                RedisClientResponseType::Files => Self::handle_files(response, cloned_ui_sender),
+                RedisClientResponseType::Llm => Self::handle_llm_response(response, cloned_ui_sender),                
                 RedisClientResponseType::Error => Self::handle_error(response, cloned_ui_sender),
                 RedisClientResponseType::Other => {
                     Self::handle_unknown(response, cloned_ui_sender, cloned_last_command.clone())

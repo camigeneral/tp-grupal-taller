@@ -1,5 +1,4 @@
 use super::auth;
-use super::client_action;
 use super::pub_sub;
 use super::resp_parser::{CommandRequest, CommandResponse, ValueType};
 use super::redis_response::RedisResponse;
@@ -43,7 +42,6 @@ pub fn execute_command(
         "lset" => list::handle_lset(&request, docs),
         "linsert" => list::handle_linsert(&request, docs), */
         "auth" => auth::handle_auth(&request, logged_clients, active_clients, client_addr),
-        "get_files" => client_action::get_files(docs),
         _ => RedisResponse::new(
             CommandResponse::Error("Unknown".to_string()),
             false,
@@ -67,7 +65,6 @@ pub fn execute_replica_command(
         "srem" => set::handle_srem(&request, shared_sets),
         /* "rpush" => list::handle_rpush(&request, docs),
         "lset" => list::handle_lset(&request, docs), */
-        "get_files" => client_action::get_files(docs),
         /* "linsert" => list::handle_linsert(&request, docs), */
         _ => RedisResponse::new(
             CommandResponse::Error("Unknown".to_string()),
