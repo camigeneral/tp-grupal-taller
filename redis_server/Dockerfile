@@ -1,7 +1,6 @@
 FROM rust:latest AS builder
 
 WORKDIR /app
-
 COPY Cargo.toml Cargo.lock ./
 COPY redis_server/ redis_server/
 COPY microservice/ microservice/

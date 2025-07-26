@@ -1,35 +1,44 @@
 services:
   node0:
-    build: .
+    build:
+      context: .
+      dockerfile: redis_server/Dockerfile
     image: redis-node
     container_name: node0
     working_dir: /usr/local/bin
     ports:
       - "14000:14000"
+      - "4000:4000"
     volumes:
       - ./redis_server/conf_files:/usr/local/bin/redis_server/conf_files
       - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
     command: ["redis_server_bin", "4000"]
 
   node1:
-    build: .
+    build: 
+      context: .
+      dockerfile: redis_server/Dockerfile
     image: redis-node
     container_name: node1
     working_dir: /usr/local/bin
     ports:
       - "14001:14001"
+      - "4001:4001"
     volumes:
       - ./redis_server/conf_files:/usr/local/bin/redis_server/conf_files
       - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
     command: ["redis_server_bin", "4001"]
 
   node2:
-    build: .
+    build: 
+      context: .
+      dockerfile: redis_server/Dockerfile
     image: redis-node
     container_name: node2
     working_dir: /usr/local/bin
     ports:
       - "14002:14002"
+      - "4002:4002"
     volumes:
       - ./redis_server/conf_files:/usr/local/bin/redis_server/conf_files
       - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
