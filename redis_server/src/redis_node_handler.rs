@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-const PRINT_PINGS: bool = false;
+const PRINT_PINGS: bool = true;
 
 extern crate base64;
 use self::base64::{engine::general_purpose, Engine as _};
@@ -166,6 +166,7 @@ pub fn start_node_connection(
                     );
                 }
                 Err(_) => {
+                    println!("Error connecting with peer node");
                     continue;
                 }
             }
@@ -358,7 +359,10 @@ fn handle_node(
                     let node_address_to_connect = get_node_address(parsed_port);
                     let new_stream = match TcpStream::connect(&node_address_to_connect) {
                         Ok(s) => s,
-                        Err(_) => continue,
+                        Err(_) => {
+                            println!("Error connecting to node");
+                            continue
+                        }
                     };
 
                     let mut stream_to_respond = match new_stream.try_clone() {

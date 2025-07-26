@@ -140,6 +140,7 @@ fn start_server(
     // Iniciar servidor TCP
     let tcp_listener = TcpListener::bind(bind_address)?;
     logger.log(&format!("Servidor iniciado en {}", bind_address));
+    println!("Servidor iniciado en {}", bind_address);
 
     let ctx = Arc::new(ServerContext {
         active_clients: Arc::clone(&active_clients),
@@ -153,7 +154,9 @@ fn start_server(
         main_addrs: bind_address.to_string(),
     });
 
+    println!("before incoming connection");
     for incoming_connection in tcp_listener.incoming() {
+        println!("aaaaaaaa");
         match incoming_connection {
             Ok(client_stream) => {
                 if let Err(e) =

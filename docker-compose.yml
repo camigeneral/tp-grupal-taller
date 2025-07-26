@@ -1,5 +1,12 @@
+networks:
+  redinternanodos:
+    driver: bridge
+
+
 services:
   node0:
+    networks:
+      - redinternanodos
     build:
       context: .
       dockerfile: redis_server/Dockerfile
@@ -10,11 +17,16 @@ services:
       - "14000:14000"
       - "4000:4000"
     volumes:
-      - ./redis_server/conf_files:/usr/local/bin/redis_server/conf_files
       - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     command: ["redis_server_bin", "4000"]
 
   node1:
+    networks:
+      - redinternanodos
     build: 
       context: .
       dockerfile: redis_server/Dockerfile
@@ -25,11 +37,16 @@ services:
       - "14001:14001"
       - "4001:4001"
     volumes:
-      - ./redis_server/conf_files:/usr/local/bin/redis_server/conf_files
       - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     command: ["redis_server_bin", "4001"]
 
   node2:
+    networks:
+      - redinternanodos
     build: 
       context: .
       dockerfile: redis_server/Dockerfile
@@ -40,14 +57,20 @@ services:
       - "14002:14002"
       - "4002:4002"
     volumes:
-      - ./redis_server/conf_files:/usr/local/bin/redis_server/conf_files
       - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     command: ["redis_server_bin", "4002"]
 
   microservice:
+    networks:
+      - redinternanodos
     build:
       context: .
       dockerfile: microservice/Dockerfile
+    restart: on-failure
     image: microservice
     container_name: microservice
     working_dir: /usr/local/bin

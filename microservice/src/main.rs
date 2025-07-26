@@ -96,7 +96,7 @@ impl Microservice {
     /// * `Err(Box<dyn std::error::Error>)` - Error si no se puede conectar al nodo Redis o establecer las conexiones.
     pub fn start(&self, redis_port: u16) -> Result<(), Box<dyn std::error::Error>> {
         // let main_address = format!("127.0.0.1:{}", redis_port);
-        let main_address = format!("node0:14000");
+        let main_address = format!("node0:4000");
 
         println!("Conectándome al server de redis en {:?}", main_address);
         let mut socket: TcpStream = TcpStream::connect(&main_address)?;
