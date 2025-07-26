@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::BufReader;
+use std::env;
 use std::io::Write;
 #[allow(unused_imports)]
 use std::net::TcpListener;
@@ -94,7 +95,8 @@ impl Microservice {
     /// * `Ok(())` - El microservicio se inició correctamente.
     /// * `Err(Box<dyn std::error::Error>)` - Error si no se puede conectar al nodo Redis o establecer las conexiones.
     pub fn start(&self, redis_port: u16) -> Result<(), Box<dyn std::error::Error>> {
-        let main_address = format!("127.0.0.1:{}", redis_port);
+        // let main_address = format!("127.0.0.1:{}", redis_port);
+        let main_address = format!("node0:14000");
 
         println!("Conectándome al server de redis en {:?}", main_address);
         let mut socket: TcpStream = TcpStream::connect(&main_address)?;
@@ -155,9 +157,9 @@ impl Microservice {
         &self,
         connect_node_sender: &MpscSender<TcpStream>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let other_ports = vec![4003, 4004, 4005, 4006, 4007, 4008, 4001, 4002];
-        for port in other_ports {
-            let addr = format!("127.0.0.1:{}", port);
+        let other_ports = get_nodes_addresses();
+        for addr in other_ports {
+            // let addr = format!("127.0.0.1:{}", port);
             match TcpStream::connect(&addr) {
                 Ok(mut extra_socket) => {
                     println!("Microservicio conectado a nodo adicional: {}", addr);
@@ -579,6 +581,16 @@ impl Microservice {
                     format!("Error obteniendo lock de node_streams: {}", e),
                 )))
             }
+        }
+    }
+}
+
+fn get_nodes_addresses() -> Vec<String> {
+    match env::var("REDIS_NODE_HOSTS") {
+        Ok(val) => val.split(',').map(|s| s.to_string()).collect(),
+        Err(_) => {
+            eprintln!("REDIS_NODE_HOSTS no está seteada");
+            vec![]
         }
     }
 }

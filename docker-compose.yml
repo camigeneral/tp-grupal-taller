@@ -43,3 +43,20 @@ services:
       - ./redis_server/conf_files:/usr/local/bin/redis_server/conf_files
       - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
     command: ["redis_server_bin", "4002"]
+
+  microservice:
+    build:
+      context: .
+      dockerfile: microservice/Dockerfile
+    image: microservice
+    container_name: microservice
+    working_dir: /usr/local/bin
+    depends_on:
+      - node0
+      - node1
+      - node2
+    ports:
+      - "5000:5000"
+    environment:
+      REDIS_NODE_HOSTS: node2:4002,node1:4001
+    command: ["microservice_bin"]
