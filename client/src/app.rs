@@ -4,12 +4,10 @@ use self::gtk4::{
     prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, PopoverExt, WidgetExt},
     CssProvider,
 };
-use std::fs;
-use std::collections::HashSet;
 use crate::components::structs::document_value_info::DocumentValueInfo;
 use crate::components::{
     error_modal::ErrorModal,
-    loading_modal::{LoadingModalMsg, LoadingModalModel},
+    loading_modal::{LoadingModalModel, LoadingModalMsg},
     login::{LoginForm, LoginMsg, LoginOutput},
 };
 use app::gtk4::glib::Propagation;
@@ -19,6 +17,8 @@ use components::file_workspace::{FileWorkspace, FileWorkspaceMsg, FileWorkspaceO
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
 use components::types::FileType;
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::fs;
 use std::thread;
 
 use std::sync::mpsc::{channel, Sender};
@@ -88,7 +88,7 @@ pub enum AppMsg {
     AddFile(String),
     SendPrompt(DocumentValueInfo),
     UpdateAllFileData(String, Vec<String>),
-    UpdateLineFile(String, String, String)
+    UpdateLineFile(String, String, String),
 }
 
 #[relm4::component(pub)]
@@ -103,7 +103,7 @@ impl SimpleComponent for AppModel {
         set_width_request: 800,
         set_default_height: 600,
         #[wrap(Some)]
-        set_titlebar = model.header_cont.widget(),        
+        set_titlebar = model.header_cont.widget(),
 
         #[name="main_container"]
         gtk::Box {
@@ -220,11 +220,13 @@ impl SimpleComponent for AppModel {
         );
         let error_modal = ErrorModal::builder()
             .transient_for(&root)
-            .launch(()) 
+            .launch(())
             .detach();
 
         let loading_modal = LoadingModalModel::builder()
-        .transient_for(&root).launch(()).detach();
+            .transient_for(&root)
+            .launch(())
+            .detach();
 
         let header_model = NavbarModel::builder().launch(()).forward(
             sender.input_sender(),
@@ -246,7 +248,7 @@ impl SimpleComponent for AppModel {
                     AppMsg::AddContentSpreadSheet(doc_info)
                 }
                 FileWorkspaceOutputMessage::FilesLoaded => AppMsg::FilesLoaded,
-                FileWorkspaceOutputMessage::SendPrompt(doc_info) => AppMsg::SendPrompt(doc_info)
+                FileWorkspaceOutputMessage::SendPrompt(doc_info) => AppMsg::SendPrompt(doc_info),
             },
         );
 
@@ -414,13 +416,17 @@ impl SimpleComponent for AppModel {
             AppMsg::SendPrompt(doc_info) => {
                 self.command = format!(
                     "PROMPT|{}|{}|{}|{}|{}",
-                    doc_info.index, doc_info.file, doc_info.prompt, doc_info.offset, doc_info.selection_mode
+                    doc_info.index,
+                    doc_info.file,
+                    doc_info.prompt,
+                    doc_info.offset,
+                    doc_info.selection_mode
                 );
                 self.loading_modal.emit(LoadingModalMsg::Show);
                 sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::AddContent(doc_info) => {
-                println!("Doc info: {:#?}", doc_info);            
+                println!("Doc info: {:#?}", doc_info);
                 self.command = format!(
                     "WRITE|{}|{}|{}|{}",
                     doc_info.index, doc_info.value, doc_info.timestamp, doc_info.file
@@ -481,7 +487,6 @@ impl SimpleComponent for AppModel {
             }
 
             AppMsg::UpdateAllFileData(file, content) => {
-
                 let mut updated_content: Vec<String> = Vec::new();
 
                 for coded_text in content {
@@ -495,12 +500,12 @@ impl SimpleComponent for AppModel {
                     .emit(FileWorkspaceMsg::UpdateAllFileData(file, updated_content));
             }
 
-            AppMsg::UpdateLineFile(file, line , content) => {
+            AppMsg::UpdateLineFile(file, line, content) => {
                 let parsed_index = match line.parse::<i32>() {
                     Ok(idx) => idx,
                     Err(e) => {
                         println!("Error parseando índice: {}", e);
-                        return;                        
+                        return;
                     }
                 };
 
@@ -593,7 +598,7 @@ impl SimpleComponent for AppModel {
                         }
                     }
                 }
-            
+
                 let mut doc_names_vec: Vec<String> = doc_names.into_iter().collect();
                 doc_names_vec.sort();
                 let archivos_tipos: Vec<(String, FileType)> = doc_names_vec

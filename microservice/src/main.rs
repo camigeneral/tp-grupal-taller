@@ -1,11 +1,11 @@
 use std::collections::HashMap;
-use std::io::BufReader;
 use std::env;
+use std::io::BufRead;
+use std::io::BufReader;
 use std::io::Write;
 #[allow(unused_imports)]
 use std::net::TcpListener;
 use std::net::TcpStream;
-use std::io::BufRead;
 #[allow(unused_imports)]
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
@@ -13,15 +13,15 @@ use std::sync::mpsc::{channel, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 extern crate rusty_docs;
-use rusty_docs::document;
-use document::Document;
-#[allow(unused_imports)]
-use std::time::Duration;
-use rusty_docs::logger;
 use self::logger::*;
+use self::shared::MicroserviceMessage;
+use document::Document;
+use rusty_docs::document;
+use rusty_docs::logger;
 use rusty_docs::resp_parser;
 use rusty_docs::shared;
-use self::shared::MicroserviceMessage;
+#[allow(unused_imports)]
+use std::time::Duration;
 
 /// Microservicio que actúa como intermediario entre clientes y nodos Redis.
 ///
@@ -49,7 +49,7 @@ pub struct Microservice {
 
     /// Ruta al archivo de log donde se registran los eventos del microservicio.
     logger: Logger,
-    llm_sender: Option<MpscSender<String>>,    
+    llm_sender: Option<MpscSender<String>>,
 }
 
 impl Microservice {
@@ -75,7 +75,7 @@ impl Microservice {
             documents: Arc::new(Mutex::new(HashMap::new())),
             document_streams: Arc::new(Mutex::new(HashMap::new())),
             logger,
-            llm_sender: None,            
+            llm_sender: None,
         })
     }
 
@@ -88,10 +88,11 @@ impl Microservice {
             "Microservicio conectandose al server de llm en {:?}",
             llm_address
         ));
-        let node_streams = Arc::clone(&self.node_streams); 
+        let node_streams = Arc::clone(&self.node_streams);
 
         thread::spawn(move || {
-            let mut socket = TcpStream::connect(llm_address.clone()).expect("No se pudo conectar al LLM");
+            let mut socket =
+                TcpStream::connect(llm_address.clone()).expect("No se pudo conectar al LLM");
             let mut reader = BufReader::new(socket.try_clone().unwrap());
 
             for prompt in rx {
@@ -115,7 +116,8 @@ impl Microservice {
                     break;
                 }
 
-                let parts: Vec<&str> = response.split(' ')
+                let parts: Vec<&str> = response
+                    .split(' ')
                     .map(|s| s.trim())
                     .filter(|s| !s.is_empty())
                     .collect();
@@ -362,7 +364,7 @@ impl Microservice {
                 cloned_documents,
                 cloned_document_streams,
                 logger,
-                llm_sender
+                llm_sender,
             ) {
                 println!("Error en la conexión con el nodo: {}", e);
             }
@@ -396,7 +398,7 @@ impl Microservice {
         documents: Arc<Mutex<HashMap<String, Document>>>,
         document_streams: Arc<Mutex<HashMap<String, String>>>,
         logger: Logger,
-        llm_sender: Option<MpscSender<String>>
+        llm_sender: Option<MpscSender<String>>,
     ) -> std::io::Result<()> {
         for stream in reciever {
             let cloned_node_streams = Arc::clone(&node_streams);
@@ -416,7 +418,7 @@ impl Microservice {
                     cloned_document_streams,
                     cloned_last_command,
                     log_clone,
-                    llm_sender
+                    llm_sender,
                 ) {
                     println!("Error en la conexión con el nodo: {}", e);
                 }
@@ -451,12 +453,12 @@ impl Microservice {
         _document_streams: Arc<Mutex<HashMap<String, String>>>,
         last_command_sent: Arc<Mutex<String>>,
         log_clone: Logger,
-        llm_sender: Option<MpscSender<String>>
+        llm_sender: Option<MpscSender<String>>,
     ) -> std::io::Result<()> {
         if let Ok(peer_addr) = microservice_socket.peer_addr() {
             println!("Escuchando respuestas del nodo: {}", peer_addr);
         }
-        
+
         let mut reader = BufReader::new(microservice_socket.try_clone()?);
         loop {
             let llm_sender_clone = llm_sender.clone();
@@ -631,7 +633,13 @@ impl Microservice {
                         log_clone.log("Error obteniendo lock de documents para write");
                     }
                 }
-                MicroserviceMessage::Prompt { line, offset, prompt, file, selection_mode } => {                                        
+                MicroserviceMessage::Prompt {
+                    line,
+                    offset,
+                    prompt,
+                    file,
+                    selection_mode,
+                } => {
                     if let Ok(mut docs) = documents.lock() {
                         if let Some(document) = docs.get_mut(&file) {
                             let parsed_index = match line.parse::<usize>() {
@@ -648,52 +656,61 @@ impl Microservice {
                                         lines.join("<enter>")
                                     } else {
                                         lines.get(parsed_index).cloned().unwrap_or_default()
-                                    };                            
+                                    };
 
                                     let final_prompt = format!(
                                         "archivo:'{file}', linea: {parsed_index}, offset: {offset}, contenido: '{content}', prompt: '{prompt}', aplicacion: '{selection_mode}'\n"                                        
-                                    );         
-                                    println!("final_prompt: {final_prompt}, sender: {:#?}", llm_sender_clone);
-                       
+                                    );
+                                    println!(
+                                        "final_prompt: {final_prompt}, sender: {:#?}",
+                                        llm_sender_clone
+                                    );
+
                                     if let Some(llm_tx) = llm_sender_clone {
                                         println!("final_prompt: {final_prompt}");
                                         if let Err(e) = llm_tx.send(final_prompt) {
                                             eprintln!("Error al enviar prompt al LLM: {e}");
                                         }
                                     }
-                                }                                
+                                }
                                 _ => {}
                             }
-
                         }
                     }
-                },
-                MicroserviceMessage::PromptResponse { line, file, response, selection_mode } => {
+                }
+                MicroserviceMessage::PromptResponse {
+                    line,
+                    file,
+                    response,
+                    selection_mode,
+                } => {
                     println!("entro aca: response {response}, selection_mode_ {selection_mode}");
                     if let Ok(mut docs) = documents.lock() {
                         if let Some(document) = docs.get_mut(&file) {
                             match document {
                                 Document::Text(lines) => {
                                     let mut updated_lines: Vec<String> = Vec::new();
-                                    if selection_mode == "whole-file" {                                                                            
-                                        updated_lines.extend(response.split("<enter>").map(String::from));                                                                          
+                                    if selection_mode == "whole-file" {
+                                        updated_lines
+                                            .extend(response.split("<enter>").map(String::from));
                                     } else {
                                         let parsed_index = match line.parse::<usize>() {
                                             Ok(idx) => idx,
                                             Err(e) => {
                                                 eprintln!("Índice inválido en modo línea: {}", e);
-                                                return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Error al parsear índice: {}", e)));
+                                                return Err(std::io::Error::new(
+                                                    std::io::ErrorKind::InvalidInput,
+                                                    format!("Error al parsear índice: {}", e),
+                                                ));
                                             }
-                                        };                                                                 
+                                        };
                                         lines[parsed_index] = response.clone();
-                                        updated_lines = lines.clone();                                        
+                                        updated_lines = lines.clone();
                                     }
-                                    docs.insert(file, Document::Text(updated_lines.to_vec()));                                        
-                                }                                
+                                    docs.insert(file, Document::Text(updated_lines.to_vec()));
+                                }
                                 _ => {}
                             }
-
-                            
                         }
                     }
                 }

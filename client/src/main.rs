@@ -6,8 +6,8 @@ use app::AppModel;
 extern crate rand;
 use rand::Rng;
 use std::env::args;
-mod components;
 mod client;
+mod components;
 mod types;
 
 fn main() {

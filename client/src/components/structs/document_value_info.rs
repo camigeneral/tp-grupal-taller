@@ -26,7 +26,7 @@ impl DocumentValueInfo {
             timestamp: get_timestamp_millis(),
             offset: 0,
             prompt: String::new(),
-            selection_mode: String::new()
+            selection_mode: String::new(),
         }
     }
 

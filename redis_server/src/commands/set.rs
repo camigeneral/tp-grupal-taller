@@ -1,5 +1,5 @@
-use super::resp_parser::{CommandRequest, CommandResponse, ValueType};
 use super::redis_response::RedisResponse;
+use super::resp_parser::{CommandRequest, CommandResponse, ValueType};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};

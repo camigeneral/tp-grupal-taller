@@ -1,11 +1,10 @@
 extern crate rusty_docs;
-use rusty_docs::resp_parser::{parse_replica_command, write_response, CommandResponse};
-use utils::get_resource_path;
 use crate::persist_documents;
 use commands::redis;
 use encryption::{encrypt_message, ENCRYPTION, KEY};
 use local_node::{LocalNode, NodeRole, NodeState};
 use peer_node;
+use rusty_docs::resp_parser::{parse_replica_command, write_response, CommandResponse};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::File;
@@ -16,6 +15,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
+use utils::get_resource_path;
 
 const PRINT_PINGS: bool = true;
 
@@ -51,7 +51,6 @@ pub fn get_config_path(port: usize) -> Result<String, std::io::Error> {
 
     Ok(get_resource_path(file_name))
 }
-
 
 pub fn create_local_node(port: usize) -> Result<Arc<Mutex<LocalNode>>, std::io::Error> {
     let config_path = get_config_path(port)?;
@@ -306,7 +305,7 @@ fn handle_node(
 
         let command = &input[0];
 
-        if command != "pong"  && command != "ping" || PRINT_PINGS {
+        if command != "pong" && command != "ping" || PRINT_PINGS {
             println!("Recibido: {:?}", input);
         }
 
@@ -337,7 +336,6 @@ fn handle_node(
                 // let node_address = format!("127.0.0.1:{}", node_listening_port);
                 let node_address = get_node_address(parsed_port);
 
-
                 let node_role = match input[2].trim().to_lowercase().as_str() {
                     "master" => NodeRole::Master,
                     "replica" => NodeRole::Replica,
@@ -361,7 +359,7 @@ fn handle_node(
                         Ok(s) => s,
                         Err(_) => {
                             println!("Error connecting to node");
-                            continue
+                            continue;
                         }
                     };
 
@@ -1151,7 +1149,6 @@ fn initialize_replica_promotion(
         }
     }
 }
-
 
 fn get_node_address(port: usize) -> String {
     let last_digit = port % 10;

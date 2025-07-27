@@ -1,6 +1,13 @@
 extern crate aes;
 extern crate rusty_docs;
+use crate::hashing::get_hash_slots;
+use crate::local_node::NodeRole;
+use crate::local_node::NodeState;
 use commands::redis;
+use rusty_docs::client_info;
+use rusty_docs::resp_parser::{
+    format_resp_command, parse_command, write_response, CommandRequest, CommandResponse, ValueType,
+};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env::args;
@@ -11,11 +18,6 @@ use std::net::{TcpListener, TcpStream};
 use std::str;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use rusty_docs::resp_parser::{CommandRequest, ValueType, format_resp_command, parse_command, write_response, CommandResponse};
-use crate::hashing::get_hash_slots;
-use crate::local_node::NodeRole;
-use crate::local_node::NodeState;
-use rusty_docs::client_info;
 mod commands;
 mod encryption;
 mod hashing;
@@ -27,10 +29,10 @@ mod utils;
 use crate::server_context::ServerContext;
 use client_info::ClientType;
 mod types;
-use types::*;
-use rusty_docs::logger;
 use self::logger::*;
+use rusty_docs::logger;
 use rusty_docs::shared;
+use types::*;
 
 /// Número de argumentos esperados para iniciar el servidor
 static REQUIRED_ARGS: usize = 2;
@@ -904,7 +906,7 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, String>
         let content = match line_result {
             Ok(l) => l,
             Err(e) => return Err(e.to_string()),
-        };        
+        };
 
         let parts: Vec<&str> = content.split("/++/").collect();
         if parts.len() != 2 {
@@ -947,9 +949,9 @@ pub fn subscribe_microservice_to_all_docs(
             return;
         }
     };
-    
-    for (doc_name, document) in docs_lock.iter() {        
-        let subscribers = map.entry(doc_name.clone()).or_insert_with(Vec::new);        
+
+    for (doc_name, document) in docs_lock.iter() {
+        let subscribers = map.entry(doc_name.clone()).or_insert_with(Vec::new);
         if !subscribers.contains(&addr) {
             subscribers.push(addr.clone());
             println!(

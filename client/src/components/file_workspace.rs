@@ -10,10 +10,10 @@ use super::file_editor::FileEditorModel;
 use super::list_files::FileListView;
 use crate::components::file_editor::FileEditorOutputMessage;
 use crate::components::structs::document_value_info::DocumentValueInfo;
-use rusty_docs::document::Document;
 use components::file_editor::FileEditorMessage;
 use components::list_files::FileFilterAction;
 use components::types::FileType;
+use rusty_docs::document::Document;
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -54,7 +54,7 @@ pub enum FileWorkspaceMsg {
     ContentAddedSpreadSheet(DocumentValueInfo),
     UpdateFilesList(Vec<(String, FileType)>),
     UpdateAllFileData(String, Vec<String>),
-    UpdateLineFile(String, DocumentValueInfo)
+    UpdateLineFile(String, DocumentValueInfo),
 }
 
 #[derive(Debug)]
@@ -132,9 +132,7 @@ impl SimpleComponent for FileWorkspace {
                     FileEditorOutputMessage::ContentAddedSpreadSheet(doc_info) => {
                         FileWorkspaceMsg::ContentAddedSpreadSheet(doc_info)
                     }
-                    FileEditorOutputMessage::SendPrompt(doc) => {
-                        FileWorkspaceMsg::SendPrompt(doc)
-                    }                    
+                    FileEditorOutputMessage::SendPrompt(doc) => FileWorkspaceMsg::SendPrompt(doc),
                 },
             );
 
@@ -264,14 +262,13 @@ impl SimpleComponent for FileWorkspace {
                 };
 
                 let file_editor_sender = self.file_editor_ctrl.sender().clone();
-                if let Some(doc) = self
-                .files
-                .get_mut(&(file.clone(), file_type.clone()))
-                {
-                
-                    match doc {                        
+                if let Some(doc) = self.files.get_mut(&(file.clone(), file_type.clone())) {
+                    match doc {
                         Document::Text(_lines) => {
-                            self.files.insert((file.clone(), file_type.clone()), Document::Text(content.clone()));                                        
+                            self.files.insert(
+                                (file.clone(), file_type.clone()),
+                                Document::Text(content.clone()),
+                            );
                         }
                         _ => {}
                     }
@@ -284,7 +281,7 @@ impl SimpleComponent for FileWorkspace {
                             val,
                             file_type.clone(),
                         ))
-                        .unwrap();                
+                        .unwrap();
                 }
             }
 
@@ -338,7 +335,7 @@ impl SimpleComponent for FileWorkspace {
                     }
                 }
             }
-            
+
             FileWorkspaceMsg::UpdateFilesList(archivos_tipos) => {
                 // Limpiar y actualizar self.files solo con los nombres y tipos
                 for (name, tipo) in &archivos_tipos {

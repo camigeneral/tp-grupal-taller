@@ -1,11 +1,11 @@
-extern crate serde_json;
 extern crate curl;
+extern crate serde_json;
+use curl::easy::{Easy, List};
+use serde_json::json;
+use std::io::{BufRead, BufReader, Write};
+use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
 use std::thread;
-use std::net::{TcpListener, TcpStream};
-use curl::easy::{Easy, List};
-use std::io::{BufReader,BufRead, Write};
-use serde_json::json;
 mod threadpool;
 use threadpool::ThreadPool;
 
@@ -170,20 +170,20 @@ llm-response salida.txt linea:0 <space>Hola<space>buen<space>día
         "contents": [{
             "parts": [{
                 "text": format!("{}", prompt.to_string())
-            }]
-        }]
-        
-    })
+        }]}]})
     .to_string();
 
     let mut response_data = Vec::new();
     let mut headers = List::new();
-        headers.append("Content-Type: application/json").unwrap();
-        headers
-            .append(&format!("X-goog-api-key: {}", api_key))
-            .unwrap();
-    let mut easy = Easy::new();    
-    easy.url("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent").unwrap();
+    headers.append("Content-Type: application/json").unwrap();
+    headers
+        .append(&format!("X-goog-api-key: {}", api_key))
+        .unwrap();
+    let mut easy = Easy::new();
+    easy.url(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+    )
+    .unwrap();
     easy.post(true).unwrap();
 
     easy.http_headers(headers).unwrap();
@@ -192,10 +192,12 @@ llm-response salida.txt linea:0 <space>Hola<space>buen<space>día
 
     {
         let mut transfer = easy.transfer();
-        transfer.write_function(|data| {
-            response_data.extend_from_slice(data);
-            Ok(data.len())
-        }).unwrap();
+        transfer
+            .write_function(|data| {
+                response_data.extend_from_slice(data);
+                Ok(data.len())
+            })
+            .unwrap();
         transfer.perform().unwrap();
     }
 
@@ -235,7 +237,9 @@ fn handle_requests(stream: TcpStream, thread_pool: Arc<ThreadPool>) {
                                 .and_then(|p| p["text"].as_str())
                             {
                                 let resp = text.trim().trim_end_matches("\n");
-                                if let Err(e) = stream_clone.write_all(format!("{resp}\n").as_bytes()) {
+                                if let Err(e) =
+                                    stream_clone.write_all(format!("{resp}\n").as_bytes())
+                                {
                                     eprintln!("Error escribiendo al cliente: {}", e);
                                 }
                             } else {
@@ -256,11 +260,10 @@ fn handle_requests(stream: TcpStream, thread_pool: Arc<ThreadPool>) {
     }
 }
 
-
 fn main() -> std::io::Result<()> {
     let thread_pool = Arc::new(ThreadPool::new(4));
     let listener = TcpListener::bind("127.0.0.1:4030")?;
-    
+
     for stream in listener.incoming() {
         let stream = stream?;
         let pool = Arc::clone(&thread_pool);
@@ -270,4 +273,3 @@ fn main() -> std::io::Result<()> {
     }
     Ok(())
 }
-
