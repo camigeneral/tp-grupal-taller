@@ -249,7 +249,7 @@ impl Microservice {
         Ok(())
     }
 
-    fn get_document_data(doc_name: &String, documento: &Document) -> String {
+    fn get_document_data(documento: &Document) -> String {
         match documento {
             Document::Text(lines) => {
                 let mut data: String = format!("");
@@ -297,7 +297,7 @@ impl Microservice {
                     ));
 
                     for (doc_name, documento) in docs.iter() {
-                        let document_data = Self::get_document_data(doc_name, documento);
+                        let document_data = Self::get_document_data(documento);
 
                         // Enviar a todos los nodos disponibles
                         for (stream_id, stream) in streams.iter_mut() {
