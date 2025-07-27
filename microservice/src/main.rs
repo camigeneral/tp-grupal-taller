@@ -234,6 +234,8 @@ impl Microservice {
             // let addr = format!("127.0.0.1:{}", port);
             match TcpStream::connect(&addr) {
                 Ok(mut extra_socket) => {
+                    self.logger
+                    .log(&format!("Microservicio envia {:?}", addr));
                     println!("Microservicio conectado a nodo adicional: {}", addr);
 
                     let parts: Vec<&str> = "Microservicio".split_whitespace().collect();
@@ -410,6 +412,7 @@ impl Microservice {
             let llm_sender: Option<MpscSender<String>> = llm_sender.clone();
 
             thread::spawn(move || {
+                let logger_clone = log_clone.clone();
                 if let Err(e) = Self::listen_to_redis_response(
                     stream,
                     cloned_own_sender,
@@ -420,6 +423,7 @@ impl Microservice {
                     log_clone,
                     llm_sender,
                 ) {
+                    logger_clone.log(&format!("Error en la conexión con el nodo: {}", e));
                     println!("Error en la conexión con el nodo: {}", e);
                 }
             });
@@ -684,7 +688,6 @@ impl Microservice {
                     response,
                     selection_mode,
                 } => {
-                    println!("entro aca: response {response}, selection_mode_ {selection_mode}");
                     if let Ok(mut docs) = documents.lock() {
                         if let Some(document) = docs.get_mut(&file) {
                             match document {
