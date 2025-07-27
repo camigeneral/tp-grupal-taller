@@ -126,8 +126,8 @@ impl Microservice {
                 }
 
                 let document = parts[1];
-                let message = redis_parser::format_resp_command(&parts);
-                let resp = redis_parser::format_resp_publish(document, &message);
+                let message = resp_parser::format_resp_command(&parts);
+                let resp = resp_parser::format_resp_publish(document, &message);
 
                 if let Ok(mut streams) = node_streams.lock() {
                     for (id, stream) in streams.iter_mut() {
@@ -165,8 +165,7 @@ impl Microservice {
     ///
     /// * `Ok(())` - El microservicio se inició correctamente.
     /// * `Err(Box<dyn std::error::Error>)` - Error si no se puede conectar al nodo Redis o establecer las conexiones.
-    pub fn start(&self, redis_port: u16) -> Result<(), Box<dyn std::error::Error>> {
-        // let main_address = format!("127.0.0.1:{}", redis_port);
+    pub fn start(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let main_address = format!("node0:4000");
 
         println!("Conectándome al server de redis en {:?}", main_address);
@@ -461,7 +460,7 @@ impl Microservice {
         let mut reader = BufReader::new(microservice_socket.try_clone()?);
         loop {
             let llm_sender_clone = llm_sender.clone();
-            let (parts, _) = redis_parser::parse_resp_command(&mut reader)?;
+            let (parts, _) = resp_parser::parse_resp_command(&mut reader)?;
             if parts.is_empty() {
                 break;
             }
@@ -740,6 +739,6 @@ fn get_nodes_addresses() -> Vec<String> {
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config_path = "microservice.conf";
-    let microservice = Microservice::new(config_path)?;
-    microservice.start(4000)
+    let mut microservice = Microservice::new(config_path)?;
+    microservice.start()
 }
