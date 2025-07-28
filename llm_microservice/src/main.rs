@@ -1,6 +1,5 @@
 extern crate serde_json;
 extern crate reqwest;
-extern crate curl;
 use std::sync::Arc;
 use std::thread;
 use std::net::{TcpListener, TcpStream};
