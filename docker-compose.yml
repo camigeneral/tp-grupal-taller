@@ -65,6 +65,8 @@ services:
     command: ["redis_server_bin", "4002"]
 
   llm_microservice:
+    networks:
+        - redinternanodos
     build:      
       dockerfile: llm_microservice/Dockerfile
     restart: on-failure    
