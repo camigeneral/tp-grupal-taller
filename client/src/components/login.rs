@@ -3,7 +3,8 @@ extern crate relm4;
 
 use self::gtk::prelude::*;
 use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
-
+use self::gtk::gdk_pixbuf::Pixbuf;
+use std::io::Cursor;
 /// Modelo para el formulario de login.
 #[derive(Debug)]
 pub struct LoginForm {
@@ -13,6 +14,7 @@ pub struct LoginForm {
 }
 
 /// Mensajes que puede recibir el formulario de login.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum LoginMsg {
     UsernameChanged(String),
@@ -45,11 +47,7 @@ impl SimpleComponent for LoginForm {
             gtk::Box {
                 set_halign: gtk::Align::Center,
                 set_margin_bottom: 80,
-
-                gtk::Image {
-                    set_from_file: Some("src/components/images/logo.png"),
-                    set_widget_name: "LoginLogo",
-                }
+                // Eliminamos gtk::Image aquí, lo agregaremos manualmente
             },
 
             gtk::Box {
@@ -105,6 +103,12 @@ impl SimpleComponent for LoginForm {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
+        // Cargar la imagen embebida
+        let image_bytes = include_bytes!("../components/assets/logo.png");
+        let pixbuf = Pixbuf::from_read(Cursor::new(image_bytes)).expect("falló al leer imagen");
+        let image = gtk::Image::from_pixbuf(Some(&pixbuf));
+        image.set_widget_name("LoginLogo");
+
         let model = LoginForm {
             username: String::new(),
             password: String::new(),
@@ -126,6 +130,12 @@ impl SimpleComponent for LoginForm {
         );
 
         let widgets = view_output!();
+        // Agregar la imagen manualmente al primer Box
+        if let Some(box_) = widgets.login_form.first_child() {
+            if let Some(inner_box) = box_.dynamic_cast::<gtk::Box>().ok() {
+                inner_box.append(&image);
+            }
+        }
         ComponentParts { model, widgets }
     }
 

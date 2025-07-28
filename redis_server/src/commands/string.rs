@@ -1,12 +1,12 @@
 use super::redis;
+use super::redis_response::RedisResponse;
 #[allow(unused_imports)]
 use super::resp_parser::{CommandRequest, CommandResponse, ValueType};
-use super::redis_response::RedisResponse;
 use crate::client_info;
 use client_info::ClientType;
-use types::RedisDocumentsMap;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use types::RedisDocumentsMap;
 
 pub fn handle_get(request: &CommandRequest, docs: &RedisDocumentsMap) -> RedisResponse {
     let key = match &request.key {

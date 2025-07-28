@@ -44,6 +44,7 @@ pub struct SpreadsheetModel {
     entries: Vec<Vec<gtk::Entry>>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum SpreadsheetMsg {
     CellChanged(usize, usize, String),
@@ -52,6 +53,7 @@ pub enum SpreadsheetMsg {
     UpdateSheetContent(String, i32, String),
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum SpreadsheetOutput {
     ContentChanged(DocumentValueInfo),

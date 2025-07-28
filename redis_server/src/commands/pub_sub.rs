@@ -1,12 +1,12 @@
-use super::resp_parser::{CommandRequest, CommandResponse, ValueType};
 use super::redis_response::RedisResponse;
+use super::resp_parser::{CommandRequest, CommandResponse, ValueType};
 use commands::set::handle_sadd;
 use commands::set::handle_srem;
-use types::{ClientsMap, SubscribersMap, WriteClient};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
+use types::{ClientsMap, SubscribersMap, WriteClient};
 
 /// Maneja el comando SUBSCRIBE que permite a un cliente suscribirse a un documento
 ///

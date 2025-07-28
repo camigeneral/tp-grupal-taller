@@ -4,13 +4,11 @@ use self::gtk4::{
     prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, PopoverExt, WidgetExt},
     CssProvider,
 };
-use std::fs;
-use std::collections::HashSet;
 use crate::components::structs::document_value_info::DocumentValueInfo;
 use crate::components::{
     error_modal::ErrorModal,
-    loading_modal::{LoadingModalMsg, LoadingModalModel},
-    login::{LoginForm, LoginMsg, LoginOutput},
+    loading_modal::{LoadingModalModel, LoadingModalMsg},
+    login::{LoginForm, LoginOutput},
 };
 use app::gtk4::glib::Propagation;
 use client::LocalClient;
@@ -19,6 +17,8 @@ use components::file_workspace::{FileWorkspace, FileWorkspaceMsg, FileWorkspaceO
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
 use components::types::FileType;
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::fs;
 use std::thread;
 
 use std::sync::mpsc::{channel, Sender};
@@ -27,6 +27,9 @@ use self::relm4::{
     gtk, Component, ComponentController, ComponentParts, ComponentSender, Controller,
     RelmWidgetExt, SimpleComponent,
 };
+use self::gtk::prelude::*;
+use self::gtk::gdk_pixbuf::Pixbuf;
+use std::io::Cursor;
 
 /// Modelo principal de la aplicación que contiene los controladores de los componentes.
 ///
@@ -52,17 +55,15 @@ pub struct AppModel {
     loading_modal: Controller<LoadingModalModel>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum AppMsg {
     Connect,
-    Ignore,
     LoginSuccess(String),
-    LoginFailure(String),
-    Logout,
     CommandChanged(String),
     ExecuteCommand,
-    CloseApplication,
     GetFiles,
+    CloseApplication,
     RefreshData(DocumentValueInfo),
     CreateFile(String, String, String),
     SubscribeFile(String),
@@ -88,7 +89,7 @@ pub enum AppMsg {
     AddFile(String),
     SendPrompt(DocumentValueInfo),
     UpdateAllFileData(String, Vec<String>),
-    UpdateLineFile(String, String, String)
+    UpdateLineFile(String, String, String),
 }
 
 #[relm4::component(pub)]
@@ -103,7 +104,7 @@ impl SimpleComponent for AppModel {
         set_width_request: 800,
         set_default_height: 600,
         #[wrap(Some)]
-        set_titlebar = model.header_cont.widget(),        
+        set_titlebar = model.header_cont.widget(),
 
         #[name="main_container"]
         gtk::Box {
@@ -119,18 +120,10 @@ impl SimpleComponent for AppModel {
                     set_spacing: 15,
                     set_hexpand: true,
 
+                    #[name = "logo_box"]
                     gtk::Box {
                         set_halign: gtk::Align::Center,
-
-                         gtk::Image {
-                            set_from_file: Some("src/components/images/logo.png"),
-                            set_widget_name: "AppLogo",
-                            set_valign: gtk::Align::Center,
-                            set_halign: gtk::Align::Center,
-                            set_margin_bottom: 0,
-                            set_margin_start: 100,
-                            set_margin_top: 20,
-                         }
+                        // Eliminamos gtk::Image aquí, lo agregaremos manualmente
                     },
 
                      gtk::Box {
@@ -220,11 +213,13 @@ impl SimpleComponent for AppModel {
         );
         let error_modal = ErrorModal::builder()
             .transient_for(&root)
-            .launch(()) 
+            .launch(())
             .detach();
 
         let loading_modal = LoadingModalModel::builder()
-        .transient_for(&root).launch(()).detach();
+            .transient_for(&root)
+            .launch(())
+            .detach();
 
         let header_model = NavbarModel::builder().launch(()).forward(
             sender.input_sender(),
@@ -246,7 +241,7 @@ impl SimpleComponent for AppModel {
                     AppMsg::AddContentSpreadSheet(doc_info)
                 }
                 FileWorkspaceOutputMessage::FilesLoaded => AppMsg::FilesLoaded,
-                FileWorkspaceOutputMessage::SendPrompt(doc_info) => AppMsg::SendPrompt(doc_info)
+                FileWorkspaceOutputMessage::SendPrompt(doc_info) => AppMsg::SendPrompt(doc_info),
             },
         );
 
@@ -290,6 +285,21 @@ impl SimpleComponent for AppModel {
         let command_sender = Some(tx.clone());
         model.command_sender = command_sender;
 
+        // Cargar la imagen embebida para el logo principal
+        let image_bytes = include_bytes!("components/assets/logo.png");
+        let pixbuf = Pixbuf::from_read(Cursor::new(image_bytes)).expect("falló al leer imagen");
+        let image = gtk::Image::from_pixbuf(Some(&pixbuf));
+        image.set_widget_name("AppLogo");
+        image.set_valign(gtk::Align::Center);
+        image.set_halign(gtk::Align::Center);
+        image.set_margin_bottom(0);
+        image.set_margin_start(100);
+        image.set_margin_top(20);
+
+        // Agregar la imagen manualmente al logo_box
+        if let Some(logo_box) = widgets.logo_box.clone().dynamic_cast::<gtk::Box>().ok() {
+            logo_box.append(&image);
+        }
         thread::spawn(
             move || match LocalClient::new(port, Some(ui_sender), Some(rx)) {
                 Ok(mut client) => client.run(),
@@ -323,7 +333,6 @@ impl SimpleComponent for AppModel {
                 self.username = username;
                 sender.input(AppMsg::ExecuteCommand);
             }
-            AppMsg::Ignore => {}
             AppMsg::LoginSuccess(username) => {
                 if self
                     .header_cont
@@ -344,30 +353,6 @@ impl SimpleComponent for AppModel {
                 }
                 self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
                 self.is_logged_in = true;
-            }
-            AppMsg::LoginFailure(error) => {
-                self.login_form_cont.emit(LoginMsg::SetErrorForm(error));
-            }
-            AppMsg::Logout => {
-                if self
-                    .header_cont
-                    .sender()
-                    .send(NavbarMsg::SetConnectionStatus(false))
-                    .is_err()
-                {
-                    eprintln!("Failed to send message");
-                }
-
-                if self
-                    .header_cont
-                    .sender()
-                    .send(NavbarMsg::SetLoggedInUser("".to_string()))
-                    .is_err()
-                {
-                    eprintln!("Failed to send message");
-                }
-
-                self.is_logged_in = false;
             }
 
             AppMsg::CommandChanged(command) => {
@@ -390,6 +375,11 @@ impl SimpleComponent for AppModel {
                 sender.input(AppMsg::UpdateFilesList);
             }
             AppMsg::ManageSubscribeResponse(file, qty_subs, content) => {
+
+                if self.current_file != file {
+                    return;
+                }
+
                 let file_type = if file.ends_with(".xlsx") {
                     FileType::Sheet
                 } else {
@@ -414,13 +404,17 @@ impl SimpleComponent for AppModel {
             AppMsg::SendPrompt(doc_info) => {
                 self.command = format!(
                     "PROMPT|{}|{}|{}|{}|{}",
-                    doc_info.index, doc_info.file, doc_info.prompt, doc_info.offset, doc_info.selection_mode
+                    doc_info.index,
+                    doc_info.file,
+                    doc_info.prompt,
+                    doc_info.offset,
+                    doc_info.selection_mode
                 );
                 self.loading_modal.emit(LoadingModalMsg::Show);
                 sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::AddContent(doc_info) => {
-                println!("Doc info: {:#?}", doc_info);            
+                println!("Doc info: {:#?}", doc_info);
                 self.command = format!(
                     "WRITE|{}|{}|{}|{}",
                     doc_info.index, doc_info.value, doc_info.timestamp, doc_info.file
@@ -450,8 +444,9 @@ impl SimpleComponent for AppModel {
             }
 
             AppMsg::UnsubscribeFile(file) => {
-                self.current_file = file;
-                self.command = format!("unsubscribe {}", self.current_file);
+                
+                self.command = format!("unsubscribe {}", file);
+                self.current_file = "".to_string();
                 sender.input(AppMsg::ExecuteCommand);
             }
 
@@ -481,7 +476,6 @@ impl SimpleComponent for AppModel {
             }
 
             AppMsg::UpdateAllFileData(file, content) => {
-
                 let mut updated_content: Vec<String> = Vec::new();
 
                 for coded_text in content {
@@ -495,12 +489,12 @@ impl SimpleComponent for AppModel {
                     .emit(FileWorkspaceMsg::UpdateAllFileData(file, updated_content));
             }
 
-            AppMsg::UpdateLineFile(file, line , content) => {
+            AppMsg::UpdateLineFile(file, line, content) => {
                 let parsed_index = match line.parse::<i32>() {
                     Ok(idx) => idx,
                     Err(e) => {
                         println!("Error parseando índice: {}", e);
-                        return;                        
+                        return;
                     }
                 };
 
@@ -570,7 +564,7 @@ impl SimpleComponent for AppModel {
 
             AppMsg::UpdateFilesList => {
                 let mut doc_names: HashSet<String> = HashSet::new();
-                if let Ok(entries) = fs::read_dir("./rdb_files") {
+                if let Ok(entries) = fs::read_dir("./redis_server/rdb_files") {
                     for entry in entries.map_while(Result::ok) {
                         let path = entry.path();
                         let fname = path
@@ -593,7 +587,7 @@ impl SimpleComponent for AppModel {
                         }
                     }
                 }
-            
+
                 let mut doc_names_vec: Vec<String> = doc_names.into_iter().collect();
                 doc_names_vec.sort();
                 let archivos_tipos: Vec<(String, FileType)> = doc_names_vec

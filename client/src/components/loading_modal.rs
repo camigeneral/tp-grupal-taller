@@ -1,14 +1,12 @@
 extern crate gtk4;
 extern crate relm4;
 
-use self::gtk4::prelude::{BoxExt, OrientableExt, WidgetExt, GtkWindowExt };
-use self::relm4::{  
-    gtk, ComponentParts, ComponentSender, SimpleComponent
-};
+use self::gtk4::prelude::{BoxExt, GtkWindowExt, OrientableExt, WidgetExt};
+use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
 
 #[derive(Debug)]
 pub struct LoadingModalModel {
-    is_visible: bool
+    is_visible: bool,
 }
 
 #[derive(Debug)]
@@ -25,15 +23,15 @@ impl SimpleComponent for LoadingModalModel {
 
     view! {
         #[root]
-        gtk::Window {            
+        gtk::Window {
             set_modal: true,
             set_resizable: false,
             set_default_size: (400, 200),
-            set_decorated: false,            
+            set_decorated: false,
             #[watch]
             set_visible: model.is_visible,
             set_css_classes: &["loading-modal"],
-              
+
             gtk::Box {
                 set_hexpand: true,
                 set_vexpand: true,
@@ -63,7 +61,7 @@ impl SimpleComponent for LoadingModalModel {
                             set_size_request: (40, 40),
                             set_halign: gtk::Align::Center,
                         },
-                        
+
                         gtk::Box {
                             set_orientation: gtk::Orientation::Vertical,
                             set_spacing: 8,
@@ -74,7 +72,7 @@ impl SimpleComponent for LoadingModalModel {
                                 set_css_classes: &["loading-title"],
                                 set_halign: gtk::Align::Center,
                             },
-                            
+
                             gtk::Label {
                                 set_label: "La IA está trabajando en tu solicitud...",
                                 set_css_classes: &["loading-subtitle"],
@@ -83,19 +81,15 @@ impl SimpleComponent for LoadingModalModel {
                         },
                     }
                 }
-                
+
             }
         }
     }
 
-    fn init(
-        _init: (),
-        root: Self::Root,
-        _sender: ComponentSender<Self>,
-    ) -> ComponentParts<Self> {
+    fn init(_init: (), root: Self::Root, _sender: ComponentSender<Self>) -> ComponentParts<Self> {
         let model = LoadingModalModel { is_visible: false };
         let widgets = view_output!();
-        
+
         ComponentParts { model, widgets }
     }
 

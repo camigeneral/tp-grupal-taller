@@ -2,15 +2,15 @@ extern crate relm4;
 use self::relm4::Sender as UiSender;
 use crate::app::AppMsg;
 use crate::components::structs::document_value_info::DocumentValueInfo;
+use rusty_docs::resp_parser;
 use rusty_docs::resp_parser::{format_resp_command, format_resp_publish};
-use types::RedisClientResponseType;
 use std::collections::HashMap;
 use std::io::{BufReader, BufWriter, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::{channel, Receiver, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use rusty_docs::resp_parser;
+use types::RedisClientResponseType;
 
 /// Registro de canales de escritura asociados a nodos.
 ///
@@ -236,24 +236,24 @@ impl LocalClient {
         if parts.is_empty() {
             return String::new();
         }
-    
+
         let cmd = parts[0];
-    
+
         const SIMPLE_COMMANDS: [&str; 4] = ["AUTH", "SUBSCRIBE", "UNSUBSCRIBE", "SET"];
-    
+
         if SIMPLE_COMMANDS.iter().any(|c| cmd.eq_ignore_ascii_case(c)) {
             return format_resp_command(&parts);
         }
-    
+
         let cmd_upper = cmd.to_ascii_uppercase();
-    
+
         if cmd_upper.contains("WRITE") {
             let splited_command: Vec<&str> = command.split('|').collect();
             let client_command = format_resp_command(&splited_command);
             let key = splited_command.get(4).unwrap_or(&"");
             return format_resp_publish(key, &client_command);
         }
-    
+
         if cmd_upper.contains("PROMPT") {
             println!("command: {:#?}", command);
             let splited_command: Vec<&str> = command.split('|').collect();
@@ -261,11 +261,10 @@ impl LocalClient {
             let key = splited_command.get(2).unwrap_or(&"");
             return format_resp_publish(key, &client_command);
         }
-    
+
         let key = parts.get(1).unwrap_or(&"");
         format_resp_publish(key, command)
     }
-    
 
     /// Actualiza el último comando enviado, almacenándolo de forma segura.
     ///
@@ -395,16 +394,11 @@ impl LocalClient {
     /// * `ui_sender` - Canal para enviar mensajes a la UI.
     fn handle_status(
         response: Vec<String>,
-        local_addr: String,
+        _local_addr: String,
         ui_sender: Option<UiSender<AppMsg>>,
     ) {
-        let socket = response[2].clone();
         let doc = response[1].clone();
-        let content = response[3].clone();
-        if socket != local_addr {
-            return;
-        }
-
+        let content: String = response[3].clone();
         if let Some(sender) = &ui_sender {
             let mut document = DocumentValueInfo::new(content, 0);
             document.decode_text();
@@ -460,21 +454,26 @@ impl LocalClient {
     /// * `ui_sender` - Canal para enviar mensajes a la UI.
     fn handle_llm_response(response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) {
         if let Some(sender) = &ui_sender {
-
             if response.len() == 3 {
                 let content = response[2].to_string();
-                let file = response[1].to_string();  
-                let mut new_lines = Vec::new();                                        
+                let file = response[1].to_string();
+                let mut new_lines = Vec::new();
                 new_lines.extend(content.split("<enter>").map(String::from));
-                let _ = sender.send(AppMsg::UpdateAllFileData(file.to_string(), new_lines.to_vec()));
+                let _ = sender.send(AppMsg::UpdateAllFileData(
+                    file.to_string(),
+                    new_lines.to_vec(),
+                ));
             } else {
                 let content = response[3].to_string();
-                let line_parts : Vec<&str> = response[2].split(':').collect();
+                let line_parts: Vec<&str> = response[2].split(':').collect();
                 let line = line_parts[1];
-                let file = response[1].to_string(); 
-                let _ = sender.send(AppMsg::UpdateLineFile(file.to_string(), line.to_string(), content));
-
-            }           
+                let file = response[1].to_string();
+                let _ = sender.send(AppMsg::UpdateLineFile(
+                    file.to_string(),
+                    line.to_string(),
+                    content,
+                ));
+            }
         }
     }
 
@@ -585,7 +584,9 @@ impl LocalClient {
                     Self::handle_status(response, local_addr.to_string(), cloned_ui_sender)
                 }
                 RedisClientResponseType::Write => Self::handle_write(response, cloned_ui_sender),
-                RedisClientResponseType::Llm => Self::handle_llm_response(response, cloned_ui_sender),                
+                RedisClientResponseType::Llm => {
+                    Self::handle_llm_response(response, cloned_ui_sender)
+                }
                 RedisClientResponseType::Error => Self::handle_error(response, cloned_ui_sender),
                 RedisClientResponseType::Other => {
                     Self::handle_unknown(response, cloned_ui_sender, cloned_last_command.clone())
@@ -685,13 +686,13 @@ impl LocalClient {
 
     pub fn extract_document_name(resp: &str) -> Option<String> {
         let parts: Vec<&str> = resp.split("\r\n").collect();
-    
+
         for part in parts.iter().rev() {
             if !part.is_empty() && (part.ends_with(".txt") || part.ends_with(".xlsx")) {
                 return Some(part.to_string());
             }
         }
-    
+
         None
     }
 }

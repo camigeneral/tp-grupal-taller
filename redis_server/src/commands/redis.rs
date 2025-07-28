@@ -1,12 +1,12 @@
 use super::auth;
 use super::pub_sub;
-use super::resp_parser::{CommandRequest, CommandResponse, ValueType};
 use super::redis_response::RedisResponse;
+use super::resp_parser::{CommandRequest, CommandResponse, ValueType};
 use super::set;
 use super::string;
-use types::*;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use types::*;
 
 pub fn execute_command(
     request: CommandRequest,

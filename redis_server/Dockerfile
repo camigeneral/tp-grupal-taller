@@ -1,11 +1,7 @@
 FROM rust:latest AS builder
 
 WORKDIR /app
-COPY Cargo.toml Cargo.lock ./
-COPY redis_server/ redis_server/
-COPY microservice/ microservice/
-COPY client/ client/
-COPY rusty_docs/ rusty_docs/
+COPY . . 
 
 RUN rustup target add x86_64-unknown-linux-musl
 

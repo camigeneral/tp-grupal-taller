@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 pub enum ClientType {
     Client,
     Microservice,
+    LlmMicroservice
 }
 #[derive(Debug, Clone)]
 pub struct Client {

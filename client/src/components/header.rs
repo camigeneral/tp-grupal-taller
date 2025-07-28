@@ -20,6 +20,7 @@ pub struct NavbarModel {
 
 /// Enum que define los diferentes mensajes que puede recibir el componente `NavbarModel`.
 /// Permite cambiar el estado de conexión, mostrar el popover para nuevos archivos, y crear documentos.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum NavbarMsg {
     /// Mensaje para establecer el estado de conexión.
@@ -37,6 +38,7 @@ pub enum NavbarMsg {
 
 /// Enum que define las salidas posibles del componente `NavbarModel`.
 /// Actualmente solo existe un mensaje para solicitar el cambio de estado de conexión.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum NavbarOutput {
     /// Solicita alternar el estado de conexión.

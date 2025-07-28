@@ -50,5 +50,3 @@ pub type LoggedClientsMap = Arc<Mutex<HashMap<String, bool>>>;
 /// manteniendo la capacidad de escritura. Útil para casos donde se necesita flexibilidad
 /// en el tipo de datos almacenado.
 pub type WriteClient<T> = Arc<Mutex<HashMap<String, T>>>;
-
-

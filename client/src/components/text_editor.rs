@@ -2,7 +2,8 @@ extern crate gtk4;
 extern crate relm4;
 
 use self::gtk4::prelude::{
-    BoxExt, Cast, EventControllerExt, OrientableExt, TextBufferExt, TextViewExt, WidgetExt, EditableExt, ButtonExt
+    BoxExt, ButtonExt, Cast, EditableExt, EventControllerExt, OrientableExt, TextBufferExt,
+    TextViewExt, WidgetExt,
 };
 use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
 use crate::components::structs::document_value_info::DocumentValueInfo;
@@ -37,8 +38,7 @@ pub enum TextEditorMessage {
     SetPrompt(String),
     SendPrompt,
     ResetEditor,
-    SetSelectionMode(SelectionMode)
-
+    SetSelectionMode(SelectionMode),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -51,13 +51,13 @@ impl ToString for SelectionMode {
     fn to_string(&self) -> String {
         match self {
             SelectionMode::Cursor => "cursor".to_string(),
-            SelectionMode::WholeFile=> "whole-file".to_string(),            
+            SelectionMode::WholeFile => "whole-file".to_string(),
         }
     }
 }
 
-
 /// Enum que define los posibles mensajes de salida del editor de archivos.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum TextEditorOutputMessage {
     /// Mensaje que indica que se debe volver a la vista anterior.
@@ -92,7 +92,7 @@ impl SimpleComponent for TextEditorModel {
                 gtk::DropDown::from_strings(&["Todo el archivo", "Posición cursor"]) {
                     set_selected: match model.selection_mode {
                         SelectionMode::WholeFile => 0,
-                        SelectionMode::Cursor => 1,                        
+                        SelectionMode::Cursor => 1,
                     },
                     connect_selected_notify[sender] => move |dropdown| {
                         let index = dropdown.selected();
@@ -109,12 +109,12 @@ impl SimpleComponent for TextEditorModel {
                     set_label: "Generar con IA",
                     connect_clicked[sender] => move |_| {
                         sender.input(TextEditorMessage::SendPrompt);
-                        
+
                     },
                     add_css_class: "back-button",
                     add_css_class: "button",
                 },
-                                    
+
             },
             gtk::ScrolledWindow {
                 set_vexpand: true,
@@ -164,7 +164,7 @@ impl SimpleComponent for TextEditorModel {
         buffer.connect_mark_set(move |_buffer, iter, _mark| {
             let line = iter.line();
             let offset = iter.line_offset();
-            *cursor_position_clone.borrow_mut() = Some((line, offset));      
+            *cursor_position_clone.borrow_mut() = Some((line, offset));
         });
 
         let sender_insert = sender.clone();
@@ -216,13 +216,13 @@ impl SimpleComponent for TextEditorModel {
         match message {
             TextEditorMessage::SendPrompt => {
                 if let Some((line, offset)) = self.cursor_position.borrow().clone() {
-                    let mut document = DocumentValueInfo::new(self.content.clone(), line);                    
+                    let mut document = DocumentValueInfo::new(self.content.clone(), line);
                     document.offset = offset;
                     document.prompt = self.prompt.clone();
                     document.file = self.file_name.clone();
-                    document.selection_mode = self.selection_mode.to_string();                    
+                    document.selection_mode = self.selection_mode.to_string();
 
-                    let _ =  sender.output(TextEditorOutputMessage::SendPrompt(document));                    
+                    let _ = sender.output(TextEditorOutputMessage::SendPrompt(document));
                 }
             }
             TextEditorMessage::SetSelectionMode(mode) => {
@@ -245,8 +245,8 @@ impl SimpleComponent for TextEditorModel {
                 self.content_changed_manually = false;
 
                 self.file_name = file_name;
-                self.num_contributors = contributors;                
-                self.content = content;            
+                self.num_contributors = contributors;
+                self.content = content;
                 self.buffer.set_text(&format!("{}\n", self.content));
 
                 self.content_changed_manually = true;
