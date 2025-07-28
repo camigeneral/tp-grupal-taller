@@ -39,7 +39,7 @@ FORMATO DEL RESULTADO
 
 Debés devolver la respuesta como una única línea de texto, en el siguiente formato exacto:
 
-llm-response <nombre_archivo> [linea:<n>] <contenido_codificado>
+llm-response <nombre_archivo> linea:<n> <contenido_codificado>
 
 ▸ Para modo whole-file:
   - Generá el contenido completo del archivo, reemplazando todo su contenido.
@@ -175,10 +175,11 @@ fn handle_requests(stream: TcpStream, thread_pool: Arc<ThreadPool>) {
 
 fn main() -> std::io::Result<()> {
     let thread_pool = Arc::new(ThreadPool::new(4));
-    let listener = TcpListener::bind("127.0.0.1:4030")?;
+    let listener = TcpListener::bind("0.0.0.0:4030")?;
 
     for stream in listener.incoming() {
         let stream = stream?;
+        println!("Se conecto el microservicio");
         let pool = Arc::clone(&thread_pool);
         thread::spawn(move || {
             handle_requests(stream, pool);
