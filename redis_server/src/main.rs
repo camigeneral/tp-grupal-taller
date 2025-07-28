@@ -153,12 +153,11 @@ fn start_server(
         peer_nodes: Arc::clone(&peer_nodes),
         logged_clients: Arc::clone(&logged_clients),
         internal_subscription_channel: initialize_subscription_channel(),
+        llm_channel: initialize_llm_request_channel(),
         main_addrs: bind_address.to_string(),
     });
 
-    println!("before incoming connection");
     for incoming_connection in tcp_listener.incoming() {
-        println!("aaaaaaaa");
         match incoming_connection {
             Ok(client_stream) => {
                 if let Err(e) =
@@ -259,7 +258,7 @@ fn handle_new_client_connection(
         }
     };
 
-    let client_type = if command_request.command == "microservicio" {
+    let client_type = if command_request.command == "microservicio"  || command_request.command == "llm-microservice" {
         let client_stream_clone = match client_stream.try_clone() {
             Ok(clone) => clone,
             Err(e) => {
@@ -267,7 +266,11 @@ fn handle_new_client_connection(
                 return Err(e);
             }
         };
-
+        let client_type = if command_request.command == "microservicio"{
+            ClientType::Microservice
+        }  else {
+            ClientType::LlmMicroservice
+        };
         subscribe_microservice_to_all_docs(
             client_stream_clone,
             client_addr.to_string().clone(),
@@ -275,9 +278,12 @@ fn handle_new_client_connection(
             Arc::clone(&ctx.document_subscribers),
             logger.clone(),
             ctx.main_addrs.clone(),
+            client_type.clone()
         );
-        ClientType::Microservice
-    } else {
+
+        client_type
+        
+    }  else {
         println!("Cliente conectado: {}", client_addr);
         ClientType::Client
     };
@@ -306,6 +312,8 @@ fn handle_new_client_connection(
 
         if client_type == ClientType::Microservice {
             subscribe_to_internal_channel(Arc::clone(&ctx), client);
+        } else if client_type == ClientType::LlmMicroservice {
+            subscribe_to_llm_request_channel(Arc::clone(&ctx), client);
         }
     }
 
@@ -348,6 +356,22 @@ pub fn subscribe_to_internal_channel(ctx: Arc<ServerContext>, microservice: clie
 
     channels_guard.insert("notifications".to_string(), microservice);
     println!("Microservicio suscrito al canal interno subscriptions");
+}
+
+/// Suscribe al microservicio al canal de suscripciones
+///
+/// # Argumentos
+/// * `ctx` - Contexto del servidor
+/// * `microservice` - Cliente microservicio a suscribir
+///
+pub fn subscribe_to_llm_request_channel(ctx: Arc<ServerContext>, microservice: client_info::Client) {
+    let mut channels_guard = match ctx.llm_channel.lock() {
+        Ok(lock) => lock,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+
+    channels_guard.insert("notifications".to_string(), microservice);
+    println!("Client/Microservicio suscrito al canal interno llm_requests");
 }
 
 /// Maneja la comunicación con un cliente conectado.
@@ -928,6 +952,7 @@ pub fn subscribe_microservice_to_all_docs(
     clients_on_docs: SubscribersMap,
     logger: Logger,
     main_addrs: String,
+    client_type: ClientType
 ) {
     let docs_lock = match docs.lock() {
         Ok(lock) => lock,
@@ -954,20 +979,29 @@ pub fn subscribe_microservice_to_all_docs(
         let subscribers = map.entry(doc_name.clone()).or_insert_with(Vec::new);
         if !subscribers.contains(&addr) {
             subscribers.push(addr.clone());
-            println!(
-                "Microservicio {} suscripto automáticamente a {}",
-                addr, doc_name
-            );
-            let document_data = document.to_string().clone();
 
-            let command_parts = vec!["DOC", doc_name, &document_data, &main_addrs];
-
-            let message = format_resp_command(&command_parts.clone());
-            if let Err(e) = client_stream.write_all(message.as_bytes()) {
-                eprintln!("Error enviando notificación DOC al microservicio: {}", e);
+            if client_type == ClientType::Microservice {
+                println!(
+                    "Microservicio {} suscripto automáticamente a {}",
+                    addr, doc_name
+                );
+                let document_data = document.to_string().clone();
+    
+                let command_parts = vec!["DOC", doc_name, &document_data, &main_addrs];
+    
+                let message = format_resp_command(&command_parts.clone());
+                if let Err(e) = client_stream.write_all(message.as_bytes()) {
+                    eprintln!("Error enviando notificación DOC al microservicio: {}", e);
+                } else {
+                    let _ = client_stream.flush();
+                }
             } else {
-                let _ = client_stream.flush();
+                println!(
+                    "LLM-Microservicio {} suscripto automáticamente a {}",
+                    addr, doc_name
+                );
             }
+            
         }
     }
 
@@ -992,3 +1026,22 @@ fn initialize_subscription_channel() -> ClientsMap {
     );
     Arc::new(Mutex::new(internal_channels))
 }
+
+
+/// Inicializa los canales de comunicación internos del sistema
+///
+/// # Retorna
+/// InternalChannelsMap con los canales internos inicializados
+fn initialize_llm_request_channel() -> ClientsMap {
+    let mut internal_channels: HashMap<String, client_info::Client> = HashMap::new();
+    internal_channels.insert(
+        "llm_request".to_string(),
+        client_info::Client {
+            stream: Arc::new(Mutex::new(None)),
+            client_type: ClientType::LlmMicroservice,
+            username: "Llm-microservice".to_string(),
+        },
+    );
+    Arc::new(Mutex::new(internal_channels))
+}
+
