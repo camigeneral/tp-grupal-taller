@@ -27,6 +27,9 @@ use self::relm4::{
     gtk, Component, ComponentController, ComponentParts, ComponentSender, Controller,
     RelmWidgetExt, SimpleComponent,
 };
+use self::gtk::prelude::*;
+use self::gtk::gdk_pixbuf::Pixbuf;
+use std::io::Cursor;
 
 /// Modelo principal de la aplicación que contiene los controladores de los componentes.
 ///
@@ -119,18 +122,10 @@ impl SimpleComponent for AppModel {
                     set_spacing: 15,
                     set_hexpand: true,
 
+                    #[name = "logo_box"]
                     gtk::Box {
                         set_halign: gtk::Align::Center,
-
-                         gtk::Image {
-                            set_from_file: Some("components/images/logo.png"),
-                            set_widget_name: "AppLogo",
-                            set_valign: gtk::Align::Center,
-                            set_halign: gtk::Align::Center,
-                            set_margin_bottom: 0,
-                            set_margin_start: 100,
-                            set_margin_top: 20,
-                         }
+                        // Eliminamos gtk::Image aquí, lo agregaremos manualmente
                     },
 
                      gtk::Box {
@@ -292,6 +287,21 @@ impl SimpleComponent for AppModel {
         let command_sender = Some(tx.clone());
         model.command_sender = command_sender;
 
+        // Cargar la imagen embebida para el logo principal
+        let image_bytes = include_bytes!("components/assets/logo.png");
+        let pixbuf = Pixbuf::from_read(Cursor::new(image_bytes)).expect("falló al leer imagen");
+        let image = gtk::Image::from_pixbuf(Some(&pixbuf));
+        image.set_widget_name("AppLogo");
+        image.set_valign(gtk::Align::Center);
+        image.set_halign(gtk::Align::Center);
+        image.set_margin_bottom(0);
+        image.set_margin_start(100);
+        image.set_margin_top(20);
+
+        // Agregar la imagen manualmente al logo_box
+        if let Some(logo_box) = widgets.logo_box.clone().dynamic_cast::<gtk::Box>().ok() {
+            logo_box.append(&image);
+        }
         thread::spawn(
             move || match LocalClient::new(port, Some(ui_sender), Some(rx)) {
                 Ok(mut client) => client.run(),
