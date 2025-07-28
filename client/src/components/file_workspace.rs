@@ -36,6 +36,7 @@ pub struct FileWorkspace {
 
 /// Enum que define los diferentes mensajes que puede recibir el componente `FileWorkspace`.
 /// Permite abrir un archivo, cerrar el editor o ignorar un mensaje.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum FileWorkspaceMsg {
     /// Mensaje para abrir un archivo con nombre, contenido y cantidad de líneas.

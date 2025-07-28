@@ -14,6 +14,7 @@ pub struct LoginForm {
 }
 
 /// Mensajes que puede recibir el formulario de login.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum LoginMsg {
     UsernameChanged(String),

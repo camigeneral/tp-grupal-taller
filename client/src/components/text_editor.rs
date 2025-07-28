@@ -57,6 +57,7 @@ impl ToString for SelectionMode {
 }
 
 /// Enum que define los posibles mensajes de salida del editor de archivos.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum TextEditorOutputMessage {
     /// Mensaje que indica que se debe volver a la vista anterior.
