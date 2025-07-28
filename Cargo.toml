@@ -1,37 +1,11 @@
-[package]
-name = "rusty-docs"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+members = [
+    "redis_server",
+    "client",
+    "microservice",
+    "llm_microservice",
+    "rusty_docs"
+]
 
-[dependencies]
-curl = "0.4"
-serde_json = "1.0"
-reqwest = { version = "0.11", features = ["blocking", "json"] }
-gtk4 = { version = "0.9.6", package = "gtk4" }
-relm4 = { version = "0.9.1" }
-gdk4 = { version = "0.9.6" }
-rand = "0.8"
-chrono = "0.4.41"
-aes-gcm = "0.10"   
-aes = "0.8"          
-base64 = "0.21"     
 
-[lib]
-name = "rusty_docs"
-path = "src/lib.rs"
 
-[[bin]]
-name = "llm_microservice"
-path = "src/llm_microservice.rs"
-
-[[bin]]
-name = "redis_server"
-path = "src/redis_server.rs"
-
-[[bin]]
-name = "client"
-path = "src/client_init.rs"
-
-[[bin]]
-name = "microservice"
-path = "src/microservice.rs"
