@@ -20,7 +20,7 @@ use rusty_docs::document;
 use rusty_docs::logger;
 use rusty_docs::resp_parser;
 use rusty_docs::shared;
-#[allow(unused_imports)]
+use std::thread::sleep;
 use std::time::Duration;
 
 /// Microservicio que actúa como intermediario entre clientes y nodos Redis.
@@ -80,7 +80,7 @@ impl Microservice {
     }
 
     fn connect_to_llm(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let llm_address = format!("127.0.0.1:4030");
+        let llm_address = format!("llm_microservice:4030");
         let (tx, rx) = channel::<String>();
 
         self.llm_sender = Some(tx);
@@ -90,9 +90,16 @@ impl Microservice {
         ));
         let node_streams = Arc::clone(&self.node_streams);
 
-        thread::spawn(move || {
-            let mut socket =
-                TcpStream::connect(llm_address.clone()).expect("No se pudo conectar al LLM");
+        thread::spawn(move || {            
+            let mut socket = loop {
+                match TcpStream::connect(llm_address.clone()) {
+                    Ok(s) => break s,
+                    Err(e) => {
+                        eprintln!("No se pudo conectar al LLM: {}. Reintentando en 15 segundos...", e);
+                        sleep(Duration::from_secs(15));
+                    }
+                }
+            };
             let mut reader = BufReader::new(socket.try_clone().unwrap());
 
             for prompt in rx {
@@ -177,7 +184,7 @@ impl Microservice {
             main_address
         ));
         let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
-        //self.connect_to_llm()?;
+        self.connect_to_llm()?;
         let redis_socket = socket.try_clone()?;
         let redis_socket_clone_for_hashmap = socket.try_clone()?;
 
