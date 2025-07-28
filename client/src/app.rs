@@ -8,7 +8,7 @@ use crate::components::structs::document_value_info::DocumentValueInfo;
 use crate::components::{
     error_modal::ErrorModal,
     loading_modal::{LoadingModalModel, LoadingModalMsg},
-    login::{LoginForm, LoginMsg, LoginOutput},
+    login::{LoginForm, LoginOutput},
 };
 use app::gtk4::glib::Propagation;
 use client::LocalClient;
@@ -55,17 +55,15 @@ pub struct AppModel {
     loading_modal: Controller<LoadingModalModel>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum AppMsg {
     Connect,
-    Ignore,
     LoginSuccess(String),
-    LoginFailure(String),
-    Logout,
     CommandChanged(String),
     ExecuteCommand,
-    CloseApplication,
     GetFiles,
+    CloseApplication,
     RefreshData(DocumentValueInfo),
     CreateFile(String, String, String),
     SubscribeFile(String),
@@ -335,7 +333,6 @@ impl SimpleComponent for AppModel {
                 self.username = username;
                 sender.input(AppMsg::ExecuteCommand);
             }
-            AppMsg::Ignore => {}
             AppMsg::LoginSuccess(username) => {
                 if self
                     .header_cont
@@ -356,30 +353,6 @@ impl SimpleComponent for AppModel {
                 }
                 self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
                 self.is_logged_in = true;
-            }
-            AppMsg::LoginFailure(error) => {
-                self.login_form_cont.emit(LoginMsg::SetErrorForm(error));
-            }
-            AppMsg::Logout => {
-                if self
-                    .header_cont
-                    .sender()
-                    .send(NavbarMsg::SetConnectionStatus(false))
-                    .is_err()
-                {
-                    eprintln!("Failed to send message");
-                }
-
-                if self
-                    .header_cont
-                    .sender()
-                    .send(NavbarMsg::SetLoggedInUser("".to_string()))
-                    .is_err()
-                {
-                    eprintln!("Failed to send message");
-                }
-
-                self.is_logged_in = false;
             }
 
             AppMsg::CommandChanged(command) => {
