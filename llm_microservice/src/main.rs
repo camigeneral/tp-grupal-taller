@@ -6,7 +6,6 @@ use std::thread;
 use std::net::{TcpListener, TcpStream};
 use std::io::{BufReader,BufRead, Write};
 use serde_json::json;
-#[path = "utils/threadpool.rs"]
 mod threadpool;
 use threadpool::ThreadPool;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
