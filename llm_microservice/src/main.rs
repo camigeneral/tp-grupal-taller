@@ -200,7 +200,11 @@ impl LlmMicroservice {
 
 
     pub fn run(&mut self) -> std::io::Result<()> {
-        
+        //self.connect_to_redis()?;
+        //self.start_node_connection_handler()?;
+        //self.add_node_stream()?;
+        //self.send_initial_command()?;
+        //self.connect_to_replica_nodes(&connect_node_sender)?;
 
 
         for stream in self.listener.incoming() {
