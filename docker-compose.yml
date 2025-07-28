@@ -64,6 +64,17 @@ services:
         hard: 65536
     command: ["redis_server_bin", "4002"]
 
+  llm_microservice:
+    build:      
+      dockerfile: llm_microservice/Dockerfile
+    restart: on-failure    
+    image: llm_microservice
+    container_name: llm_microservice
+    working_dir: /usr/local/bin
+    ports:
+      - "4030:4030"
+    command: ["llm_microservice_bin"]
+
   microservice:
     networks:
       - redinternanodos
@@ -78,23 +89,11 @@ services:
       - node0
       - node1
       - node2
-      - llm_microservice
+      
     ports:
       - "5000:5000"
     environment:
       REDIS_NODE_HOSTS: node2:4002,node1:4001
     command: ["microservice_bin"]
 
-  llm_microservice:
-    networks:
-      - redinternanodos
-    build:
-      context: .
-      dockerfile: llm_microservice/Dockerfile
-    restart: on-failure    
-    image: llm_microservice
-    container_name: llm_microservice
-    working_dir: /usr/local/bin
-    ports:
-      - "4030:4030"
-    command: ["llm_microservice_bin"]
+  
