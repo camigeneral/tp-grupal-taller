@@ -123,7 +123,7 @@ impl SimpleComponent for AppModel {
                         set_halign: gtk::Align::Center,
 
                          gtk::Image {
-                            set_from_file: Some("src/components/images/logo.png"),
+                            set_from_file: Some("components/images/logo.png"),
                             set_widget_name: "AppLogo",
                             set_valign: gtk::Align::Center,
                             set_halign: gtk::Align::Center,
@@ -392,6 +392,11 @@ impl SimpleComponent for AppModel {
                 sender.input(AppMsg::UpdateFilesList);
             }
             AppMsg::ManageSubscribeResponse(file, qty_subs, content) => {
+
+                if self.current_file != file {
+                    return;
+                }
+
                 let file_type = if file.ends_with(".xlsx") {
                     FileType::Sheet
                 } else {
@@ -456,8 +461,9 @@ impl SimpleComponent for AppModel {
             }
 
             AppMsg::UnsubscribeFile(file) => {
-                self.current_file = file;
-                self.command = format!("unsubscribe {}", self.current_file);
+                
+                self.command = format!("unsubscribe {}", file);
+                self.current_file = "".to_string();
                 sender.input(AppMsg::ExecuteCommand);
             }
 
@@ -575,7 +581,7 @@ impl SimpleComponent for AppModel {
 
             AppMsg::UpdateFilesList => {
                 let mut doc_names: HashSet<String> = HashSet::new();
-                if let Ok(entries) = fs::read_dir("./rdb_files") {
+                if let Ok(entries) = fs::read_dir("./redis_server/rdb_files") {
                     for entry in entries.map_while(Result::ok) {
                         let path = entry.path();
                         let fname = path

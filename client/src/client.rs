@@ -394,16 +394,11 @@ impl LocalClient {
     /// * `ui_sender` - Canal para enviar mensajes a la UI.
     fn handle_status(
         response: Vec<String>,
-        local_addr: String,
+        _local_addr: String,
         ui_sender: Option<UiSender<AppMsg>>,
     ) {
-        let socket = response[2].clone();
         let doc = response[1].clone();
-        let content = response[3].clone();
-        if socket != local_addr {
-            return;
-        }
-
+        let content: String = response[3].clone();
         if let Some(sender) = &ui_sender {
             let mut document = DocumentValueInfo::new(content, 0);
             document.decode_text();
@@ -577,6 +572,7 @@ impl LocalClient {
             let cloned_ui_sender = params.ui_sender.clone();
 
             println!("Respuesta de redis: {}", response.join(" "));
+            println!("Respuesta de redis: {:#?}", client_socket_cloned);
 
             let response_type = RedisClientResponseType::from(response[0].as_str());
             let cloned_connect_node_sender = connect_node_sender.clone();
