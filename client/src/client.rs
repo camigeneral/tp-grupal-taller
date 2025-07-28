@@ -572,7 +572,6 @@ impl LocalClient {
             let cloned_ui_sender = params.ui_sender.clone();
 
             println!("Respuesta de redis: {}", response.join(" "));
-            println!("Respuesta de redis: {:#?}", client_socket_cloned);
 
             let response_type = RedisClientResponseType::from(response[0].as_str());
             let cloned_connect_node_sender = connect_node_sender.clone();
