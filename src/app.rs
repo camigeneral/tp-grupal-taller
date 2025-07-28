@@ -4,13 +4,16 @@ use self::gtk4::{
     prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt, OrientableExt, PopoverExt, WidgetExt},
     CssProvider,
 };
+use std::fs;
+use std::collections::HashSet;
 use crate::components::structs::document_value_info::DocumentValueInfo;
 use crate::components::{
     error_modal::ErrorModal,
+    loading_modal::{LoadingModalMsg, LoadingModalModel},
     login::{LoginForm, LoginMsg, LoginOutput},
 };
 use app::gtk4::glib::Propagation;
-use client::client_run;
+use client::LocalClient;
 use components::error_modal::ErrorModalMsg;
 use components::file_workspace::{FileWorkspace, FileWorkspaceMsg, FileWorkspaceOutputMessage};
 use components::header::{NavbarModel, NavbarMsg, NavbarOutput};
@@ -46,6 +49,7 @@ pub struct AppModel {
     error_modal: Controller<ErrorModal>,
     new_file_popover: Option<gtk::Popover>,
     file_name: String,
+    loading_modal: Controller<LoadingModalModel>,
 }
 
 #[derive(Debug)]
@@ -78,10 +82,13 @@ pub enum AppMsg {
     CreateSpreadsheetDocument,
     AddContent(DocumentValueInfo),
     AddContentSpreadSheet(DocumentValueInfo),
-    UpdateFilesList(Vec<String>),
+    UpdateFilesList,
     FilesLoaded,
     ReloadFile(String, String),
     AddFile(String),
+    SendPrompt(DocumentValueInfo),
+    UpdateAllFileData(String, Vec<String>),
+    UpdateLineFile(String, String, String)
 }
 
 #[relm4::component(pub)]
@@ -96,7 +103,7 @@ impl SimpleComponent for AppModel {
         set_width_request: 800,
         set_default_height: 600,
         #[wrap(Some)]
-        set_titlebar = model.header_cont.widget(),
+        set_titlebar = model.header_cont.widget(),        
 
         #[name="main_container"]
         gtk::Box {
@@ -194,7 +201,6 @@ impl SimpleComponent for AppModel {
                 #[watch]
                 set_visible: !model.is_logged_in
             },
-
         },
 
     }
@@ -214,15 +220,18 @@ impl SimpleComponent for AppModel {
         );
         let error_modal = ErrorModal::builder()
             .transient_for(&root)
-            .launch(())
+            .launch(()) 
             .detach();
+
+        let loading_modal = LoadingModalModel::builder()
+        .transient_for(&root).launch(()).detach();
 
         let header_model = NavbarModel::builder().launch(()).forward(
             sender.input_sender(),
             |output| match output {
                 NavbarOutput::ToggleConnectionRequested => AppMsg::Connect,
                 NavbarOutput::CreateFileRequested(file_id, content) => {
-                    AppMsg::CreateFile(file_id, content, "txt".to_string()) // Por defecto, tipo "txt"
+                    AppMsg::CreateFile(file_id, content, "txt".to_string())
                 }
             },
         );
@@ -237,6 +246,7 @@ impl SimpleComponent for AppModel {
                     AppMsg::AddContentSpreadSheet(doc_info)
                 }
                 FileWorkspaceOutputMessage::FilesLoaded => AppMsg::FilesLoaded,
+                FileWorkspaceOutputMessage::SendPrompt(doc_info) => AppMsg::SendPrompt(doc_info)
             },
         );
 
@@ -263,6 +273,7 @@ impl SimpleComponent for AppModel {
             error_modal,
             new_file_popover: None,
             file_name: "".to_string(),
+            loading_modal,
         };
 
         let sender_clone = sender.clone();
@@ -279,11 +290,14 @@ impl SimpleComponent for AppModel {
         let command_sender = Some(tx.clone());
         model.command_sender = command_sender;
 
-        thread::spawn(move || {
-            if let Err(e) = client_run(port, rx, Some(ui_sender)) {
-                eprintln!("Error al iniciar el cliente: {:?}", e);
-            }
-        });
+        thread::spawn(
+            move || match LocalClient::new(port, Some(ui_sender), Some(rx)) {
+                Ok(mut client) => client.run(),
+                Err(e) => {
+                    eprintln!("Error al iniciar el cliente: {:?}", e);
+                }
+            },
+        );
 
         ComponentParts { model, widgets }
     }
@@ -292,7 +306,11 @@ impl SimpleComponent for AppModel {
         match message {
             AppMsg::Connect => {
                 if self.is_logged_in {
-                    if let Err(_e) = self.header_cont.sender().send(NavbarMsg::SetConnectionStatus(true)) {
+                    if let Err(_e) = self
+                        .header_cont
+                        .sender()
+                        .send(NavbarMsg::SetConnectionStatus(true))
+                    {
                         eprintln!("Failed to send message");
                     }
                 }
@@ -307,11 +325,21 @@ impl SimpleComponent for AppModel {
             }
             AppMsg::Ignore => {}
             AppMsg::LoginSuccess(username) => {
-                if self.header_cont.sender().send(NavbarMsg::SetLoggedInUser(username)).is_err() {
+                if self
+                    .header_cont
+                    .sender()
+                    .send(NavbarMsg::SetLoggedInUser(username))
+                    .is_err()
+                {
                     eprintln!("Failed to send message");
                 }
 
-                if self.header_cont.sender().send(NavbarMsg::SetConnectionStatus(true)).is_err() {
+                if self
+                    .header_cont
+                    .sender()
+                    .send(NavbarMsg::SetConnectionStatus(true))
+                    .is_err()
+                {
                     eprintln!("Failed to send message");
                 }
                 self.files_manager_cont.emit(FileWorkspaceMsg::ReloadFiles);
@@ -321,17 +349,27 @@ impl SimpleComponent for AppModel {
                 self.login_form_cont.emit(LoginMsg::SetErrorForm(error));
             }
             AppMsg::Logout => {
-                if self.header_cont.sender().send(NavbarMsg::SetConnectionStatus(false)).is_err() {
+                if self
+                    .header_cont
+                    .sender()
+                    .send(NavbarMsg::SetConnectionStatus(false))
+                    .is_err()
+                {
                     eprintln!("Failed to send message");
                 }
-            
-                if self.header_cont.sender().send(NavbarMsg::SetLoggedInUser("".to_string())).is_err() {
+
+                if self
+                    .header_cont
+                    .sender()
+                    .send(NavbarMsg::SetLoggedInUser("".to_string()))
+                    .is_err()
+                {
                     eprintln!("Failed to send message");
                 }
-            
+
                 self.is_logged_in = false;
             }
-            
+
             AppMsg::CommandChanged(command) => {
                 self.command = command;
             }
@@ -349,8 +387,7 @@ impl SimpleComponent for AppModel {
                 }
             }
             AppMsg::GetFiles => {
-                self.command = "get_files redis".to_string();
-                sender.input(AppMsg::ExecuteCommand);
+                sender.input(AppMsg::UpdateFilesList);
             }
             AppMsg::ManageSubscribeResponse(file, qty_subs, content) => {
                 let file_type = if file.ends_with(".xlsx") {
@@ -373,12 +410,22 @@ impl SimpleComponent for AppModel {
                 self.command = format!("set {} {}", file_id, content);
                 sender.input(AppMsg::ExecuteCommand);
             }
+
+            AppMsg::SendPrompt(doc_info) => {
+                self.command = format!(
+                    "PROMPT|{}|{}|{}|{}|{}",
+                    doc_info.index, doc_info.file, doc_info.prompt, doc_info.offset, doc_info.selection_mode
+                );
+                self.loading_modal.emit(LoadingModalMsg::Show);
+                sender.input(AppMsg::ExecuteCommand);
+            }
             AppMsg::AddContent(doc_info) => {
-                println!("Doc info: {:#?}", doc_info);
+                println!("Doc info: {:#?}", doc_info);            
                 self.command = format!(
                     "WRITE|{}|{}|{}|{}",
                     doc_info.index, doc_info.value, doc_info.timestamp, doc_info.file
                 );
+
                 sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::AddContentSpreadSheet(doc_info) => {
@@ -429,9 +476,40 @@ impl SimpleComponent for AppModel {
                 }
             }
             AppMsg::RefreshData(doc_info) => {
-                println!("doc a actualizar: {:#?}", doc_info);
                 self.files_manager_cont
                     .emit(FileWorkspaceMsg::UpdateFile(doc_info));
+            }
+
+            AppMsg::UpdateAllFileData(file, content) => {
+
+                let mut updated_content: Vec<String> = Vec::new();
+
+                for coded_text in content {
+                    let mut document = DocumentValueInfo::new(coded_text, 0);
+                    document.decode_text();
+                    updated_content.push(document.value.trim_end_matches('\r').to_string().clone());
+                }
+
+                self.loading_modal.emit(LoadingModalMsg::Hide);
+                self.files_manager_cont
+                    .emit(FileWorkspaceMsg::UpdateAllFileData(file, updated_content));
+            }
+
+            AppMsg::UpdateLineFile(file, line , content) => {
+                let parsed_index = match line.parse::<i32>() {
+                    Ok(idx) => idx,
+                    Err(e) => {
+                        println!("Error parseando índice: {}", e);
+                        return;                        
+                    }
+                };
+
+                let mut document = DocumentValueInfo::new(content, parsed_index);
+                document.file = file.clone();
+                document.decode_text();
+                self.loading_modal.emit(LoadingModalMsg::Hide);
+                self.files_manager_cont
+                    .emit(FileWorkspaceMsg::UpdateFile(document));
             }
 
             AppMsg::CloseApplication => {
@@ -490,8 +568,35 @@ impl SimpleComponent for AppModel {
                 ));
             }
 
-            AppMsg::UpdateFilesList(archivos) => {
-                let archivos_tipos: Vec<(String, FileType)> = archivos
+            AppMsg::UpdateFilesList => {
+                let mut doc_names: HashSet<String> = HashSet::new();
+                if let Ok(entries) = fs::read_dir("./rdb_files") {
+                    for entry in entries.map_while(Result::ok) {
+                        let path = entry.path();
+                        let fname = path
+                            .file_name()
+                            .and_then(|f| f.to_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if fname.starts_with("redis_node_") && fname.ends_with(".rdb") {
+                            if let Ok(file) = fs::File::open(&path) {
+                                use std::io::{BufRead, BufReader};
+                                let reader = BufReader::new(file);
+                                for line in reader.lines().flatten() {
+                                    if let Some((doc_name, _)) = line.split_once("/++/") {
+                                        if !doc_name.trim().is_empty() {
+                                            doc_names.insert(doc_name.trim().to_string());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            
+                let mut doc_names_vec: Vec<String> = doc_names.into_iter().collect();
+                doc_names_vec.sort();
+                let archivos_tipos: Vec<(String, FileType)> = doc_names_vec
                     .into_iter()
                     .filter(|name| !name.is_empty())
                     .map(|name| {
@@ -508,7 +613,6 @@ impl SimpleComponent for AppModel {
             }
 
             AppMsg::ReloadFile(file_id, content) => {
-                // Determinar el tipo de archivo basado en la extensión
                 let file_type = if file_id.ends_with(".xlsx") {
                     FileType::Sheet
                 } else {
@@ -516,7 +620,6 @@ impl SimpleComponent for AppModel {
                 };
                 let mut doc_file = DocumentValueInfo::new(content, 0);
                 doc_file.decode_text();
-                // Actualizar directamente el FileWorkspace con el nuevo contenido
                 self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(
                     file_id.clone(),
                     "1".to_string(), // qty_subs

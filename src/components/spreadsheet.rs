@@ -349,7 +349,6 @@ impl SimpleComponent for SpreadsheetModel {
                 if let Err(_e) = sender.output(SpreadsheetOutput::ContentChanged(doc_info)) {
                     eprintln!("Error sending spreadsheet output");
                 }
-                
             }
             SpreadsheetMsg::RecalculateAll => {
                 self.recalculate_all();

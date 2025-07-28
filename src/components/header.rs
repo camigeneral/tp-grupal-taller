@@ -103,7 +103,9 @@ impl SimpleComponent for NavbarModel {
                     return;
                 }
                 let file_id = format!("{}.txt", self.file_name.trim());
-                if let Err(_e) = sender.output(NavbarOutput::CreateFileRequested(file_id, "".to_string())) {
+                if let Err(_e) =
+                    sender.output(NavbarOutput::CreateFileRequested(file_id, "".to_string()))
+                {
                     eprintln!("Failed to send message");
                 }
             }
@@ -116,7 +118,9 @@ impl SimpleComponent for NavbarModel {
                     return;
                 }
                 let file_id = format!("{}.xlsx", self.file_name.trim());
-                if let Err(_e) = sender.output(NavbarOutput::CreateFileRequested(file_id, "".to_string())) {
+                if let Err(_e) =
+                    sender.output(NavbarOutput::CreateFileRequested(file_id, "".to_string()))
+                {
                     eprintln!("Failed to send message");
                 }
             }

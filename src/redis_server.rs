@@ -451,7 +451,7 @@ fn handle_client(
                         e
                     ));
                 } else {
-                    logger.log("Documentos persistidos exitosamente después de comando SET");
+                    logger.log("Documents persistidos exitosamente después de comando SET");
                 }
             } else {
                 notify_microservice(Arc::clone(&ctx), doc.clone(), client_id.to_string(), true);
@@ -786,9 +786,9 @@ pub fn publish_update(
             }
         }
     } else {
-        println!("Documento no encontrado: {}", document_id);
+        println!("Document no encontrado: {}", document_id);
         logger.log(&format!(
-            "Documento {} no encontrado al intentar publicar actualización",
+            "Document {} no encontrado al intentar publicar actualización",
             document_id
         ));
     }
@@ -909,7 +909,7 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, String>
         let content = match line_result {
             Ok(l) => l,
             Err(e) => return Err(e.to_string()),
-        };
+        };        
 
         let parts: Vec<&str> = content.split("/++/").collect();
         if parts.len() != 2 {
@@ -920,7 +920,7 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, String>
         let messages_data = parts[1];
         documents.insert(document_id, messages_data.to_string());
     }
-    // println!("documentos: {:#?}", documents);
+    //println!("documentos: {:#?} file_path_ {file_path}", documents);
     Ok(documents)
 }
 
@@ -952,9 +952,9 @@ pub fn subscribe_microservice_to_all_docs(
             return;
         }
     };
-
-    for (doc_name, document) in docs_lock.iter() {
-        let subscribers = map.entry(doc_name.clone()).or_insert_with(Vec::new);
+    
+    for (doc_name, document) in docs_lock.iter() {        
+        let subscribers = map.entry(doc_name.clone()).or_insert_with(Vec::new);        
         if !subscribers.contains(&addr) {
             subscribers.push(addr.clone());
             println!(

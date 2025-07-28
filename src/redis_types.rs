@@ -1,5 +1,5 @@
 use crate::client_info::Client;
-use document::Documento;
+use crate::document::Document;
 use local_node::LocalNode;
 use peer_node::PeerNode;
 use std::collections::HashMap;
@@ -21,8 +21,8 @@ pub type SetsMap = Arc<Mutex<HashMap<String, HashSet<String>>>>;
 /// Mapa compartido de documentos.
 ///
 /// Almacena todos los documentos del sistema, donde la clave es el ID del documento (String)
-/// y el valor es el documento en sí (Documento). Este mapa es compartido entre múltiples hilos.
-pub type SharedDocumentsMap = Arc<Mutex<HashMap<String, Documento>>>;
+/// y el valor es el documento en sí (Document). Este mapa es compartido entre múltiples hilos.
+pub type SharedDocumentsMap = Arc<Mutex<HashMap<String, Document>>>;
 
 pub type RedisDocumentsMap = Arc<Mutex<HashMap<String, String>>>;
 
@@ -57,3 +57,27 @@ pub type LoggedClientsMap = Arc<Mutex<HashMap<String, bool>>>;
 /// manteniendo la capacidad de escritura. Útil para casos donde se necesita flexibilidad
 /// en el tipo de datos almacenado.
 pub type WriteClient<T> = Arc<Mutex<HashMap<String, T>>>;
+
+/// Enum que representa los diferentes tipos de respuesta del cliente Redis.
+pub enum RedisClientResponseType {
+    Ask,
+    Status,
+    Write,    
+    Error,
+    Llm,
+    Other,
+}
+
+/// Implementación para convertir un &str en un RedisClientResponseType.
+impl From<&str> for RedisClientResponseType {
+    fn from(s: &str) -> Self {
+        match s.to_uppercase().as_str() {
+            "ASK" => Self::Ask,
+            "STATUS" => Self::Status,
+            "WRITE" => Self::Write,  
+            "LLM-RESPONSE" => Self::Llm,          
+            s if s.starts_with("-ERR") => Self::Error,
+            _ => Self::Other,
+        }
+    }
+}
