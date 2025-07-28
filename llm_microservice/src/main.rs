@@ -1,15 +1,17 @@
-extern crate curl;
 extern crate serde_json;
-use curl::easy::{Easy, List};
-use serde_json::json;
-use std::io::{BufRead, BufReader, Write};
-use std::net::{TcpListener, TcpStream};
+extern crate reqwest;
+extern crate curl;
 use std::sync::Arc;
 use std::thread;
+use std::net::{TcpListener, TcpStream};
+use std::io::{BufReader,BufRead, Write};
+use serde_json::json;
+#[path = "utils/threadpool.rs"]
 mod threadpool;
 use threadpool::ThreadPool;
+use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
 
-fn get_gemini_respond(prompt: &str) -> Vec<u8> {
+fn get_gemini_respond(prompt: &str) -> Result<Vec<u8>, reqwest::Error> {
     let api_key = "AIzaSyDSyVJnHxJnUXDRnM7SxphBTwEPGtOjMEI";
 
     let body = json!({
@@ -69,10 +71,10 @@ REGLAS GENERALES
 - Nunca agregues texto fuera del formato solicitado.
 - No uses ningún otro delimitador más que <space> y <enter>.
 
-SI TU RESPUESTA CONTIENE MUCHAS COSAS (POR EJEPLO UNA LISTA), NO ME LO SEPARES POR '\n'. QUE SE PUEDA LEER EN UNA SOLA LINEA CON read_line de RUST. DAMELO TODO JUNTO. 
+SI TU RESPUESTA CONTIENE MUCHAS COSAS (POR EJEPLO UNA LISTA), NO ME LO SEPARES POR '\\n'. QUE SE PUEDA LEER EN UNA SOLA LINEA CON read_line de RUST. DAMELO TODO JUNTO. 
 Ejemplo: 
 Si el prompt es 'dame 50 capitales', no me los des asi: Tokio<enter>Ciudad<space>de<space>México<enter>El<space>Cairo<enter>Nueva<space>Delhi<enter>Shanghái<enter>São<space>Paulo<enter>Bombay<enter>
-SIEMPRE ME LOS TENES QUE DAR ASI: Tokio<enter>Ciudad<space>de<space>México<enter>El<space>Cairo<enter>Nueva<space>Delhi<enter>Shanghái<enter>São<space>Paulo<enter>Bombay<enter>
+SIEMPRE ME LOS TENÉS QUE DAR ASÍ: Tokio<enter>Ciudad<space>de<space>México<enter>El<space>Cairo<enter>Nueva<space>Delhi<enter>Shanghái<enter>São<space>Paulo<enter>Bombay<enter>
 
 REGLAS SOBRE ESPACIOS
 
@@ -86,122 +88,28 @@ Si el offset está en un límite claro de palabra (entre dos <space>), entonces:
 
 Insertar directamente: <space>NUEVO<space>.
 
-Si el contenido generado contiene múltiples palabras, todas deben estar separadas por <space> y no debe haber dobles <space> ni <space> mal ubicados.
-
-EJEMPLOS
-▸ whole-file:  
-Prompt: archivo:'receta.txt', prompt: 'generá una receta', aplicacion: 'whole-file'  
-Respuesta esperada:  
-llm-response receta.txt Ingredientes:<enter>2<space>huevos<enter>100g<space>de<space>harina<enter>Instrucciones:<enter>Mezclar<space>todo.
-
-▸ cursor:  
-Prompt: archivo:'receta.txt', linea: 0, offset: 3, contenido: 'hola<space>como<space>estan', prompt: 'dame una capital', aplicacion: 'cursor'  
-Respuesta esperada:  
-llm-response receta.txt linea:0 hol<space>Roma<space>a<space>como<space>estan
-
-Prompt: archivo:'receta.txt', linea: 0, offset: 2, contenido: 'hola<space>como<space>estan', prompt: 'lorem de dos palabras', aplicacion: 'cursor'  
-Respuesta esperada:  
-llm-response receta.txt linea:0 ho<space>Lorem<space>ipsum<space>la<space>como<space>estan
-
-▸ cursor:
-Prompt: archivo:'saludo.txt', linea: 0, offset: 4, contenido: 'hola<space>mundo', prompt: 'insertar palabra sorpresa', aplicacion: 'cursor'
-Respuesta esperada:
-llm-response saludo.txt linea:0 hola<space>sorpresa<space>mundo
-
-Prompt: archivo:'saludo.txt', linea: 0, offset: 2, contenido: 'hola<space>mundo', prompt: 'insertar un número romano', aplicacion: 'cursor'
-Respuesta esperada:
-llm-response saludo.txt linea:0 ho<space>IV<space>la<space>mundo
-
-Prompt: archivo:'gatos.txt', linea: 1, offset: 7, contenido: 'Maine<space>coon<space>gato', prompt: 'añadir tipo de gato', aplicacion: 'cursor'
-Respuesta esperada:
-llm-response gatos.txt linea:1 Maine<space>co<space>Siamés<space>on<space>gato
-
-Prompt: archivo:'colores.txt', linea: 2, offset: 10, contenido: 'rojo<space>verde<space>azul', prompt: 'agregar un color primario', aplicacion: 'cursor'
-Respuesta esperada:
-llm-response colores.txt linea:2 rojo<space>verde<space>az<space>amarillo<space>ul
-
-Prompt: archivo:'test.txt', linea: 0, offset: 0, contenido: 'hola<space>como', prompt: 'insertar saludo inicial', aplicacion: 'cursor'
-Respuesta esperada:
-llm-response test.txt linea:0 <space>Hola<space>hola<space>como
-
-▸ whole-file:
-Prompt: archivo:'planetas.txt', prompt: 'dame los 4 primeros planetas', aplicacion: 'whole-file'
-Respuesta esperada:
-llm-response planetas.txt Mercurio<enter>Venus<enter>Tierra<enter>Marte
-
-Prompt: archivo:'razas.txt', prompt: 'tres razas de perro', aplicacion: 'whole-file'
-Respuesta esperada:
-llm-response razas.txt Labrador<space>Retriever<enter>Pastor<space>Alemán<enter>Bulldog<enter>
-
-Prompt: archivo:'frutas.txt', prompt: 'nombres de frutas', aplicacion: 'whole-file'
-Respuesta esperada:
-llm-response frutas.txt Manzana<enter>Pera<enter>Banana<enter>Frutilla<enter>Durazno
-
-Prompt: archivo:'notas.txt', prompt: 'lista de 7 notas musicales', aplicacion: 'whole-file'
-Respuesta esperada:
-llm-response notas.txt Do<enter>Re<enter>Mi<enter>Fa<enter>Sol<enter>La<enter>Si
-
-▸ cursor con offset dentro de palabra:
-Prompt: archivo:'texto.txt', linea: 0, offset: 5, contenido: 'gente<space>linda', prompt: 'insertar una palabra', aplicacion: 'cursor'
-Respuesta esperada:
-llm-response texto.txt linea:0 gente<space>bella<space>linda
-
-Prompt: archivo:'ideas.txt', linea: 0, offset: 8, contenido: 'gran<space>proyecto<space>final', prompt: 'inserta una palabra clave', aplicacion: 'cursor'
-Respuesta esperada:
-llm-response ideas.txt linea:0 gran<space>proye<space>clave<space>cto<space>final
-
-▸ cursor con palabras múltiples:
-Prompt: archivo:'data.txt', linea: 0, offset: 4, contenido: 'hola<space>como<space>va', prompt: 'dos nombres', aplicacion: 'cursor'
-Respuesta esperada:
-llm-response data.txt linea:0 hola<space>Juan<space>Ana<space>como<space>va
-
-▸ cursor con inserción al final:
-Prompt: archivo:'mensaje.txt', linea: 0, offset: 13, contenido: 'esto<space>es<space>un<space>mensaje', prompt: 'añadir palabra final', aplicacion: 'cursor'
-Respuesta esperada:
-llm-response mensaje.txt linea:0 esto<space>es<space>un<space>mensaje<space>final
-
-▸ cursor con inserción al principio:
-Prompt: archivo:'salida.txt', linea: 0, offset: 0, contenido: 'buen<space>día', prompt: 'insertar saludo', aplicacion: 'cursor'
-Respuesta esperada:
-llm-response salida.txt linea:0 <space>Hola<space>buen<space>día
-"
+Si el contenido generado contiene múltiples palabras, todas deben estar separadas por <space> y no debe haber dobles <space> ni <space> mal ubicados."
             }]
         },
         "contents": [{
             "parts": [{
-                "text": format!("{}", prompt.to_string())
-        }]}]})
-    .to_string();
+                "text": prompt
+            }]
+        }]
+    });
 
-    let mut response_data = Vec::new();
-    let mut headers = List::new();
-    headers.append("Content-Type: application/json").unwrap();
-    headers
-        .append(&format!("X-goog-api-key: {}", api_key))
-        .unwrap();
-    let mut easy = Easy::new();
-    easy.url(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
-    )
-    .unwrap();
-    easy.post(true).unwrap();
+    let client = reqwest::blocking::Client::new();
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    headers.insert("X-goog-api-key", HeaderValue::from_str(api_key).unwrap());
 
-    easy.http_headers(headers).unwrap();
+    let res = client
+        .post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent")
+        .headers(headers)
+        .json(&body)
+        .send()?;
 
-    easy.post_fields_copy(body.as_bytes()).unwrap();
-
-    {
-        let mut transfer = easy.transfer();
-        transfer
-            .write_function(|data| {
-                response_data.extend_from_slice(data);
-                Ok(data.len())
-            })
-            .unwrap();
-        transfer.perform().unwrap();
-    }
-
-    response_data.clone()
+    Ok(res.bytes()?.to_vec())
 }
 
 fn handle_requests(stream: TcpStream, thread_pool: Arc<ThreadPool>) {
@@ -227,7 +135,14 @@ fn handle_requests(stream: TcpStream, thread_pool: Arc<ThreadPool>) {
 
                 thread_pool.execute(move || {
                     let gemini_resp = get_gemini_respond(&prompt_clone);
-                    let response_str = String::from_utf8_lossy(&gemini_resp);
+
+                    let response_str = match gemini_resp {
+                        Ok(resp) => String::from_utf8_lossy(&resp).into_owned(),
+                        Err(e) => {
+                            eprintln!("Error en get_gemini_respond: {}", e);
+                            return; 
+                        }
+                    };                
 
                     match serde_json::from_str::<serde_json::Value>(&response_str) {
                         Ok(parsed) => {
