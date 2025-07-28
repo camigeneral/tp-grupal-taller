@@ -234,8 +234,7 @@ impl Microservice {
             // let addr = format!("127.0.0.1:{}", port);
             match TcpStream::connect(&addr) {
                 Ok(mut extra_socket) => {
-                    self.logger
-                    .log(&format!("Microservicio envia {:?}", addr));
+                    self.logger.log(&format!("Microservicio envia {:?}", addr));
                     println!("Microservicio conectado a nodo adicional: {}", addr);
 
                     let parts: Vec<&str> = "Microservicio".split_whitespace().collect();
