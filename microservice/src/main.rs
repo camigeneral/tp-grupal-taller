@@ -665,8 +665,15 @@ impl Microservice {
                                     let content = if selection_mode == "whole-file" {
                                         lines.join("<enter>")
                                     } else {
-                                        lines.get(parsed_index).cloned().unwrap_or_default()
-                                    };
+                                        match lines.get(parsed_index) {
+                                            Some(line) => {
+                                                line.replace("<space>", " ").replace("<delete>", "")
+                                            }
+                                            None => {                                                
+                                                String::new()
+                                            }
+                                        }
+                                    };                                    
 
                                     let final_prompt = format!(
                                         "archivo:'{file}', linea: {parsed_index}, offset: {offset}, contenido: '{content}', prompt: '{prompt}', aplicacion: '{selection_mode}'\n"                                        
