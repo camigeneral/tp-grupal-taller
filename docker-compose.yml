@@ -73,6 +73,8 @@ services:
     image: llm_microservice
     container_name: llm_microservice
     working_dir: /usr/local/bin
+    environment:
+      REDIS_NODE_HOSTS: node0:4000,node1:4001,node2:4002
     ports:
       - "4030:4030"
     command: ["llm_microservice_bin"]
