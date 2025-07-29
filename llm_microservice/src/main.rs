@@ -1,13 +1,20 @@
 extern crate reqwest;
 extern crate rusty_docs;
 extern crate serde_json;
-use std::{collections::HashMap, io::{BufReader,BufRead, Write} ,net::{TcpListener, TcpStream} ,env, thread, sync::{Arc, Mutex}};
 use serde_json::json;
+use std::{
+    collections::HashMap,
+    env,
+    io::{BufRead, BufReader, Write, Error, ErrorKind},
+    net::{TcpListener, TcpStream},
+    sync::{Arc, Mutex},
+    thread,
+    time::Duration
+};
 mod threadpool;
-use threadpool::ThreadPool;
-use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
+use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use rusty_docs::{logger, resp_parser};
-
+use threadpool::ThreadPool;
 
 pub struct LlmMicroservice {
     thread_pool: Arc<ThreadPool>,
@@ -15,14 +22,12 @@ pub struct LlmMicroservice {
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
 }
 
-
 impl LlmMicroservice {
-
     pub fn new(n_threads: usize) -> Self {
         let thread_pool = Arc::new(ThreadPool::new(n_threads));
         let listener = TcpListener::bind("0.0.0.0:4030").unwrap();
 
-        LlmMicroservice { 
+        LlmMicroservice {
             thread_pool,
             listener,
             node_streams: Arc::new(Mutex::new(HashMap::new())),
@@ -105,7 +110,7 @@ impl LlmMicroservice {
 
     fn get_gemini_respond(prompt: &str) -> Result<Vec<u8>, reqwest::Error> {
         let api_key = "AIzaSyDSyVJnHxJnUXDRnM7SxphBTwEPGtOjMEI";
-    
+
         let body = json!({
             "system_instruction": {
                 "parts": [{
@@ -118,25 +123,24 @@ impl LlmMicroservice {
                 }]
             }]
         });
-    
+
         let client = reqwest::blocking::Client::new();
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         headers.insert("X-goog-api-key", HeaderValue::from_str(api_key).unwrap());
-    
+
         let res = client
             .post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent")
             .headers(headers)
             .json(&body)
             .send()?;
-    
+
         Ok(res.bytes()?.to_vec())
     }
 
-    
     fn handle_requests(stream: TcpStream, thread_pool: Arc<ThreadPool>) {
         let mut reader = BufReader::new(stream.try_clone().unwrap());
-    
+
         loop {
             let mut input_prompt = String::new();
             match reader.read_line(&mut input_prompt) {
@@ -146,26 +150,25 @@ impl LlmMicroservice {
                 }
                 Ok(_) => {
                     let prompt = input_prompt.trim().to_string();
-    
+
                     if prompt.is_empty() {
-                        println!("Prompt vacío");
                         break;
                     }
-    
+
                     let mut stream_clone = stream.try_clone().unwrap();
                     let prompt_clone = prompt.clone();
-    
+
                     thread_pool.execute(move || {
                         let gemini_resp = Self::get_gemini_respond(&prompt_clone);
-    
+
                         let response_str = match gemini_resp {
                             Ok(resp) => String::from_utf8_lossy(&resp).into_owned(),
                             Err(e) => {
                                 eprintln!("Error en get_gemini_respond: {}", e);
-                                return; 
+                                return;
                             }
-                        };                
-    
+                        };
+
                         match serde_json::from_str::<serde_json::Value>(&response_str) {
                             Ok(parsed) => {
                                 if let Some(text) = parsed["candidates"]
@@ -174,7 +177,10 @@ impl LlmMicroservice {
                                     .and_then(|p| p["text"].as_str())
                                 {
                                     let resp = text.trim().trim_end_matches("\n");
-                                    let mut resp_parts = resp.split("|").map(|s| s.trim().to_string()).collect::<Vec<String>>();
+                                    let mut resp_parts = resp
+                                        .split("|")
+                                        .map(|s| s.trim().to_string())
+                                        .collect::<Vec<String>>();
                                     if let Some(last) = resp_parts.last_mut() {
                                         *last = last.replace(" ", "");
                                     }
@@ -202,29 +208,28 @@ impl LlmMicroservice {
         }
     }
 
-
     fn connect_to_redis_nodes(&mut self) -> std::io::Result<()> {
         let node_addresses = get_nodes_addresses();
-        
+
         if node_addresses.is_empty() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "No hay nodos configurados en REDIS_NODE_HOSTS"
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "No hay nodos configurados en REDIS_NODE_HOSTS",
             ));
         }
 
         println!("Intentando conectar a {} nodos", node_addresses.len());
-        
+
         for address in node_addresses {
             self.connect_to_node_with_retry(&address)?;
         }
-        
+
         Ok(())
     }
 
     fn send_initial_command(&mut self) {
-        let mut streams = self.node_streams.lock().unwrap();                    
-    
+        let mut streams = self.node_streams.lock().unwrap();
+
         for (node_id, stream) in streams.iter_mut() {
             let resp_command = resp_parser::format_resp_command(&["llm_microservice"]);
             if let Err(e) = stream.write_all(resp_command.as_bytes()) {
@@ -232,36 +237,41 @@ impl LlmMicroservice {
             }
         }
     }
-    
 
     fn connect_to_node_with_retry(&mut self, address: &str) -> std::io::Result<()> {
         let mut attempts = 0;
         const MAX_ATTEMPTS: u32 = 15;
         const RETRY_DELAY_SECONDS: u64 = 10;
-        
+
         loop {
             attempts += 1;
             println!("Intento {} de conectar a {}", attempts, address);
-            
+
             match TcpStream::connect(address) {
                 Ok(socket) => {
-                    println!("Conexión exitosa a {}", address);                    
-                    let mut streams = self.node_streams.lock().unwrap();                    
-                    streams.insert(address.to_string(), socket);                    
+                    println!("Conexión exitosa a {}", address);
+                    let mut streams = self.node_streams.lock().unwrap();
+                    streams.insert(address.to_string(), socket);
                     return Ok(());
                 }
                 Err(e) => {
-                    eprintln!("Error conectando a {} (intento {}): {}", address, attempts, e);
-                    
+                    eprintln!(
+                        "Error conectando a {} (intento {}): {}",
+                        address, attempts, e
+                    );
+
                     if attempts >= MAX_ATTEMPTS {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::ConnectionRefused,
-                            format!("No se pudo conectar a {} después de {} intentos", address, MAX_ATTEMPTS)
+                        return Err(Error::new(
+                            ErrorKind::ConnectionRefused,
+                            format!(
+                                "No se pudo conectar a {} después de {} intentos",
+                                address, MAX_ATTEMPTS
+                            ),
                         ));
                     }
-                    
+
                     println!("Reintentando en {} segundos...", RETRY_DELAY_SECONDS);
-                    std::thread::sleep(std::time::Duration::from_secs(RETRY_DELAY_SECONDS));
+                    thread::sleep(Duration::from_secs(RETRY_DELAY_SECONDS));
                 }
             }
         }
@@ -271,7 +281,6 @@ impl LlmMicroservice {
         self.connect_to_redis_nodes()?;
         self.send_initial_command();
         //self.connect_to_replica_nodes(&connect_node_sender)?;
-
 
         for stream in self.listener.incoming() {
             let stream = stream?;
@@ -283,15 +292,12 @@ impl LlmMicroservice {
         }
         Ok(())
     }
-
-
 }
 
 fn main() -> std::io::Result<()> {
+    let mut llm_microservice = LlmMicroservice::new(4);
 
-    let mut llm_microservice = LlmMicroservice::new(4);   
-
-    llm_microservice.run()?;      
+    llm_microservice.run()?;
     Ok(())
 }
 

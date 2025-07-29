@@ -23,12 +23,12 @@ use std::thread;
 
 use std::sync::mpsc::{channel, Sender};
 
+use self::gtk::gdk_pixbuf::Pixbuf;
+use self::gtk::prelude::*;
 use self::relm4::{
     gtk, Component, ComponentController, ComponentParts, ComponentSender, Controller,
     RelmWidgetExt, SimpleComponent,
 };
-use self::gtk::prelude::*;
-use self::gtk::gdk_pixbuf::Pixbuf;
 use std::io::Cursor;
 
 /// Modelo principal de la aplicación que contiene los controladores de los componentes.
@@ -375,7 +375,6 @@ impl SimpleComponent for AppModel {
                 sender.input(AppMsg::UpdateFilesList);
             }
             AppMsg::ManageSubscribeResponse(file, qty_subs, content) => {
-
                 if self.current_file != file {
                     return;
                 }
@@ -444,7 +443,6 @@ impl SimpleComponent for AppModel {
             }
 
             AppMsg::UnsubscribeFile(file) => {
-                
                 self.command = format!("unsubscribe {}", file);
                 self.current_file = "".to_string();
                 sender.input(AppMsg::ExecuteCommand);

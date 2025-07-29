@@ -10,7 +10,7 @@ pub enum RedisClientResponseType {
 
 /// Implementación para convertir un &str en un RedisClientResponseType.
 impl From<&str> for RedisClientResponseType {
-    fn from(s: &str) -> Self {        
+    fn from(s: &str) -> Self {
         match s.to_uppercase().as_str() {
             "ASK" => Self::Ask,
             "STATUS" => Self::Status,

@@ -90,12 +90,15 @@ impl Microservice {
         ));
         let node_streams = Arc::clone(&self.node_streams);
 
-        thread::spawn(move || {            
+        thread::spawn(move || {
             let mut socket = loop {
                 match TcpStream::connect(llm_address.clone()) {
                     Ok(s) => break s,
                     Err(e) => {
-                        eprintln!("No se pudo conectar al LLM: {}. Reintentando en 15 segundos...", e);
+                        eprintln!(
+                            "No se pudo conectar al LLM: {}. Reintentando en 15 segundos...",
+                            e
+                        );
                         sleep(Duration::from_secs(15));
                     }
                 }
@@ -188,7 +191,7 @@ impl Microservice {
         let redis_socket = socket.try_clone()?;
         let redis_socket_clone_for_hashmap = socket.try_clone()?;
 
-        let command = "Microservicio\r\n".to_string();
+        let command: String = "Microservicio\r\n".to_string();
 
         println!("Enviando: {:?}", command);
         self.logger
@@ -351,6 +354,7 @@ impl Microservice {
             thread::sleep(Duration::from_secs(3));
         });
     }
+
     fn start_node_connection_handler(
         &self,
         connect_node_sender: MpscSender<TcpStream>,
@@ -669,11 +673,9 @@ impl Microservice {
                                             Some(line) => {
                                                 line.replace("<space>", " ").replace("<delete>", "")
                                             }
-                                            None => {                                                
-                                                String::new()
-                                            }
+                                            None => String::new(),
                                         }
-                                    };                                    
+                                    };
 
                                     let final_prompt = format!(
                                         "archivo:'{file}', linea: {parsed_index}, offset: {offset}, contenido: '{content}', prompt: '{prompt}', aplicacion: '{selection_mode}'\n"                                        
