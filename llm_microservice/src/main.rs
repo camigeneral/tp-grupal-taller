@@ -1,10 +1,12 @@
-extern crate serde_json;
 extern crate reqwest;
+extern crate rusty_docs;
+extern crate serde_json;
 use std::{collections::HashMap, io::{BufReader,BufRead, Write} ,net::{TcpListener, TcpStream} ,env, thread, sync::{Arc, Mutex}};
 use serde_json::json;
 mod threadpool;
 use threadpool::ThreadPool;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
+use rusty_docs::{logger, resp_parser};
 
 
 pub struct LlmMicroservice {
@@ -220,9 +222,21 @@ impl LlmMicroservice {
         Ok(())
     }
 
+    fn send_initial_command(&mut self) {
+        let mut streams = self.node_streams.lock().unwrap();                    
+    
+        for (node_id, stream) in streams.iter_mut() {
+            let resp_command = resp_parser::format_resp_command(&["llm_microservice"]);
+            if let Err(e) = stream.write_all(resp_command.as_bytes()) {
+                eprintln!("Error al escribir al nodo {}: {}", node_id, e);
+            }
+        }
+    }
+    
+
     fn connect_to_node_with_retry(&mut self, address: &str) -> std::io::Result<()> {
         let mut attempts = 0;
-        const MAX_ATTEMPTS: u32 = 10;
+        const MAX_ATTEMPTS: u32 = 15;
         const RETRY_DELAY_SECONDS: u64 = 10;
         
         loop {
@@ -231,11 +245,9 @@ impl LlmMicroservice {
             
             match TcpStream::connect(address) {
                 Ok(socket) => {
-                    println!("Conexión exitosa a {}", address);
-                    
-                    let mut streams = self.node_streams.lock().unwrap();
-                    streams.insert(address.to_string(), socket);
-                    
+                    println!("Conexión exitosa a {}", address);                    
+                    let mut streams = self.node_streams.lock().unwrap();                    
+                    streams.insert(address.to_string(), socket);                    
                     return Ok(());
                 }
                 Err(e) => {
@@ -257,9 +269,7 @@ impl LlmMicroservice {
 
     pub fn run(&mut self) -> std::io::Result<()> {
         self.connect_to_redis_nodes()?;
-        //self.start_node_connection_handler()?;
-        //self.add_node_stream()?;
-        //self.send_initial_command()?;
+        self.send_initial_command();
         //self.connect_to_replica_nodes(&connect_node_sender)?;
 
 
