@@ -1,9 +1,6 @@
 extern crate serde_json;
 extern crate reqwest;
-use std::sync::Arc;
-use std::thread;
-use std::net::{TcpListener, TcpStream};
-use std::io::{BufReader,BufRead, Write};
+use std::{collections::HashMap, io::{BufReader,BufRead, Write} ,net::{TcpListener, TcpStream} ,env, thread, sync::{Arc, Mutex}};
 use serde_json::json;
 mod threadpool;
 use threadpool::ThreadPool;
@@ -12,7 +9,8 @@ use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
 
 pub struct LlmMicroservice {
     thread_pool: Arc<ThreadPool>,
-    listener: TcpListener
+    listener: TcpListener,
+    node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
 }
 
 
@@ -22,7 +20,11 @@ impl LlmMicroservice {
         let thread_pool = Arc::new(ThreadPool::new(n_threads));
         let listener = TcpListener::bind("0.0.0.0:4030").unwrap();
 
-        LlmMicroservice { thread_pool, listener }
+        LlmMicroservice { 
+            thread_pool,
+            listener,
+            node_streams: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     fn get_llm_instruction() -> String {
@@ -199,8 +201,62 @@ impl LlmMicroservice {
     }
 
 
+    fn connect_to_redis_nodes(&mut self) -> std::io::Result<()> {
+        let node_addresses = get_nodes_addresses();
+        
+        if node_addresses.is_empty() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "No hay nodos configurados en REDIS_NODE_HOSTS"
+            ));
+        }
+
+        println!("Intentando conectar a {} nodos", node_addresses.len());
+        
+        for address in node_addresses {
+            self.connect_to_node_with_retry(&address)?;
+        }
+        
+        Ok(())
+    }
+
+    fn connect_to_node_with_retry(&mut self, address: &str) -> std::io::Result<()> {
+        let mut attempts = 0;
+        const MAX_ATTEMPTS: u32 = 10;
+        const RETRY_DELAY_SECONDS: u64 = 10;
+        
+        loop {
+            attempts += 1;
+            println!("Intento {} de conectar a {}", attempts, address);
+            
+            match TcpStream::connect(address) {
+                Ok(socket) => {
+                    println!("Conexión exitosa a {}", address);
+                    
+                    let mut streams = self.node_streams.lock().unwrap();
+                    streams.insert(address.to_string(), socket);
+                    
+                    return Ok(());
+                }
+                Err(e) => {
+                    eprintln!("Error conectando a {} (intento {}): {}", address, attempts, e);
+                    
+                    if attempts >= MAX_ATTEMPTS {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::ConnectionRefused,
+                            format!("No se pudo conectar a {} después de {} intentos", address, MAX_ATTEMPTS)
+                        ));
+                    }
+                    
+                    println!("Reintentando en {} segundos...", RETRY_DELAY_SECONDS);
+                    std::thread::sleep(std::time::Duration::from_secs(RETRY_DELAY_SECONDS));
+                }
+            }
+        }
+    }
+
     pub fn run(&mut self) -> std::io::Result<()> {
-        //self.connect_to_redis()?;
+        self.connect_to_redis_nodes()?;
         //self.start_node_connection_handler()?;
         //self.add_node_stream()?;
         //self.send_initial_command()?;
@@ -227,4 +283,14 @@ fn main() -> std::io::Result<()> {
 
     llm_microservice.run()?;      
     Ok(())
+}
+
+fn get_nodes_addresses() -> Vec<String> {
+    match env::var("REDIS_NODE_HOSTS") {
+        Ok(val) => val.split(',').map(|s| s.to_string()).collect(),
+        Err(_) => {
+            eprintln!("REDIS_NODE_HOSTS no está seteada");
+            vec![]
+        }
+    }
 }
