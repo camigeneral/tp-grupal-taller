@@ -73,6 +73,10 @@ services:
     image: llm_microservice
     container_name: llm_microservice
     working_dir: /usr/local/bin
+    depends_on:
+      - node0
+      - node1
+      - node2
     environment:
       REDIS_NODE_HOSTS: node0:4000,node1:4001,node2:4002
     ports:
@@ -92,8 +96,7 @@ services:
     depends_on:
       - node0
       - node1
-      - node2
-      
+      - node2      
     ports:
       - "5000:5000"
     environment:
