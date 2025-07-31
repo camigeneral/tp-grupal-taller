@@ -400,15 +400,23 @@ impl SimpleComponent for AppModel {
                 sender.input(AppMsg::ExecuteCommand);
             }
 
-            AppMsg::SendPrompt(doc_info) => {
-                self.command = format!(
-                    "PROMPT|{}|{}|{}|{}|{}",
-                    doc_info.index,
-                    doc_info.file,
-                    doc_info.prompt,
-                    doc_info.offset,
-                    doc_info.selection_mode
-                );
+            AppMsg::SendPrompt(doc_info) => {                
+                self.command = match doc_info.selection_mode.as_str() {
+                    "cursor" => format!(
+                        "PROMPT|{}|{}|{}|{}",
+                        doc_info.file,                                    
+                        doc_info.index,
+                        doc_info.offset,
+                        doc_info.prompt
+                    ),
+                    "whole-file" => format!(
+                        "PROMPT|{}|{}",
+                        doc_info.file,                        
+                        doc_info.prompt
+                    ),
+                    _ => String::new()
+                };
+                
                 self.loading_modal.emit(LoadingModalMsg::Show);
                 sender.input(AppMsg::ExecuteCommand);
             }
