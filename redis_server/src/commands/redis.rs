@@ -17,6 +17,7 @@ pub fn execute_command(
     active_clients: &ClientsMap,
     logged_clients: &LoggedClientsMap,
     suscription_channel: &ClientsMap,
+    llm_channel: &LlmNodesMap,
 ) -> RedisResponse {
     match request.command.as_str() {
         "get" => string::handle_get(&request, docs),
@@ -32,6 +33,7 @@ pub fn execute_command(
             document_subscribers,
             active_clients,
             suscription_channel,
+            llm_channel
         ),
         "scard" => set::handle_scard(&request, shared_sets),
         "smembers" => set::handle_smembers(&request, shared_sets),
