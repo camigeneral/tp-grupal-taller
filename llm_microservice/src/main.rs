@@ -366,6 +366,72 @@ impl LlmMicroservice {
         }
     }
 
+    
+    pub fn listen_node_responses(
+        node_socket: TcpStream,
+    ) -> std::io::Result<()> {
+        if let Ok(peer_addr) = node_socket.peer_addr() {
+            println!("Escuchando respuestas del nodo: {}", peer_addr);
+        }
+
+        let mut reader = BufReader::new(node_socket.try_clone()?);
+        loop {
+            let (parts, _) = parse_resp_command(&mut reader)?;
+            if parts.is_empty() {
+                break;
+            }           
+            println!("partes de llm_requests: {:#?}", parts);
+        }
+        Ok(())
+    }
+
+    fn handle_node_connections(
+        receiver: Receiver<TcpStream>
+    ) -> std::io::Result<()> {
+        for stream in receiver {
+            thread::spawn(move || {
+                if let Err(e) = Self::listen_node_responses(
+                    stream
+                ) {
+                    println!("Error en la conexión con el nodo: {}", e);
+                }
+            });
+        }
+
+        Ok(())
+    }
+
+    fn start_node_connection_handler(&mut self, receiver: Receiver<TcpStream>) {
+        thread::spawn(move || {
+            if let Err(e) = Self::handle_node_connections(receiver) {
+                println!("Error en la conexión con el nodo: {}", e);
+            }
+        });
+    }
+
+    /// Envia todos los nodos conectados al handler de conexiones de nodos
+    fn send_connected_nodes_to_handler(
+        &mut self,
+        connect_node_sender: &Sender<TcpStream>,
+    ) -> std::io::Result<()> {
+        let streams = self.node_streams.lock().unwrap();
+        for (node_id, stream) in streams.iter() {
+            match stream.try_clone() {
+                Ok(clone) => {
+                    if let Err(e) = connect_node_sender.send(clone) {
+                        eprintln!("Error al enviar el stream del nodo {} al handler: {}", node_id, e);
+                        return Err(Error::new(ErrorKind::Other, "Error al enviar stream al handler"));
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error al clonar el stream del nodo {}: {}", node_id, e);
+                    return Err(e);
+                }
+            }
+        }
+        Ok(())
+    }
+    
     /// Ejecuta el microservicio LLM
     /// 
     /// Esta función:
@@ -385,18 +451,24 @@ impl LlmMicroservice {
     /// - Hay problemas con el listener TCP
     pub fn run(&mut self) -> std::io::Result<()> {
         self.connect_to_redis_nodes()?;
-        self.send_initial_command();
         //self.connect_to_replica_nodes(&connect_node_sender)?;
+        let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
+        self.start_node_connection_handler(connect_nodes_receiver);
+        self.send_connected_nodes_to_handler(&connect_node_sender)?;
+        self.send_initial_command();
 
-        for stream in self.listener.incoming() {
+
+        /* for stream in self.listener.incoming() {
             let stream = stream?;
             println!("Se conecto el microservicio");
             let pool = Arc::clone(&self.thread_pool);
             thread::spawn(move || { //Esto va a ser el listen_to_redis_response
                 Self::handle_requests(stream, pool);
             });
-        }
-        Ok(())
+        } */
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }  
     }
 }
 
