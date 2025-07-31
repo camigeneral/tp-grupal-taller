@@ -1,0 +1,101 @@
+networks:
+  redinternanodos:
+    driver: bridge
+
+
+services:
+  node0:
+    networks:
+      - redinternanodos
+    build:
+      context: .
+      dockerfile: redis_server/Dockerfile
+    image: redis-node
+    container_name: node0
+    working_dir: /usr/local/bin
+    ports:
+      - "14000:14000"
+      - "4000:4000"
+    volumes:
+      - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    command: ["redis_server_bin", "4000"]
+
+  node1:
+    networks:
+      - redinternanodos
+    build: 
+      context: .
+      dockerfile: redis_server/Dockerfile
+    image: redis-node
+    container_name: node1
+    working_dir: /usr/local/bin
+    ports:
+      - "14001:14001"
+      - "4001:4001"
+    volumes:
+      - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    command: ["redis_server_bin", "4001"]
+
+  node2:
+    networks:
+      - redinternanodos
+    build: 
+      context: .
+      dockerfile: redis_server/Dockerfile
+    image: redis-node
+    container_name: node2
+    working_dir: /usr/local/bin
+    ports:
+      - "14002:14002"
+      - "4002:4002"
+    volumes:
+      - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    command: ["redis_server_bin", "4002"]
+
+  llm_microservice:
+    networks:
+        - redinternanodos
+    build:      
+      dockerfile: llm_microservice/Dockerfile
+    restart: on-failure    
+    image: llm_microservice
+    container_name: llm_microservice
+    working_dir: /usr/local/bin
+    ports:
+      - "4030:4030"
+    command: ["llm_microservice_bin"]
+
+  microservice:
+    networks:
+      - redinternanodos
+    build:
+      context: .
+      dockerfile: microservice/Dockerfile
+    restart: on-failure
+    image: microservice
+    container_name: microservice
+    working_dir: /usr/local/bin
+    depends_on:
+      - node0
+      - node1
+      - node2
+      
+    ports:
+      - "5000:5000"
+    environment:
+      REDIS_NODE_HOSTS: node2:4002,node1:4001
+    command: ["microservice_bin"]
+
+  
