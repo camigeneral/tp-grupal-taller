@@ -313,10 +313,10 @@ fn handle_new_client_connection(
         if client_type != ClientType::Client {
             if client_type == ClientType::Microservice {
                 subscribe_to_internal_channel(Arc::clone(&ctx), client.clone());
-            }            
-            subscribe_to_llm_request_channel(Arc::clone(&ctx), client, client_addr_str);
-        } 
-        
+            }else {
+                subscribe_to_llm_request_channel(Arc::clone(&ctx), client, client_addr_str);
+            }                    
+        }         
     }
 
     let client_addr_str = client_addr.to_string();
