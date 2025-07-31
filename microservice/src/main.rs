@@ -646,7 +646,37 @@ impl Microservice {
                     } else {
                         log_clone.log("Error obteniendo lock de documents para write");
                     }
-                }
+                },
+                MicroserviceMessage::RequestFile { document, prompt } => {                    
+                    if let Ok(mut docs) = documents.lock() {
+                        if let Some(documento) = docs.get_mut(&document) {
+                            let content = match documento {
+                                Document::Texto(lines) => {
+
+                                    lines.join("<enter>").to_string()
+                                },                            
+                                _ => String::new()
+                            };
+                            let message_parts = &[
+                                "file-requested",
+                                &document.clone(),
+                                &content.clone(),
+                                &prompt.clone(),                        
+                            ];
+                            let message_resp = redis_parser::format_resp_command(message_parts);
+                            let command_resp = redis_parser::format_resp_publish(&"llm_requests", &message_resp);                            
+                            if let Err(e) = microservice_socket.write_all(command_resp.as_bytes()) {
+                                println!(
+                                    "Error al enviar mensaje de actualizacion de archivo: {}",
+                                    e
+                                );
+                            } else {
+                                let _ = microservice_socket.flush();
+                                
+                            }
+                        }
+                    }
+                },
                 MicroserviceMessage::Prompt {
                     line,
                     offset,
