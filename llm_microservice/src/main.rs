@@ -35,33 +35,45 @@ pub struct LlmMicroservice {
 /// Mensajes que procesa el microservicio
 #[derive(Debug)]
 pub enum LlmPromptMessage {
+    FileRequested {
+        document: String,
+        content: String,
+        prompt: String,
+    },
     RequestFile {
         document: String,
         prompt: String,
     },
     ChangeLine {
-        document: String,
-        content: String,
+        document: String,        
         line: String,     
         offset: String,      
         prompt: String  
     },    
     Unknown(String),
+    Ignore
 }
 
 impl LlmPromptMessage {
     pub fn from_parts(parts: &[String]) -> Self {
 
         const REQUEST_FILE_CONTENT_ARGS: usize = 3;
-        const CHANGE_LINE_ARGS: usize = 6;
+        const CHANGE_LINE_ARGS: usize = 5;
+        const REQUESTED_FILE_ARGS: usize = 4;
 
         if parts.is_empty() {
             return LlmPromptMessage::Unknown("Empty message".to_string());
         }
 
         match parts.len() {
-            REQUEST_FILE_CONTENT_ARGS => LlmPromptMessage::RequestFile { document: parts[1].clone(), prompt: parts[2].clone() },
-            CHANGE_LINE_ARGS => LlmPromptMessage::ChangeLine { document: parts[1].clone(), content: parts[2].clone(), line: parts[3].clone(), offset: parts[4].clone(), prompt: parts[5].clone()},
+            REQUEST_FILE_CONTENT_ARGS => {
+                 if parts[0].as_str() != "microservice-request-file" {
+                    return LlmPromptMessage::RequestFile { document: parts[1].clone(), prompt: parts[2].clone()};                
+                }
+                return LlmPromptMessage::Ignore;
+                 },
+            CHANGE_LINE_ARGS => LlmPromptMessage::ChangeLine { document: parts[1].clone(), line: parts[2].clone(), offset: parts[3].clone(), prompt: parts[4].clone()},
+            REQUESTED_FILE_ARGS => LlmPromptMessage::FileRequested { document: parts[1].clone(), content: parts[2].clone(), prompt: parts[3].clone()},
             _ => LlmPromptMessage::Unknown("Comando no valido".to_string())
         }
     }
@@ -420,6 +432,38 @@ impl LlmMicroservice {
 
             let llm_message = LlmPromptMessage::from_parts(&parts);
             println!("llm_message: {:#?}", llm_message);
+            match llm_message {
+                LlmPromptMessage::ChangeLine { document, line, offset, prompt } => {
+                        println!("change linge {document}, {line}, {offset}, {prompt}")
+                },
+                LlmPromptMessage::RequestFile { document, prompt } => {
+                    let message_parts = &[
+                        "microservice-request-file",
+                        &document.clone(),
+                        &prompt.clone(),                        
+                    ];
+                    let message_resp = format_resp_command(message_parts);
+                    let command_resp =
+                        format_resp_publish(&"llm_requests", &message_resp);
+                    println!(
+                        "Enviando publish: {}",
+                        command_resp.replace("\r\n", "\\r\\n")
+                    );
+                    if let Err(e) = node_socket.write_all(command_resp.as_bytes()) {
+                        println!(
+                            "Error al enviar mensaje de actualizacion de archivo: {}",
+                            e
+                        );
+                    } else {
+                        let _ = node_socket.flush();
+                        
+                    }
+                }
+                LlmPromptMessage::FileRequested { document, content, prompt } => {
+                    println!("Documetno: {document}, content: {content}, prompt {prompt}");
+                }
+                _ => {}
+            }
         }
         Ok(())
     }
