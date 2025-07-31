@@ -52,6 +52,7 @@ pub enum FileWorkspaceMsg {
 
     UpdateFile(DocumentValueInfo),
     SendPrompt(DocumentValueInfo),
+    UpdateLLMFile(String, usize, usize, String),
     ContentAddedSpreadSheet(DocumentValueInfo),
     UpdateFilesList(Vec<(String, FileType)>),
     UpdateAllFileData(String, Vec<String>),
@@ -285,6 +286,51 @@ impl SimpleComponent for FileWorkspace {
                         .unwrap();
                 }
             }
+
+            FileWorkspaceMsg::UpdateLLMFile(document, line , offset , content ) => {
+                let file_type = if document.ends_with(".xlsx") {
+                    FileType::Sheet
+                } else {
+                    FileType::Text
+                };
+
+                let file_editor_sender = self.file_editor_ctrl.sender().clone();
+                if let Some(doc) = self.files.get_mut(&(document.clone(), file_type.clone())) {
+
+                    let mut new_content = String::new();
+                    match doc {
+                        Document::Texto(ref mut doc_lines) => {
+                            if line < doc_lines.len() {
+                                let original_line = &doc_lines[line];
+                                let min_offset = offset.min(original_line.len());
+                                let mut new_line = String::new();
+                                new_line.push_str(&original_line[..min_offset]);
+                                new_line.push_str("<space>");
+                                new_line.push_str(&content);
+                                new_line.push_str("<space>");
+                                new_line.push_str(&original_line[min_offset..]);
+                                doc_lines[line] = new_line;                            
+                            }
+                            new_content = doc_lines.join("\n");
+                            println!("new_content {new_content}");
+                        },
+                        _ => {}
+                    };     
+
+                    let mut document_info = DocumentValueInfo::new(new_content, line as i32);
+                    document_info.decode_text();
+
+                    file_editor_sender
+                        .send(FileEditorMessage::UpdateFileContent(
+                            document.clone(),
+                            line as i32,
+                            document_info.value.clone(),
+                            file_type.clone(),
+                        ))
+                        .unwrap();
+                }
+            }
+
 
             FileWorkspaceMsg::UpdateFile(doc_info) => {
                 let file_type = if doc_info.file.ends_with(".xlsx") {
