@@ -114,74 +114,10 @@ impl LlmMicroservice {
     fn get_llm_instruction() -> String {
         return r#"INSTRUCCIONES
             Respondé únicamente con la respuesta solicitada. No agregues introducciones, explicaciones, comentarios, aclaraciones ni conclusiones. No uses frases como 'Claro', 'Aquí está', 'Como modelo de lenguaje', etc. Respondé únicamente con el texto generado.
-
-            Usá <space> para representar espacios reales y <enter> para representar saltos de línea. NO uses \n en ningún caso. NO uses espacios literales. NO uses dobles <space>. NO uses texto fuera del bloque generado.
-
-            Insertá texto solo donde se indique.
-
-            IMPORTANTE SOBRE OFFSET: El offset se calcula sobre el contenido DECODIFICADO, es decir, el resultado luego de reemplazar <space> con espacios reales y <enter> con saltos de línea (\n). Ejemplo:
-
-            Contenido codificado: hola<space>mundo  
-            Contenido decodificado: hola mundo (10 caracteres)
-
-            - offset 0: antes de 'h'  
-            - offset 4: antes del espacio  
-            - offset 5: antes de 'm'  
-            - offset 10: al final
-
+            Usá <space> para representar espacios reales y <enter> para representar saltos de línea. NO TERMINES NI EMPIECES el <contenido_codificado> CON <enter>. NO uses \n en ningún caso. NO uses espacios literales. NO uses dobles <space>. NO uses texto fuera del bloque generado.
             FORMATO DEL RESULTADO
-
             Debe devolverse como una única línea de texto con el siguiente formato:
-
-            llm-response|<nombre_archivo>|linea:<n>|<contenido_codificado>
-
-            Reglas por tipo de modo:
-
-            ▸ Whole-file:
-            - Generar todo el contenido del archivo, reemplazándolo por completo.
-            - Si el prompt requiere procesar el contenido actual (traducir, corregir, reformatear, etc.), se debe usar como base.
-            - Si el prompt indica generar contenido nuevo desde cero, ignorar el contenido original.
-            - No incluir `linea:<n>` en este modo.
-            - Separar líneas con <enter> y palabras con <space>.
-
-            Ejemplos:
-            - prompt: 'traduce al inglés' → traducir contenido original
-            - prompt: 'corrige la gramática' → corregir contenido original
-            - prompt: 'escribí una receta' → ignorar contenido original
-            - prompt: 'dame 5 frutas' → ignorar contenido original
-
-            ▸ Cursor, reemplazo u otros modos con offset:
-            - Insertar exactamente en el offset especificado.
-            - Si el offset cae en medio de una palabra, dividirla con <space> e insertar el texto entre espacios.
-            - Si el offset está entre dos palabras, insertar directamente como <space>NUEVO<space>.
-            - El contenido final debe reflejar la inserción aplicada.
-            - Incluir etiqueta `linea:<n>`.
-
-            Si el offset está dentro de una palabra:
-            ho<space>Siam<space>la  
-            → insertar <space>NUEVO<space> entre "ho" y "Siam".
-
-            Si el offset está en un límite claro:
-            <space>NUEVO<space>
-
-
-            REGLAS GENERALES
-
-            - Nunca usar \n. Usar <enter> exclusivamente para saltos de línea.
-            - Devolver todo en una sola línea.
-            - Nunca usar espacios reales.
-            - Nunca agregar texto fuera del contenido requerido.
-            - Si el resultado incluye listas o múltiples elementos, devolverlos como una única línea separada por <enter> (no línea por línea).
-            - No incluir dobles <space> ni <space> mal ubicados.
-
-            Ejemplo incorrecto:
-            <space>Tokio<space> La<space>física<space>es<space>el<space>estudio...
-
-            Ejemplo correcto:
-            <space>Tokio<space>La<space>física<space>es<space>el<space>estudio...
-
-
-            Todas las palabras deben estar separadas por <space>. No usar ningún delimitador adicional.
+            <contenido_codificado>
             "#.to_string();
     }
 
