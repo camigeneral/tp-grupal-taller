@@ -403,14 +403,14 @@ impl SimpleComponent for AppModel {
             AppMsg::SendPrompt(doc_info) => {                
                 self.command = match doc_info.selection_mode.as_str() {
                     "cursor" => format!(
-                        "PROMPT|{}|{}|{}|{}",
+                        "change-line|{}|{}|{}|{}",
                         doc_info.file,                                    
                         doc_info.index,
                         doc_info.offset,
                         doc_info.prompt
                     ),
                     "whole-file" => format!(
-                        "PROMPT|{}|{}",
+                        "request-file|{}|{}",
                         doc_info.file,                        
                         doc_info.prompt
                     ),
