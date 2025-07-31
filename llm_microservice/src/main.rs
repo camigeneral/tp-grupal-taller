@@ -417,6 +417,9 @@ impl LlmMicroservice {
                 break;
             }           
             println!("partes de llm_requests: {:#?}", parts);
+
+            let llm_message = LlmPromptMessage::from_parts(&parts);
+            println!("llm_message: {:#?}", llm_message);
         }
         Ok(())
     }
