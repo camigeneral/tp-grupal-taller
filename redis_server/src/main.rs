@@ -385,25 +385,6 @@ pub fn subscribe_to_internal_channel(ctx: Arc<ServerContext>, client: client_inf
     println!("Microservicio suscrito al canal interno subscriptions");
 }
 
-/// Suscribe al microservicio al canal de suscripciones
-///
-/// # Argumentos
-/// * `ctx` - Contexto del servidor
-/// * `microservice` - Cliente microservicio a suscribir
-///
-pub fn subscribe_to_llm_request_channel(
-    ctx: Arc<ServerContext>,
-    client: client_info::Client,
-    client_addr_str: String,
-) {
-    let mut channels_guard = match ctx.llm_channel.lock() {
-        Ok(lock) => lock,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-
-    channels_guard.insert(client_addr_str.to_string(), client);
-    println!("Client/Microservicio suscrito al canal interno llm_requests");
-}
 
 /// Maneja la comunicación con un cliente conectado.
 ///
