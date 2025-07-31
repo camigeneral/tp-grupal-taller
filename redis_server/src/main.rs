@@ -495,7 +495,7 @@ fn handle_client(
 
             if let Ok(clients_guard) = ctx.active_clients.lock() {
                 if let Some(client) = clients_guard.get(&client_id) {
-                    subscribe_to_llm_request_channel(Arc::clone(&ctx), client.clone(), client_id.to_string());
+                    subscribe_to_llm_request_channel(Arc::clone(&ctx), client.clone());
                 }
             }
         }
