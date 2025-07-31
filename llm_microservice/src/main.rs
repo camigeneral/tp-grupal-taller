@@ -32,6 +32,42 @@ pub struct LlmMicroservice {
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
 }
 
+/// Mensajes que procesa el microservicio
+#[derive(Debug)]
+pub enum LlmPromptMessage {
+    RequestFile {
+        document: String,
+        prompt: String,
+    },
+    ChangeLine {
+        document: String,
+        content: String,
+        line: String,     
+        offset: String,      
+        prompt: String  
+    },    
+    Unknown(String),
+}
+
+impl LlmPromptMessage {
+    pub fn from_parts(parts: &[String]) -> Self {
+
+        const REQUEST_FILE_CONTENT_ARGS: usize = 3;
+        const CHANGE_LINE_ARGS: usize = 6;
+
+        if parts.is_empty() {
+            return LlmPromptMessage::Unknown("Empty message".to_string());
+        }
+
+        match parts.len() {
+            REQUEST_FILE_CONTENT_ARGS => LlmPromptMessage::RequestFile { document: parts[1].clone(), prompt: parts[2].clone() },
+            CHANGE_LINE_ARGS => LlmPromptMessage::ChangeLine { document: parts[1].clone(), content: parts[2].clone(), line: parts[3].clone(), offset: parts[4].clone(), prompt: parts[5].clone()},
+            _ => LlmPromptMessage::Unknown("Comando no valido".to_string())
+        }
+    }
+}
+
+
 impl LlmMicroservice {
     /// Crea una nueva instancia del microservicio LLM
     /// 
