@@ -16,13 +16,34 @@ use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use rusty_docs::{logger, resp_parser};
 use threadpool::ThreadPool;
 
+/// Microservicio LLM que maneja solicitudes de procesamiento de lenguaje natural
+/// 
+/// Este microservicio se encarga de:
+/// - Escuchar conexiones TCP en el puerto 4030
+/// - Procesar solicitudes de texto usando la API de Gemini
+/// - Conectar a nodos Redis para comunicación distribuida
+/// - Manejar múltiples conexiones concurrentes usando un pool de hilos
 pub struct LlmMicroservice {
+    /// Pool de hilos para manejar múltiples conexiones concurrentes
     thread_pool: Arc<ThreadPool>,
+    /// Listener TCP que acepta conexiones entrantes
     listener: TcpListener,
+    /// Streams de conexión a los nodos Redis, indexados por dirección
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
 }
 
 impl LlmMicroservice {
+    /// Crea una nueva instancia del microservicio LLM
+    /// 
+    /// # Argumentos
+    /// 
+    /// * `n_threads` - Número de hilos en el pool para manejar conexiones concurrentes
+    /// 
+    /// # Ejemplo
+    /// 
+    /// ```rust
+    /// let microservice = LlmMicroservice::new(4);
+    /// ```
     pub fn new(n_threads: usize) -> Self {
         let thread_pool = Arc::new(ThreadPool::new(n_threads));
         let listener = TcpListener::bind("0.0.0.0:4030").unwrap();
@@ -34,6 +55,14 @@ impl LlmMicroservice {
         }
     }
 
+    /// Obtiene las instrucciones del sistema para el modelo LLM
+    /// 
+    /// Estas instrucciones definen el formato de respuesta esperado y las reglas
+    /// para el procesamiento de texto, incluyendo el manejo de espacios y saltos de línea.
+    /// 
+    /// # Returns
+    /// 
+    /// String con las instrucciones del sistema para el modelo LLM
     fn get_llm_instruction() -> String {
         return r#"INSTRUCCIONES
             Respondé únicamente con la respuesta solicitada. No agregues introducciones, explicaciones, comentarios, aclaraciones ni conclusiones. No uses frases como 'Claro', 'Aquí está', 'Como modelo de lenguaje', etc. Respondé únicamente con el texto generado.
@@ -108,6 +137,22 @@ impl LlmMicroservice {
             "#.to_string();
     }
 
+    /// Envía una solicitud al modelo Gemini y obtiene la respuesta
+    /// 
+    /// # Argumentos
+    /// 
+    /// * `prompt` - El texto de entrada que se enviará al modelo LLM
+    /// 
+    /// # Returns
+    /// 
+    /// Result que contiene los bytes de la respuesta de Gemini o un error de reqwest
+    /// 
+    /// # Errores
+    /// 
+    /// Esta función puede fallar si:
+    /// - La API key no es válida
+    /// - Hay problemas de conectividad con la API de Gemini
+    /// - La respuesta no es válida
     fn get_gemini_respond(prompt: &str) -> Result<Vec<u8>, reqwest::Error> {
         let api_key = "AIzaSyDSyVJnHxJnUXDRnM7SxphBTwEPGtOjMEI";
 
@@ -138,6 +183,15 @@ impl LlmMicroservice {
         Ok(res.bytes()?.to_vec())
     }
 
+    /// Maneja las solicitudes entrantes de un stream TCP
+    /// 
+    /// Esta función lee líneas del stream, las procesa con el modelo LLM,
+    /// y envía las respuestas de vuelta al cliente.
+    /// 
+    /// # Argumentos
+    /// 
+    /// * `stream` - Stream TCP conectado al cliente
+    /// * `thread_pool` - Pool de hilos para procesar solicitudes de forma asíncrona
     fn handle_requests(stream: TcpStream, thread_pool: Arc<ThreadPool>) {
         let mut reader = BufReader::new(stream.try_clone().unwrap());
 
@@ -208,6 +262,20 @@ impl LlmMicroservice {
         }
     }
 
+    /// Conecta a todos los nodos Redis configurados en la variable de entorno
+    /// 
+    /// Lee la variable de entorno `REDIS_NODE_HOSTS` que debe contener las direcciones
+    /// de los nodos Redis separadas por comas.
+    /// 
+    /// # Returns
+    /// 
+    /// Result que indica éxito o error en la conexión
+    /// 
+    /// # Errores
+    /// 
+    /// Esta función puede fallar si:
+    /// - La variable `REDIS_NODE_HOSTS` no está configurada
+    /// - No se puede conectar a alguno de los nodos después de múltiples intentos
     fn connect_to_redis_nodes(&mut self) -> std::io::Result<()> {
         let node_addresses = get_nodes_addresses();
 
@@ -227,6 +295,10 @@ impl LlmMicroservice {
         Ok(())
     }
 
+    /// Envía el comando inicial de registro a todos los nodos Redis conectados
+    /// 
+    /// Este comando informa a los nodos Redis que este microservicio está disponible
+    /// y listo para recibir solicitudes.
     fn send_initial_command(&mut self) {
         let mut streams = self.node_streams.lock().unwrap();
 
@@ -238,6 +310,23 @@ impl LlmMicroservice {
         }
     }
 
+    /// Intenta conectar a un nodo Redis específico con reintentos automáticos
+    /// 
+    /// Realiza hasta 15 intentos de conexión con un delay de 10 segundos entre intentos.
+    /// 
+    /// # Argumentos
+    /// 
+    /// * `address` - Dirección del nodo Redis (formato: "host:puerto")
+    /// 
+    /// # Returns
+    /// 
+    /// Result que indica éxito o error en la conexión
+    /// 
+    /// # Errores
+    /// 
+    /// Esta función puede fallar si:
+    /// - No se puede conectar después de 15 intentos
+    /// - El nodo no está disponible
     fn connect_to_node_with_retry(&mut self, address: &str) -> std::io::Result<()> {
         let mut attempts = 0;
         const MAX_ATTEMPTS: u32 = 15;
@@ -277,6 +366,23 @@ impl LlmMicroservice {
         }
     }
 
+    /// Ejecuta el microservicio LLM
+    /// 
+    /// Esta función:
+    /// 1. Conecta a todos los nodos Redis configurados
+    /// 2. Envía el comando inicial de registro
+    /// 3. Comienza a escuchar conexiones TCP entrantes
+    /// 4. Maneja cada conexión en un hilo separado
+    /// 
+    /// # Returns
+    /// 
+    /// Result que indica éxito o error en la ejecución
+    /// 
+    /// # Errores
+    /// 
+    /// Esta función puede fallar si:
+    /// - No se puede conectar a los nodos Redis
+    /// - Hay problemas con el listener TCP
     pub fn run(&mut self) -> std::io::Result<()> {
         self.connect_to_redis_nodes()?;
         self.send_initial_command();
@@ -294,6 +400,13 @@ impl LlmMicroservice {
     }
 }
 
+/// Función principal que inicia el microservicio LLM
+/// 
+/// Crea una instancia del microservicio con 4 hilos y lo ejecuta.
+/// 
+/// # Returns
+/// 
+/// Result que indica éxito o error en la ejecución del programa
 fn main() -> std::io::Result<()> {
     let mut llm_microservice = LlmMicroservice::new(4);
 
@@ -301,6 +414,19 @@ fn main() -> std::io::Result<()> {
     Ok(())
 }
 
+/// Obtiene las direcciones de los nodos Redis desde la variable de entorno
+/// 
+/// Lee la variable de entorno `REDIS_NODE_HOSTS` que debe contener las direcciones
+/// de los nodos Redis separadas por comas.
+/// 
+/// # Returns
+/// 
+/// Vector de strings con las direcciones de los nodos Redis
+/// 
+/// # Ejemplo
+/// 
+/// Si `REDIS_NODE_HOSTS=localhost:6379,localhost:6380`, retorna:
+/// `["localhost:6379", "localhost:6380"]`
 fn get_nodes_addresses() -> Vec<String> {
     match env::var("REDIS_NODE_HOSTS") {
         Ok(val) => val.split(',').map(|s| s.to_string()).collect(),
