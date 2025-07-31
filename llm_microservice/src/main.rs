@@ -35,7 +35,7 @@ pub struct LlmMicroservice {
 /// Mensajes que procesa el microservicio
 #[derive(Debug)]
 pub enum LlmPromptMessage {
-    FileRequested {
+    RequestedFile {
         document: String,
         content: String,
         prompt: String,
@@ -57,27 +57,19 @@ pub enum LlmPromptMessage {
 impl LlmPromptMessage {
     pub fn from_parts(parts: &[String]) -> Self {
 
-        const REQUEST_FILE_CONTENT_ARGS: usize = 3;
-        const CHANGE_LINE_ARGS: usize = 5;
-        const REQUESTED_FILE_ARGS: usize = 4;
-
         if parts.is_empty() {
             return LlmPromptMessage::Unknown("Empty message".to_string());
         }
 
-        match parts.len() {
-            REQUEST_FILE_CONTENT_ARGS => {
-                 if parts[0].as_str() != "microservice-request-file" {
-                    return LlmPromptMessage::RequestFile { document: parts[1].clone(), prompt: parts[2].clone()};                
-                }
-                return LlmPromptMessage::Ignore;
-                 },
-            CHANGE_LINE_ARGS => LlmPromptMessage::ChangeLine { document: parts[1].clone(), line: parts[2].clone(), offset: parts[3].clone(), prompt: parts[4].clone()},
-            REQUESTED_FILE_ARGS => LlmPromptMessage::FileRequested { document: parts[1].clone(), content: parts[2].clone(), prompt: parts[3].clone()},
-            _ => LlmPromptMessage::Unknown("Comando no valido".to_string())
+        match parts[0].as_str() {
+            "request-file" => return LlmPromptMessage::RequestFile { document: parts[1].clone(), prompt: parts[2].clone()},
+            "change-line" => LlmPromptMessage::ChangeLine { document: parts[1].clone(), line: parts[2].clone(), offset: parts[3].clone(), prompt: parts[4].clone()},
+            "requested-file" => LlmPromptMessage::RequestedFile { document: parts[1].clone(), content: parts[2].clone(), prompt: parts[3].clone()},
+            _ => LlmPromptMessage::Ignore
         }
     }
 }
+
 
 
 impl LlmMicroservice {
@@ -176,7 +168,14 @@ impl LlmMicroservice {
     /// 
     /// * `stream` - Stream TCP conectado al cliente
     /// * `thread_pool` - Pool de hilos para procesar solicitudes de forma asíncrona
-    fn handle_requests(stream: TcpStream, thread_pool: Arc<ThreadPool>) {
+    fn handle_requests(        
+        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+        document: String,
+        selection_mode: String,
+        line: String,
+        offset: String,
+        prompt: String,
+        thread_pool: Arc<ThreadPool>) {
         let mut reader = BufReader::new(stream.try_clone().unwrap());
 
         loop {
@@ -351,26 +350,40 @@ impl LlmMicroservice {
     }
 
     
-    pub fn listen_node_responses(
+     pub fn listen_node_responses(
         node_socket: TcpStream,
+        thread_pool: Arc<ThreadPool>,
+        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     ) -> std::io::Result<()> {
         if let Ok(peer_addr) = node_socket.peer_addr() {
             println!("Escuchando respuestas del nodo: {}", peer_addr);
         }
-
+        
         let mut reader = BufReader::new(node_socket.try_clone()?);
         loop {
+            let thread_pool_clone: Arc<ThreadPool> = thread_pool.clone();
+            let mut node_socket_clone = node_socket.try_clone()?;
+            
             let (parts, _) = parse_resp_command(&mut reader)?;
             if parts.is_empty() {
                 break;
             }           
             println!("partes de llm_requests: {:#?}", parts);
+            
 
             let llm_message = LlmPromptMessage::from_parts(&parts);
             println!("llm_message: {:#?}", llm_message);
+            
+
             match llm_message {
                 LlmPromptMessage::ChangeLine { document, line, offset, prompt } => {
-                        println!("change linge {document}, {line}, {offset}, {prompt}")
+                        println!("change linge {document}, {line}, {offset}, {prompt}");
+                        let node_streams_clone: Arc<Mutex<HashMap<String, TcpStream>>>= Arc::clone(&node_streams);
+
+                        let final_prompt =  format!(
+                            "user-prompt:{prompt}",                        
+                        );
+                        Self::handle_requests(node_streams_clone, document, "cursor".to_string(), line, offset, final_prompt, thread_pool_clone);
                 },
                 LlmPromptMessage::RequestFile { document, prompt } => {
                     let message_parts = &[
@@ -385,18 +398,25 @@ impl LlmMicroservice {
                         "Enviando publish: {}",
                         command_resp.replace("\r\n", "\\r\\n")
                     );
-                    if let Err(e) = node_socket.write_all(command_resp.as_bytes()) {
+                    if let Err(e) = node_socket_clone.write_all(command_resp.as_bytes()) {
                         println!(
                             "Error al enviar mensaje de actualizacion de archivo: {}",
                             e
                         );
                     } else {
-                        let _ = node_socket.flush();
+                        let _ = node_socket_clone.flush();
                         
                     }
                 }
-                LlmPromptMessage::FileRequested { document, content, prompt } => {
-                    println!("Documetno: {document}, content: {content}, prompt {prompt}");
+                LlmPromptMessage::RequestedFile { document, content, prompt } => {
+                    println!("Documetno: {document}, content: {content}, prompt {prompt}");                    
+                    let node_streams_clone: Arc<Mutex<HashMap<String, TcpStream>>>= Arc::clone(&node_streams);
+
+                    let final_prompt =  format!(
+                        "content-to-change:{content}, user-prompt:{prompt}",                        
+                    );
+
+                    Self::handle_requests(node_streams_clone, document, "whole-file".to_string(), "0".to_string(), "0".to_string(), final_prompt, thread_pool_clone);
                 }
                 _ => {}
             }
@@ -405,12 +425,19 @@ impl LlmMicroservice {
     }
 
     fn handle_node_connections(
-        receiver: Receiver<TcpStream>
-    ) -> std::io::Result<()> {
+        receiver: Receiver<TcpStream>,
+        thread_pool: Arc<ThreadPool>,
+        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+
+    ) -> std::io::Result<()> {        
         for stream in receiver {
+            let thread_pool_clone: Arc<ThreadPool> = thread_pool.clone();
+            let cloned_node_streams = Arc::clone(&node_streams);
             thread::spawn(move || {
                 if let Err(e) = Self::listen_node_responses(
-                    stream
+                    stream,
+                    thread_pool_clone,
+                    cloned_node_streams
                 ) {
                     println!("Error en la conexión con el nodo: {}", e);
                 }
@@ -420,9 +447,14 @@ impl LlmMicroservice {
         Ok(())
     }
 
+
     fn start_node_connection_handler(&mut self, receiver: Receiver<TcpStream>) {
+
+        let thread_pool_clone: Arc<ThreadPool> = self.thread_pool.clone();
+        let cloned_node_streams = Arc::clone(&self.node_streams);
+
         thread::spawn(move || {
-            if let Err(e) = Self::handle_node_connections(receiver) {
+            if let Err(e) = Self::handle_node_connections(receiver, thread_pool_clone, cloned_node_streams) {
                 println!("Error en la conexión con el nodo: {}", e);
             }
         });
