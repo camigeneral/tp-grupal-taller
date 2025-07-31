@@ -89,7 +89,7 @@ pub enum AppMsg {
     AddFile(String),
     SendPrompt(DocumentValueInfo),
     UpdateAllFileData(String, Vec<String>),
-    UpdateLineFile(String, String, String),
+    UpdateLineFile(String, String, String, String),
 }
 
 #[relm4::component(pub)]
@@ -495,8 +495,15 @@ impl SimpleComponent for AppModel {
                     .emit(FileWorkspaceMsg::UpdateAllFileData(file, updated_content));
             }
 
-            AppMsg::UpdateLineFile(file, line, content) => {
-                let parsed_index = match line.parse::<i32>() {
+            AppMsg::UpdateLineFile(file, line, content, offset) => {
+                let parsed_index = match line.parse::<usize>() {
+                    Ok(idx) => idx,
+                    Err(e) => {
+                        println!("Error parseando índice: {}", e);
+                        return;
+                    }
+                };
+                let parsed_offset = match offset.parse::<usize>() {
                     Ok(idx) => idx,
                     Err(e) => {
                         println!("Error parseando índice: {}", e);
@@ -504,14 +511,11 @@ impl SimpleComponent for AppModel {
                     }
                 };
 
-                let mut document = DocumentValueInfo::new(content, parsed_index);
-                document.file = file.clone();
-                document.decode_text();
                 self.loading_modal.emit(LoadingModalMsg::Hide);
                 self.files_manager_cont
-                    .emit(FileWorkspaceMsg::UpdateFile(document));
+                    .emit(FileWorkspaceMsg::UpdateLLMFile(file, parsed_index, parsed_offset, content));
             }
-
+            
             AppMsg::CloseApplication => {
                 if let Some(channel_sender) = &self.command_sender {
                     if let Err(e) = channel_sender.send("close".to_string()) {
