@@ -678,7 +678,7 @@ impl Microservice {
                         log_clone.log("Error obteniendo lock de documents para write");
                     }
                 },
-                MicroserviceMessage::LLMResponse { document, content, selection_mode, line, offset } => {
+                MicroserviceMessage::ClientLlmResponse { document, content, selection_mode, line, offset } => {
                     log_clone.log(&format!(
                         "LLMResponse recibido: documento {}, selection_mode {}, línea {:?}, offset {:?}",
                         document, selection_mode, line, offset
