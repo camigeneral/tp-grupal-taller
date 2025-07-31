@@ -1,6 +1,7 @@
 extern crate relm4;
 use self::relm4::Sender as UiSender;
 use crate::app::AppMsg;
+use std::collections::HashSet;
 use crate::components::structs::document_value_info::DocumentValueInfo;
 use rusty_docs::resp_parser;
 use rusty_docs::resp_parser::{format_resp_command, format_resp_publish};
@@ -72,6 +73,9 @@ pub struct LocalClient {
     rx_ui: Option<Receiver<String>>,
     /// Registro de canales de escritura para los nodos conectados.
     writer_registry: WriterRegistry,
+    //Regsitro de respuestas ya procesadas
+    processed_responses: Arc<Mutex<HashSet<String>>>,
+
 }
 
 /// Contexto de conexión para un nodo Redis.
@@ -90,6 +94,7 @@ struct NodeConnectionContext {
     ui_sender: Option<UiSender<AppMsg>>,
     /// Registro de canales de escritura para los nodos.
     writer_registry: WriterRegistry,
+    processed_responses: Arc<Mutex<HashSet<String>>>,
 }
 
 impl LocalClient {
@@ -124,6 +129,7 @@ impl LocalClient {
             redis_sender: None,
             rx_ui,
             writer_registry: WriterRegistry::new(),
+            processed_responses: Arc::new(Mutex::new(HashSet::new())),
         })
     }
 
@@ -561,6 +567,19 @@ impl LocalClient {
                 break;
             }
 
+            let response_id = format!("{}-{:?}", response.join("|"), client_socket_cloned.local_addr());
+            
+            if let Ok(mut processed) = params.processed_responses.lock() {
+                if processed.contains(&response_id) {
+                    continue;
+                }
+                processed.insert(response_id);
+                
+                if processed.len() > 1000 {
+                    processed.clear();
+                }
+            }
+
             let local_addr = match client_socket_cloned.local_addr() {
                 Ok(addr) => addr,
                 Err(e) => {
@@ -702,6 +721,7 @@ impl From<&LocalClient> for NodeConnectionContext {
             last_command_sent: Arc::clone(&client.last_command_sent),
             ui_sender: client.ui_sender.clone(),
             writer_registry: client.writer_registry.clone(),
+            processed_responses: Arc::clone(&client.processed_responses),
         }
     }
 }
