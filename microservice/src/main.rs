@@ -530,7 +530,38 @@ impl Microservice {
                         println!("Error obteniendo lock de documents para client-subscribed");
                         log_clone.log("Error obteniendo lock de documents para client-subscribed");
                     }
-                }
+                },
+                MicroserviceMessage::RequestFile { document, prompt } => {                    
+                    if let Ok(mut docs) = documents.lock() {
+                        if let Some(documento) = docs.get_mut(&document) {
+                            let content = match documento {
+                                Document::Texto(lines) => {
+
+                                    lines.join("<enter>").to_string()
+                                },                            
+                                _ => String::new()
+                            };
+                            let message_parts = &[
+                                "requested-file",
+                                &document.clone(),
+                                &content.clone(),
+                                &prompt.clone(),                        
+                            ];
+                            let message_resp = redis_parser::format_resp_command(message_parts);
+                            let command_resp = redis_parser::format_resp_publish(&"llm_requests", &message_resp);
+                            println!("command_resp: {command_resp}");
+                            if let Err(e) = microservice_socket.write_all(command_resp.as_bytes()) {
+                                println!(
+                                    "Error al enviar mensaje de actualizacion de archivo: {}",
+                                    e
+                                );
+                            } else {
+                                let _ = microservice_socket.flush();
+                                
+                            }
+                        }
+                    }
+                },
                 MicroserviceMessage::Doc {
                     document,
                     content,
@@ -645,6 +676,79 @@ impl Microservice {
                         }
                     } else {
                         log_clone.log("Error obteniendo lock de documents para write");
+                    }
+                },
+                MicroserviceMessage::LLMResponse { document, content, selection_mode, line, offset } => {
+                    log_clone.log(&format!(
+                        "LLMResponse recibido: documento {}, selection_mode {}, línea {:?}, offset {:?}",
+                        document, selection_mode, line, offset
+                    ));
+                    if let Ok(mut docs) = documents.lock() {
+                        if let Some(documento) = docs.get_mut(&document) {
+                            match selection_mode.as_str() {
+                                "whole-file" => {
+                                    let lines: Vec<String> = content.split("<enter>").map(|s| s.to_string()).collect();
+                                    match documento {
+                                        Document::Texto(ref mut doc_lines) => {
+                                            *doc_lines = lines.clone();
+                                            log_clone.log(&format!("Documento '{}' actualizado (whole-file) con {} líneas", document, doc_lines.len()));
+                                        },
+                                        Document::Calculo(ref mut doc_lines) => {
+                                            *doc_lines = lines.clone();
+                                            log_clone.log(&format!("Documento '{}' actualizado (whole-file) con {} líneas (calculo)", document, doc_lines.len()));
+                                        },
+                                    }
+                                },
+                                "cursor" => {
+                                    let parsed_line = match line.parse::<usize>() {
+                                        Ok(idx) => idx,
+                                        Err(e) => {
+                                            println!("Error parseando índice: {}", e);
+                                            log_clone.log(&format!("Error parseando índice: {}", e));
+                                            continue;
+                                        }
+                                    };
+
+                                    let parsed_offset = match offset.parse::<usize>() {
+                                        Ok(idx) => idx,
+                                        Err(e) => {
+                                            println!("Error parseando índice: {}", e);
+                                            log_clone.log(&format!("Error parseando índice: {}", e));
+                                            continue;
+                                        }
+                                    };                                    
+
+                                            match documento {
+                                                Document::Texto(ref mut doc_lines) => {
+                                                    if parsed_line < doc_lines.len() {
+                                                        let original_line = &doc_lines[parsed_line];
+                                                        let offset = parsed_offset.min(original_line.len());
+                                                        let mut new_line = String::new();
+                                                        new_line.push_str(&original_line[..offset]);
+                                                        new_line.push_str("<space>");
+                                                        new_line.push_str(&content);
+                                                        new_line.push_str("<space>");
+                                                        new_line.push_str(&original_line[offset..]);
+                                                        doc_lines[parsed_line] = new_line;
+                                                        println!("Insertado en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, content);
+                                                    } else {
+                                                        //log_clone.log(&format!("Línea {} fuera de rango para documento '{}'", line_num, document));
+                                                    }
+                                                },
+                                                _ => {}
+                                            };                                                                            
+                                },
+                                _ => {
+                                    log_clone.log(&format!("Modo de selección desconocido en LLMResponse: {}", selection_mode));
+                                }
+                            }
+                        } else {
+                            println!("Documento no encontrado para LLMResponse: {}", document);
+                            log_clone.log(&format!("Documento no encontrado para LLMResponse: {}", document));
+                        }
+                    } else {
+                        println!("Error obteniendo lock de documents para LLMResponse");
+                        log_clone.log("Error obteniendo lock de documents para LLMResponse");
                     }
                 },
                 MicroserviceMessage::RequestFile { document, prompt } => {                    
