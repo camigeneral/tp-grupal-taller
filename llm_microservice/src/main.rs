@@ -286,7 +286,7 @@ impl LlmMicroservice {
             let stream = stream?;
             println!("Se conecto el microservicio");
             let pool = Arc::clone(&self.thread_pool);
-            thread::spawn(move || {
+            thread::spawn(move || { //Esto va a ser el listen_to_redis_response
                 Self::handle_requests(stream, pool);
             });
         }
