@@ -257,9 +257,8 @@ impl LocalClient {
         if cmd_upper.contains("PROMPT") {
             println!("command: {:#?}", command);
             let splited_command: Vec<&str> = command.split('|').collect();
-            let client_command = format_resp_command(&splited_command);
-            let key = splited_command.get(2).unwrap_or(&"");
-            return format_resp_publish(key, &client_command);
+            let client_command = format_resp_command(&splited_command);            
+            return format_resp_publish("llm_requests", &client_command);
         }
 
         let key = parts.get(1).unwrap_or(&"");
