@@ -24,7 +24,7 @@ pub enum MicroserviceMessage {
         prompt: String,
     },
     
-    LLMResponse {
+    ClientLlmResponse {
         document: String,
         content: String,
         selection_mode: String,
@@ -62,7 +62,7 @@ impl MicroserviceMessage {
                 }
             }
 
-            "LLM-RESPONSE" => MicroserviceMessage::LLMResponse { document: parts[1].clone(), content: parts[2].clone(), selection_mode: parts[3].clone(), line: parts[4].clone(), offset: parts[5].clone() },
+            "CLIENT-LLM-RESPONSE" => MicroserviceMessage::ClientLlmResponse { document: parts[1].clone(), content: parts[2].clone(), selection_mode: parts[3].clone(), line: parts[4].clone(), offset: parts[5].clone() },
 
             "MICROSERVICE-REQUEST-FILE" => {
                 MicroserviceMessage::RequestFile { document: parts[1].clone(), prompt: parts[2].clone() }
