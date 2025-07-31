@@ -1,4 +1,5 @@
-use resp_parser;
+#[path = "utils/redis_parser.rs"]
+mod redis_parser;
 
 /// Mensajes que procesa el microservicio
 #[derive(Debug)]
@@ -18,19 +19,10 @@ pub enum MicroserviceMessage {
         content: String,
         file: String,
     },
-    Prompt {
-        line: String,
-        offset: String,
-        prompt: String,
-        file: String,
-        selection_mode: String,
-    },
 
-    PromptResponse {
-        line: String,
-        file: String,
-        response: String,
-        selection_mode: String,
+    RequestFile {        
+        document: String,
+        prompt: String,
     },
     Error(String),
     Unknown(String),
@@ -62,41 +54,9 @@ impl MicroserviceMessage {
                     file,
                 }
             }
-            "LLM-RESPONSE" if parts.len() >= 2 => {
-                if parts.len() == 3 {
-                    let response = parts[2].to_string();
-                    let file = parts[1].to_string();
-                    return MicroserviceMessage::PromptResponse {
-                        line: "0".to_string(),
-                        file,
-                        response,
-                        selection_mode: "whole-file".to_string(),
-                    };
-                } else {
-                    let response = parts[3].to_string();
-                    let line_parts: Vec<&str> = parts[2].split(':').collect();
-                    let file = parts[1].to_string();
-                    return MicroserviceMessage::PromptResponse {
-                        line: line_parts[1].to_string(),
-                        file,
-                        response,
-                        selection_mode: "cursor".to_string(),
-                    };
-                }
-            }
-            "PROMPT" if parts.len() >= 3 => {
-                let line = parts[1].to_string();
-                let file = parts[2].to_string();
-                let prompt = parts[3].to_string();
-                let offset = parts[4].to_string();
-                let selection_mode = parts[5].to_string();
-                MicroserviceMessage::Prompt {
-                    line,
-                    offset,
-                    prompt,
-                    file,
-                    selection_mode,
-                }
+
+            "MICROSERVICE-REQUEST-FILE" => {
+                MicroserviceMessage::RequestFile { document: parts[1].clone(), prompt: parts[2].clone() }
             }
 
             cmd if cmd.starts_with("-ERR") => MicroserviceMessage::Error(cmd.to_string()),
@@ -111,12 +71,12 @@ impl ToString for MicroserviceMessage {
             MicroserviceMessage::ClientSubscribed {
                 document,
                 client_id,
-            } => resp_parser::format_resp_command(&["client-subscribed", document, client_id]),
+            } => redis_parser::format_resp_command(&["client-subscribed", document, client_id]),
             MicroserviceMessage::Doc {
                 document,
                 content,
                 stream_id,
-            } => resp_parser::format_resp_command(&["DOC", document, content, stream_id]),
+            } => redis_parser::format_resp_command(&["DOC", document, content, stream_id]),
             _ => "".to_string(),
         }
     }
