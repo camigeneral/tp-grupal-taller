@@ -20,6 +20,7 @@ use rusty_docs::document;
 use rusty_docs::logger;
 use rusty_docs::resp_parser;
 use rusty_docs::shared;
+use rusty_docs::vars::DOCKER;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -761,13 +762,18 @@ impl Microservice {
 }
 
 fn get_nodes_addresses() -> Vec<String> {
-    match env::var("REDIS_NODE_HOSTS") {
-        Ok(val) => val.split(',').map(|s| s.to_string()).collect(),
-        Err(_) => {
-            eprintln!("REDIS_NODE_HOSTS no está seteada");
-            vec![]
+    if DOCKER {
+        match env::var("REDIS_NODE_HOSTS") {
+            Ok(val) => val.split(',').map(|s| s.to_string()).collect(),
+            Err(_) => {
+                eprintln!("REDIS_NODE_HOSTS no está seteada");
+                vec![]
+            }
         }
+    } else {
+        return vec!["127.0.0.1:4008".to_string(), "127.0.0.1:4007".to_string(), "127.0.0.1:4006".to_string(), "127.0.0.1:4005".to_string(), "127.0.0.1:4004".to_string(), "127.0.0.1:4003".to_string(), "127.0.0.1:4002".to_string(), "127.0.0.1:4001".to_string()];
     }
+
 }
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
