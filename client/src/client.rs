@@ -568,17 +568,21 @@ impl LocalClient {
             }
 
             let response_id = format!("{}-{:?}", response.join("|"), client_socket_cloned.local_addr());
-            
+        
             if let Ok(mut processed) = params.processed_responses.lock() {
-                if processed.contains(&response_id) {
-                    continue;
+                if response[0].to_uppercase() != "ASK" {
+                    if processed.contains(&response_id) {
+                        println!("Respuesta duplicada detectada, omitiendo: {}", response.join(" "));
+                        continue;
+                    }
+                    processed.insert(response_id);
                 }
-                processed.insert(response_id);
-                
+
                 if processed.len() > 1000 {
                     processed.clear();
                 }
             }
+
 
             let local_addr = match client_socket_cloned.local_addr() {
                 Ok(addr) => addr,
