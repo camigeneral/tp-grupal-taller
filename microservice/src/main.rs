@@ -66,7 +66,7 @@ impl Microservice {
     ///
     pub fn new(config_path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let logger = logger::Logger::init(
-            logger::Logger::get_log_path_from_config(config_path),
+            logger::Logger::get_log_path_from_config(config_path, "microservice_log_path="),
             "0000".parse()?,
         );
         Ok(Microservice {
@@ -314,10 +314,10 @@ impl Microservice {
                             let set_parts = vec!["SET", doc_name, &document_data];
                             let set_command = resp_parser::format_resp_command(&set_parts);
 
-                            logger_clone.log(&format!(
-                                "Enviando comando SET para persistir documento {} en nodo {}: {}",
-                                doc_name, stream_id, set_command
-                            ));
+                            // logger_clone.log(&format!(
+                            //     "Enviando comando SET para persistir documento {} en nodo {}: {}",
+                            //     doc_name, stream_id, set_command
+                            // ));
 
                             if let Err(e) = stream.write_all(set_command.as_bytes()) {
                                 println!("Error enviando comando SET a nodo {}: {}", stream_id, e);
@@ -328,10 +328,10 @@ impl Microservice {
                                 continue;
                             } else {
                                 let _ = stream.flush();
-                                logger_clone.log(&format!(
-                                    "Comando SET enviado exitosamente a nodo {}",
-                                    stream_id
-                                ));
+                                // logger_clone.log(&format!(
+                                //     "Comando SET enviado exitosamente a nodo {}",
+                                //     stream_id
+                                // ));
                             }
 
                             if let Ok(mut last_command) = last_command_sent_clone.lock() {
