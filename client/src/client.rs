@@ -267,6 +267,13 @@ impl LocalClient {
             return format_resp_publish("llm_requests", &client_command);
         }
 
+        if cmd_upper.contains("CLIENT-LLM-RESPONSE") {                     
+            let splited_command: Vec<&str> = command.split('|').collect();
+            let filename = splited_command[1].to_string();
+            let client_command = format_resp_command(&splited_command);            
+            return format_resp_publish(&filename, &client_command);
+        }
+
         let key = parts.get(1).unwrap_or(&"");
         format_resp_publish(key, command)
     }
