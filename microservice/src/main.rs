@@ -678,26 +678,21 @@ impl Microservice {
                         log_clone.log("Error obteniendo lock de documents para write");
                     }
                 },
-                MicroserviceMessage::ClientLlmResponse { document, content, selection_mode, line, offset } => {
+                 MicroserviceMessage::ClientLlmResponse { document, content, selection_mode, line, offset } => {
                     log_clone.log(&format!(
                         "LLMResponse recibido: documento {}, selection_mode {}, línea {:?}, offset {:?}",
                         document, selection_mode, line, offset
                     ));
                     if let Ok(mut docs) = documents.lock() {
-                        if let Some(documento) = docs.get_mut(&document) {
+                        if let Some(documento) = docs.get(&document) {
                             match selection_mode.as_str() {
                                 "whole-file" => {
                                     let lines: Vec<String> = content.split("<enter>").map(|s| s.to_string()).collect();
-                                    match documento {
-                                        Document::Texto(ref mut doc_lines) => {
-                                            *doc_lines = lines.clone();
-                                            log_clone.log(&format!("Documento '{}' actualizado (whole-file) con {} líneas", document, doc_lines.len()));
-                                        },
-                                        Document::Calculo(ref mut doc_lines) => {
-                                            *doc_lines = lines.clone();
-                                            log_clone.log(&format!("Documento '{}' actualizado (whole-file) con {} líneas (calculo)", document, doc_lines.len()));
-                                        },
-                                    }
+                                    let new_document = Document::Texto(lines.clone());
+                                    docs.insert(document.clone(), new_document);
+                                    log_clone.log(&format!("Documento '{}' actualizado (whole-file) con {} líneas", document, lines.len()));
+                                    println!("Documento '{}' actualizado (whole-file) con {} líneas", document, lines.len());
+                                    println!("Documento: {:#?}", docs);
                                 },
                                 "cursor" => {
                                     let parsed_line = match line.parse::<usize>() {
@@ -718,25 +713,28 @@ impl Microservice {
                                         }
                                     };                                    
 
-                                            match documento {
-                                                Document::Texto(ref mut doc_lines) => {
-                                                    if parsed_line < doc_lines.len() {
-                                                        let original_line = &doc_lines[parsed_line];
-                                                        let offset = parsed_offset.min(original_line.len());
-                                                        let mut new_line = String::new();
-                                                        new_line.push_str(&original_line[..offset]);
-                                                        new_line.push_str("<space>");
-                                                        new_line.push_str(&content);
-                                                        new_line.push_str("<space>");
-                                                        new_line.push_str(&original_line[offset..]);
-                                                        doc_lines[parsed_line] = new_line;
-                                                        println!("Insertado en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, content);
-                                                    } else {
-                                                        //log_clone.log(&format!("Línea {} fuera de rango para documento '{}'", line_num, document));
-                                                    }
-                                                },
-                                                _ => {}
-                                            };                                                                            
+                                    match documento {
+                                        Document::Texto(doc_lines) => {
+                                            let mut new_lines = doc_lines.clone();
+                                            if parsed_line < new_lines.len() {
+                                                let original_line = &new_lines[parsed_line];
+                                                let offset = parsed_offset.min(original_line.len());
+                                                let mut new_line = String::new();
+                                                new_line.push_str(&original_line[..offset]);
+                                                new_line.push_str("<space>");
+                                                new_line.push_str(&content);
+                                                new_line.push_str("<space>");
+                                                new_line.push_str(&original_line[offset..]);
+                                                new_lines[parsed_line] = new_line;
+                                                let new_document = Document::Texto(new_lines);
+                                                docs.insert(document.clone(), new_document);
+                                                println!("Insertado en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, content);
+                                            } else {
+                                                //log_clone.log(&format!("Línea {} fuera de rango para documento '{}'", line_num, document));
+                                            }
+                                        },
+                                        _ => {}
+                                    };                                                                            
                                 },
                                 _ => {
                                     log_clone.log(&format!("Modo de selección desconocido en LLMResponse: {}", selection_mode));
