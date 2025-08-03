@@ -5,6 +5,7 @@ pub enum RedisClientResponseType {
     Write,
     Error,
     Llm,
+    ClientLlm,
     Other,
 }
 
@@ -16,6 +17,7 @@ impl From<&str> for RedisClientResponseType {
             "STATUS" => Self::Status,
             "WRITE" => Self::Write,
             "LLM-RESPONSE" => Self::Llm,
+            "CLIENT-LLM-RESPONSE" => Self::ClientLlm,
             s if s.starts_with("-ERR") => Self::Error,
             _ => Self::Other,
         }
