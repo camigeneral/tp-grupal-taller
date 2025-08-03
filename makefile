@@ -1,25 +1,91 @@
-# Número de instancias por defecto si no se especifica
-nodes ?= 1
+# Variables con valores por defecto
 port ?= 4000
-redis:
-	@if [ $(nodes) -lt 1 ] || [ $(nodes) -gt 3 ]; then \
-		echo "Error: El número de instancias debe estar entre 1 y 3"; \
-		exit 1; \
-	fi; \
-	for i in $$(seq 1 $(nodes)); do \
-		PORT=$$((4000 + $$i - 1)); \
-		echo "Iniciando Redis Server $$i en puerto $$PORT"; \
-		cargo run --bin redis_server $$PORT; \
-	done
+service ?=
+cmd ?=/bin/bash
 
+.PHONY: client build up stop down logs restart ps exec rm prune rebuild clean
 
-microservice:
-	cargo run --bin microservice
-
-client: 
+# Ejecutar el cliente en local
+client:
 	cargo run --bin client $(port)
 
-clean_redis:
-	pkill -f "redis_server" || true
+# Build de todos o un servicio
+build:
+	@if [ -z "$(service)" ]; then \
+		echo "Building all services..."; \
+		sudo docker compose build; \
+	else \
+		echo "Building service: $(service)"; \
+		sudo docker compose build $(service); \
+	fi
 
-.PHONY: redis microservice client clean
+# Levantar todos o un servicio (modo detached)
+up:
+	@if [ -z "$(service)" ]; then \
+		echo "Starting all services..."; \
+		sudo docker compose up -d; \
+	else \
+		echo "Starting service: $(service)"; \
+		sudo docker compose up -d $(service); \
+	fi
+
+# Ver logs de un servicio
+logs:
+ifndef service
+	$(error Debes pasar service=nombre_del_servicio)
+endif
+	@echo "Logs de $(service)..."
+	@sudo docker compose logs -f $(service)
+
+# Detener todos los servicios
+stop:
+	@if [ -z "$(service)" ]; then \
+		echo "Stop all services..."; \
+		sudo docker compose stop; \
+	else \
+		echo "Stop service: $(service)"; \
+		sudo docker compose stop $(service); \
+	fi
+
+# Bajar y eliminar volúmenes
+down:
+	sudo docker compose down -v
+
+# Reiniciar todos o uno
+restart:
+	@if [ -z "$(service)" ]; then \
+		echo "Restarting all services..."; \
+		sudo docker compose restart; \
+	else \
+		echo "Restarting service: $(service)"; \
+		sudo docker compose restart $(service); \
+	fi
+
+# Ver servicios corriendo
+ps:
+	sudo docker compose ps
+
+# Acceder al contenedor con shell o comando (por defecto /bin/bash)
+exec:
+ifndef service
+	$(error Debes pasar service=nombre_del_servicio)
+endif
+	@echo "Ingresando a $(service)..."
+	@sudo docker compose exec $(service) $(cmd)
+
+# Eliminar contenedores parados
+rm:
+	sudo docker compose rm -f
+
+# Limpiar todo (containers, networks, volumes, images no usados)
+prune:
+	sudo docker system prune -af --volumes
+
+# Rebuild forzado
+rebuild:
+	@echo " Rebuild completo (limpiando cache)..."
+	sudo docker compose build --no-cache
+
+# Cliente y servicios definidos como PHONY
+clean:
+	sudo docker compose down -v --remove-orphans

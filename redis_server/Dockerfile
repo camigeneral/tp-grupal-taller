@@ -1,0 +1,19 @@
+FROM rust:latest AS builder
+
+WORKDIR /app
+COPY . . 
+
+RUN rustup target add x86_64-unknown-linux-musl
+
+RUN cargo build --release --bin redis_server --target x86_64-unknown-linux-musl
+
+FROM alpine:latest
+
+RUN apk add --no-cache ca-certificates
+
+COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/redis_server /usr/local/bin/redis_server_bin
+
+COPY redis_server/conf_files /usr/local/bin/redis_server/conf_files
+COPY redis_server/rdb_files /usr/local/bin/redis_server/rdb_files
+
+CMD ["redis_server_bin", "4000"]

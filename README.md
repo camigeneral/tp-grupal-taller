@@ -81,6 +81,35 @@ make microservice
 make client
 ```
 
+## Ejecución con Docker
+
+1. Construir y levantar los contenedores:
+```bash
+docker compose up --build
+```
+2. Detener y eliminar los contenedores:
+```bash
+docker compose down
+```
+
+Para construir y levantar cada componente individualmente:
+1. Contruir el servidor:
+```bash
+sudo docker build -f redis_server/Dockerfile -t redis-node .
+```
+2. Construir el microservicio:
+```bash
+sudo docker build -f microservice/Dockerfile -t microservice .
+```
+3. Levantar los nodos:
+```bash
+sudo docker compose up <node1/node2/node3>
+```
+4. Levantar el microservicio:
+```bash
+sudo docker compose up microservice
+```
+   
 ## Como testear
 Ejecutando el siguiente comando se correran los tests unitarios
 ```bash
