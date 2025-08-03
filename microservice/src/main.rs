@@ -51,7 +51,6 @@ pub struct Microservice {
 
     /// Ruta al archivo de log donde se registran los eventos del microservicio.
     logger: Logger,
-    llm_sender: Option<MpscSender<String>>,
     processed_responses: Arc<Mutex<HashSet<String>>>,
 }
 
@@ -78,90 +77,9 @@ impl Microservice {
             documents: Arc::new(Mutex::new(HashMap::new())),
             document_streams: Arc::new(Mutex::new(HashMap::new())),
             logger,
-            llm_sender: None,
             processed_responses: Arc::new(Mutex::new(HashSet::new()))
 
         })
-    }
-
-    fn connect_to_llm(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let llm_address = format!("llm_microservice:4030");
-        let (tx, rx) = channel::<String>();
-
-        self.llm_sender = Some(tx);
-        self.logger.log(&format!(
-            "Microservicio conectandose al server de llm en {:?}",
-            llm_address
-        ));
-        let node_streams = Arc::clone(&self.node_streams);
-
-        thread::spawn(move || {
-            let mut socket = loop {
-                match TcpStream::connect(llm_address.clone()) {
-                    Ok(s) => break s,
-                    Err(e) => {
-                        eprintln!(
-                            "No se pudo conectar al LLM: {}. Reintentando en 15 segundos...",
-                            e
-                        );
-                        sleep(Duration::from_secs(15));
-                    }
-                }
-            };
-            let mut reader = BufReader::new(socket.try_clone().unwrap());
-
-            for prompt in rx {
-                if prompt.trim().is_empty() {
-                    break;
-                }
-
-                let prompt = format!("{}\n", prompt.trim().trim_end_matches("\n"));
-                if let Err(e) = socket.write_all(prompt.as_bytes()) {
-                    eprintln!("Error escribiendo al LLM: {}", e);
-                    break;
-                }
-                if let Err(e) = socket.flush() {
-                    eprintln!("Error flusheando al LLM: {}", e);
-                    break;
-                }
-
-                let mut response = String::new();
-                if let Err(e) = reader.read_line(&mut response) {
-                    eprintln!("Error leyendo del LLM: {}", e);
-                    break;
-                }
-
-                let parts: Vec<&str> = response
-                    .split(' ')
-                    .map(|s| s.trim())
-                    .filter(|s| !s.is_empty())
-                    .collect();
-
-                if parts.len() < 2 {
-                    eprintln!("Respuesta malformada del LLM: {:?}", response);
-                    continue;
-                }
-
-                let document = parts[1];
-                let message = format_resp_command(&parts);
-                let resp = format_resp_publish(document, &message);
-
-                if let Ok(mut streams) = node_streams.lock() {
-                    for (id, stream) in streams.iter_mut() {
-                        if let Err(e) = stream.write_all(resp.as_bytes()) {
-                            eprintln!("Error escribiendo a nodo {}: {}", id, e);
-                        } else {
-                            println!("Respuesta del LLM enviada a nodo {}: {}", id, resp);
-                            let _ = stream.flush();
-                        }
-                    }
-                } else {
-                    eprintln!("Error obteniendo lock de node_streams");
-                }
-            }
-        });
-
-        Ok(())
     }
 
     /// Inicia el microservicio y establece las conexiones con los nodos Redis.
@@ -192,7 +110,6 @@ impl Microservice {
             main_address
         ));
         let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
-        self.connect_to_llm()?;
         let redis_socket = socket.try_clone()?;
         let redis_socket_clone_for_hashmap = socket.try_clone()?;
 
