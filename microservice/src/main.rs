@@ -11,6 +11,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::{channel, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
+use std::collections::HashSet;
 use std::thread;
 extern crate rusty_docs;
 use self::logger::*;
