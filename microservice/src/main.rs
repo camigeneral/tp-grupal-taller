@@ -79,6 +79,54 @@ impl Microservice {
         })
     }
 
+    /// Envía datos a un stream y maneja errores de conexión
+    /// 
+    /// Si el write falla con errores de broken pipe (32) o host unreachable (113),
+    /// elimina el nodo de node_streams ya que la conexión no es válida.
+    /// 
+    /// # Argumentos
+    /// 
+    /// * `stream` - Stream TCP al que enviar los datos
+    /// * `data` - Datos a enviar
+    /// * `node_id` - Identificador del nodo para eliminarlo en caso de error
+    /// * `node_streams` - Referencia a la colección de streams de nodos
+    /// 
+    /// # Returns
+    /// 
+    /// Result que indica éxito o error en el envío
+    fn write_to_stream_with_error_handling(
+        stream: &mut TcpStream,
+        data: &[u8],
+        node_id: &str,
+        node_streams: &Arc<Mutex<HashMap<String, TcpStream>>>,
+    ) -> std::io::Result<()> {
+        match stream.write_all(data) {
+            Ok(_) => {
+                if let Err(e) = stream.flush() {
+                    eprintln!("Error al hacer flush del stream del nodo {}: {}", node_id, e);
+                }
+                Ok(())
+            }
+            Err(e) => {
+                // Verificar si es un error de broken pipe (32) o host unreachable (113)
+                if e.raw_os_error() == Some(32) || e.raw_os_error() == Some(113) {
+                    eprintln!("Error de conexión con nodo {}: {} (os error {:?})", node_id, e, e.raw_os_error());
+                    
+                    // Eliminar el nodo de node_streams
+                    if let Ok(mut streams_guard) = node_streams.lock() {
+                        streams_guard.remove(node_id);
+                        println!("Nodo {} eliminado de node_streams debido a error de conexión", node_id);
+                    } else {
+                        eprintln!("Error obteniendo lock de node_streams para eliminar nodo {}", node_id);
+                    }
+                } else {
+                    eprintln!("Error al escribir al nodo {}: {}", node_id, e);
+                }
+                Err(e)
+            }
+        }
+    }
+
     /// Inicia el microservicio y establece las conexiones con los nodos Redis.
     ///
     /// Este método realiza las siguientes operaciones:
@@ -123,7 +171,10 @@ impl Microservice {
         let parts: Vec<&str> = command.split_whitespace().collect();
         let resp_command = format_resp_command(&parts);
         println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
-        socket.write_all(resp_command.as_bytes())?;
+        if let Err(e) = Self::write_to_stream_with_error_handling(&mut socket, resp_command.as_bytes(), &main_address, &self.node_streams) {
+            eprintln!("Error al escribir al nodo principal {}: {}", main_address, e);
+            return Err(Box::new(e));
+        }
 
         connect_node_sender.send(redis_socket)?;
 
@@ -167,7 +218,10 @@ impl Microservice {
 
                     let parts: Vec<&str> = "Microservicio".split_whitespace().collect();
                     let resp_command = format_resp_command(&parts);
-                    extra_socket.write_all(resp_command.as_bytes())?;
+                    if let Err(e) = Self::write_to_stream_with_error_handling(&mut extra_socket, resp_command.as_bytes(), &addr, &self.node_streams) {
+                        eprintln!("Error al escribir al nodo réplica {}: {}", addr, e);
+                        continue;
+                    }
 
                     self.add_node_stream(&addr, extra_socket.try_clone()?)?;
                     connect_node_sender.send(extra_socket)?;
@@ -240,19 +294,13 @@ impl Microservice {
                             //     doc_name, stream_id, set_command
                             // ));
 
-                            if let Err(e) = stream.write_all(set_command.as_bytes()) {
+                            if let Err(e) = Self::write_to_stream_with_error_handling(stream, set_command.as_bytes(), stream_id, &node_streams_clone) {
                                 println!("Error enviando comando SET a nodo {}: {}", stream_id, e);
                                 logger_clone.log(&format!(
                                     "Error enviando comando SET a nodo {}: {}",
                                     stream_id, e
                                 ));
                                 continue;
-                            } else {
-                                let _ = stream.flush();
-                                // logger_clone.log(&format!(
-                                //     "Comando SET enviado exitosamente a nodo {}",
-                                //     stream_id
-                                // ));
                             }
 
                             if let Ok(mut last_command) = last_command_sent_clone.lock() {
@@ -281,6 +329,7 @@ impl Microservice {
         let cloned_documents: Arc<Mutex<HashMap<String, Document>>> = Arc::clone(&self.documents);
         let logger = self.logger.clone();
         let proccesed_commands: Arc<Mutex<HashSet<String>>> = Arc::clone(&self.processed_responses);
+        let node_streams_clone = Arc::clone(&self.node_streams);
 
         thread::spawn(move || {
             if let Err(e) = Self::connect_to_nodes(                
@@ -288,7 +337,8 @@ impl Microservice {
                 cloned_last_command,
                 cloned_documents,                
                 logger,
-                proccesed_commands
+                proccesed_commands,
+                node_streams_clone
             ) {
                 println!("Error en la conexión con el nodo: {}", e);
             }
@@ -319,13 +369,15 @@ impl Microservice {
         last_command_sent: Arc<Mutex<String>>,
         documents: Arc<Mutex<HashMap<String, Document>>>,
         logger: Logger,
-        processed_responses: Arc<Mutex<HashSet<String>>>
+        processed_responses: Arc<Mutex<HashSet<String>>>,
+        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     ) -> std::io::Result<()> {
         for stream in reciever {            
             let cloned_documents = Arc::clone(&documents);            
             let cloned_last_command = Arc::clone(&last_command_sent);            
             let log_clone = logger.clone();
             let proccesed_commands_clone: Arc<Mutex<HashSet<String>>> = Arc::clone(&processed_responses);
+            let node_streams_clone = Arc::clone(&node_streams);
 
             thread::spawn(move || {
                 let logger_clone = log_clone.clone();
@@ -334,7 +386,8 @@ impl Microservice {
                     cloned_documents,                    
                     cloned_last_command,
                     log_clone,
-                    proccesed_commands_clone
+                    proccesed_commands_clone,
+                    node_streams_clone
                 ) {
                     logger_clone.log(&format!("Error en la conexión con el nodo: {}", e));
                     println!("Error en la conexión con el nodo: {}", e);
@@ -367,7 +420,8 @@ impl Microservice {
         documents: Arc<Mutex<HashMap<String, Document>>>,        
         last_command_sent: Arc<Mutex<String>>,
         log_clone: Logger,
-        processed_responses: Arc<Mutex<HashSet<String>>>
+        processed_responses: Arc<Mutex<HashSet<String>>>,
+        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     ) -> std::io::Result<()> {
         if let Ok(peer_addr) = microservice_socket.peer_addr() {
             println!("Escuchando respuestas del nodo: {}", peer_addr);
@@ -408,7 +462,7 @@ impl Microservice {
                                 "Enviando publish para client-subscribed: {}",
                                 command_resp
                             ));
-                            if let Err(e) = microservice_socket.write_all(command_resp.as_bytes()) {
+                            if let Err(e) = Self::write_to_stream_with_error_handling(&mut microservice_socket, command_resp.as_bytes(), &document, &node_streams) {
                                 println!(
                                     "Error al enviar mensaje de actualizacion de archivo: {}",
                                     e
@@ -416,12 +470,6 @@ impl Microservice {
                                 log_clone.log(&format!(
                                     "Error al enviar mensaje de actualizacion de archivo: {}",
                                     e
-                                ));
-                            } else {
-                                let _ = microservice_socket.flush();
-                                log_clone.log(&format!(
-                                    "Enviando publish para client-subscribed: {}",
-                                    command_resp
                                 ));
                             }
                         }
@@ -653,14 +701,11 @@ impl Microservice {
                             ];
                             let message_resp = format_resp_command(message_parts);
                             let command_resp = format_resp_publish(&"llm_requests", &message_resp);                            
-                            if let Err(e) = microservice_socket.write_all(command_resp.as_bytes()) {
+                            if let Err(e) = Self::write_to_stream_with_error_handling(&mut microservice_socket, command_resp.as_bytes(), &document, &node_streams) {
                                 println!(
                                     "Error al enviar mensaje de actualizacion de archivo: {}",
                                     e
                                 );
-                            } else {
-                                let _ = microservice_socket.flush();
-                                
                             }
                         }
                     }
