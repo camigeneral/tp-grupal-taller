@@ -49,6 +49,9 @@ pub struct Microservice {
 
     /// Ruta al archivo de log donde se registran los eventos del microservicio.
     logger: Logger,
+    
+    /// Conjunto de respuestas ya procesadas para evitar duplicados.
+    /// Se utiliza para identificar y omitir mensajes duplicados del LLM.
     processed_responses: Arc<Mutex<HashSet<String>>>,
 }
 
@@ -234,6 +237,18 @@ impl Microservice {
         Ok(())
     }
 
+    /// Convierte un documento a formato de string para persistencia
+    /// 
+    /// Esta función toma un documento (texto o spreadsheet) y lo convierte
+    /// a un string con formato específico usando "/--/" como separador entre líneas.
+    /// 
+    /// # Argumentos
+    /// 
+    /// * `documento` - Referencia al documento a convertir
+    /// 
+    /// # Returns
+    /// 
+    /// String con el contenido del documento formateado para persistencia
     fn get_document_data(documento: &Document) -> String {
         match documento {
             Document::Text(lines) => {
@@ -321,6 +336,15 @@ impl Microservice {
         });
     }
 
+    /// Inicia el manejador de conexiones de nodos en un hilo separado
+    /// 
+    /// Esta función crea un hilo que se encarga de procesar las conexiones
+    /// entrantes de los nodos Redis. Clona las referencias necesarias y
+    /// delega el procesamiento a `connect_to_nodes`.
+    /// 
+    /// # Argumentos
+    /// 
+    /// * `connect_nodes_receiver` - Receiver para recibir streams TCP de nuevos nodos
     fn start_node_connection_handler(
         &self,
         connect_nodes_receiver: Receiver<TcpStream>,
@@ -717,8 +741,19 @@ impl Microservice {
         Ok(())
     }
 
-    /// * `connect_node_sender` - Sender para enviar streams TCP al manejador.
-    /// * `connect_nodes_receiver` - Receiver para recibir streams TCP de nuevos nodos.
+    /// Agrega un nuevo stream de nodo al mapa de conexiones activas
+    /// 
+    /// Esta función agrega un stream TCP de un nodo Redis al mapa de conexiones
+    /// activas del microservicio. La dirección del nodo se usa como clave.
+    /// 
+    /// # Argumentos
+    /// 
+    /// * `address` - Dirección del nodo Redis (formato: "host:puerto")
+    /// * `stream` - Stream TCP conectado al nodo
+    /// 
+    /// # Returns
+    /// 
+    /// Result que indica éxito o error al agregar el stream
     fn add_node_stream(
         &self,
         address: &str,
@@ -740,6 +775,19 @@ impl Microservice {
     }
 }
 
+/// Convierte texto normal a formato codificado para el sistema
+/// 
+/// Esta función toma texto normal y lo convierte al formato interno del sistema,
+/// reemplazando espacios con "<space>", saltos de línea con "<enter>", y
+/// strings vacíos con "<delete>".
+/// 
+/// # Argumentos
+/// 
+/// * `value` - String con el texto a codificar
+/// 
+/// # Returns
+/// 
+/// String con el texto codificado en formato interno
 pub fn parse_text(value: String)-> String {
     let val = value.clone();
     let mut value_clone = if value.trim_end_matches('\n').is_empty() {
@@ -751,6 +799,19 @@ pub fn parse_text(value: String)-> String {
     return value_clone;
 }
 
+/// Convierte texto codificado a formato normal
+/// 
+/// Esta función toma un string codificado (con "<space>", "<enter>", "<delete>")
+/// y lo convierte a un string normal, reemplazando "<space>" con espacios,
+/// "<enter>" con saltos de línea, y "<delete>" con strings vacíos.
+/// 
+/// # Argumentos
+/// 
+/// * `value` - String con el texto codificado
+/// 
+/// # Returns
+/// 
+/// String con el texto decodificado en formato normal
 pub fn decode_text(value: String)-> String {
     let  value_clone = value.clone();
     value_clone
@@ -759,6 +820,20 @@ pub fn decode_text(value: String)-> String {
         .replace("<delete>", "")
 }
 
+/// Obtiene las direcciones de los nodos Redis desde la variable de entorno
+/// 
+/// Lee la variable de entorno `REDIS_NODE_HOSTS` que debe contener las direcciones
+/// de los nodos Redis separadas por comas. Si no está en modo Docker, retorna
+/// una lista predefinida de direcciones locales.
+/// 
+/// # Returns
+/// 
+/// Vector de strings con las direcciones de los nodos Redis
+/// 
+/// # Ejemplo
+/// 
+/// Si `REDIS_NODE_HOSTS=localhost:6379,localhost:6380`, retorna:
+/// `["localhost:6379", "localhost:6380"]`
 fn get_nodes_addresses() -> Vec<String> {
     if DOCKER {
         match env::var("REDIS_NODE_HOSTS") {
@@ -774,6 +849,14 @@ fn get_nodes_addresses() -> Vec<String> {
 
 }
 
+/// Función principal que inicia el microservicio
+/// 
+/// Crea una instancia del microservicio con la configuración especificada
+/// y lo ejecuta. El archivo de configuración debe estar en "microservice.conf".
+/// 
+/// # Returns
+/// 
+/// Result que indica éxito o error en la ejecución del programa
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config_path = "microservice.conf";
     let mut microservice = Microservice::new(config_path)?;
