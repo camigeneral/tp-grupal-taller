@@ -39,7 +39,13 @@ endif
 
 # Detener todos los servicios
 stop:
-	sudo docker compose stop
+	@if [ -z "$(service)" ]; then \
+		echo "Stop all services..."; \
+		sudo docker compose stop; \
+	else \
+		echo "Stop service: $(service)"; \
+		sudo docker compose stop $(service); \
+	fi
 
 # Bajar y eliminar volúmenes
 down:
