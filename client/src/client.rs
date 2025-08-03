@@ -521,6 +521,42 @@ impl LocalClient {
             )));
         }
     }
+    /// Maneja respuestas de tipo LLM-RESPONSE, actualizando el contenido del documento en la UI.
+    ///
+    /// # Argumentos
+    /// * `response` - Respuesta recibida.
+    /// * `ui_sender` - Canal para enviar mensajes a la UI.
+    fn handle_llm_response(response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) {
+        if let Some(sender) = &ui_sender {
+
+            let selection_mode = response[3].clone();
+
+            let content = response[1].to_string();
+            let file = response[2].to_string();
+            
+            match selection_mode.as_str() {
+                "whole-file" => {
+                    let mut new_lines = Vec::new();
+                    new_lines.extend(content.split("<enter>").map(String::from));
+                    let _ = sender.send(AppMsg::UpdateAllFileData(
+                        file.to_string(),
+                        new_lines.to_vec(),
+                    ));
+                },
+                "cursor" => {
+                    let line = response[4].to_string();
+                    let offset = response[5].to_string();
+                    let _ = sender.send(AppMsg::UpdateLineFile(
+                        file.to_string(),
+                        line,
+                        content,
+                        offset,                        
+                    ));
+                },
+                _ => {}
+            }
+        }
+    }
     /// Maneja respuestas desconocidas, intentando deducir la acción adecuada.
     ///
     /// # Argumentos
