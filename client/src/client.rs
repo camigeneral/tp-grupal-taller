@@ -260,7 +260,7 @@ impl LocalClient {
             return format_resp_publish(key, &client_command);
         }
 
-        if cmd_upper.contains("PROMPT") {
+        if cmd_upper.contains("CHANGE-LINE") || cmd_upper.contains("WHOLE-FILE")  {
             println!("command: {:#?}", command);
             let splited_command: Vec<&str> = command.split('|').collect();
             let client_command = format_resp_command(&splited_command);            
