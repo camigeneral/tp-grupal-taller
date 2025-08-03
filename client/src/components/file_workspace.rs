@@ -299,23 +299,25 @@ impl SimpleComponent for FileWorkspace {
 
                     let mut new_content = String::new();
                     match doc {
-                        Document::Text(ref mut doc_lines) => {
+                        Document::Texto(ref mut doc_lines) => {
                             if line < doc_lines.len() {
-                                let original_line = &doc_lines[line];
+                                let original_line = &decode_text(doc_lines[line].to_string());
                                 let min_offset = offset.min(original_line.len());
                                 let mut new_line = String::new();
+                                let parsed_content = &decode_text(content.to_string()); 
                                 new_line.push_str(&original_line[..min_offset]);
-                                new_line.push_str("<space>");
-                                new_line.push_str(&content);
-                                new_line.push_str("<space>");
+                                new_line.push_str(" ");
+                                new_line.push_str(&parsed_content);
+                                new_line.push_str(" ");
                                 new_line.push_str(&original_line[min_offset..]);
+                                new_line = parse_text(new_line);
                                 doc_lines[line] = new_line;                            
                             }
                             new_content = doc_lines.join("\n");
                             println!("new_content {new_content}");
                         },
                         _ => {}
-                    };     
+                    };      
 
                     let mut document_info = DocumentValueInfo::new(new_content, line as i32);
                     document_info.decode_text();
@@ -405,4 +407,23 @@ impl SimpleComponent for FileWorkspace {
             _ => {}
         }
     }
+}
+
+pub fn parse_text(value: String)-> String {
+    let val = value.clone();
+    let mut value_clone = if value.trim_end_matches('\n').is_empty() {
+        "<delete>".to_string()
+    } else {
+        val.replace('\n', "<enter>")
+    };
+    value_clone = value_clone.replace(' ', "<space>");
+    return value_clone;
+}
+
+pub fn decode_text(value: String)-> String {
+    let  value_clone = value.clone();
+    value_clone
+        .replace("<space>", " ")
+        .replace("<enter>", "\n")
+        .replace("<delete>", "")
 }
