@@ -393,8 +393,16 @@ impl LocalClient {
         if response.len() < 3 {
             println!("Nodo de redireccion no disponible");
         } else {
+            let mut new_response = response.clone();
+            
+            if let Some(addr) = response.get(2) {
+                if let Some((_, port)) = addr.split_once(':') {
+                    new_response[2] = format!("127.0.0.1:{}", port);
+                }
+            }
+    
             let _ = Self::send_command_to_nodes(
-                response,
+                new_response,
                 connect_node_sender.clone(),
                 contenxt.clone(),
             );

@@ -577,7 +577,6 @@ fn handle_node(
                             poisoned.into_inner()
                         }
                     };
-                    // let address = format!("127.0.0.1:{}", port);
                     let address = get_node_address(port);
 
                     if let Some(replica_node) = locked_peer_nodes.get_mut(&address) {
