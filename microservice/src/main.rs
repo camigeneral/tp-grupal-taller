@@ -646,7 +646,7 @@ impl Microservice {
                                 _ => String::new()
                             };
                             let message_parts = &[
-                                "file-requested",
+                                "requested-file",
                                 &document.clone(),
                                 &content.clone(),
                                 &prompt.clone(),                        
