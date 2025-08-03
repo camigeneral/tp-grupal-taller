@@ -204,7 +204,7 @@ services:
       - node7
       - node8
     environment:
-      REDIS_NODE_HOSTS: node0:4000,node1:4001,node2:4002
+      REDIS_NODE_HOSTS: node8:4008,node7:4007,node6:4006,node5:4005,node4:4004,node3:4003,node2:4002,node1:4001,node0:4000
     ports:
       - "4030:4030"
     command: ["llm_microservice_bin"]
