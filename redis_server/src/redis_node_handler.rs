@@ -5,7 +5,6 @@ use encryption::{encrypt_message, ENCRYPTION, KEY};
 use local_node::{LocalNode, NodeRole, NodeState};
 use peer_node;
 use rusty_docs::resp_parser::{parse_replica_command, write_response, CommandResponse};
-use rusty_docs::vars::DOCKER;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::File;
@@ -16,7 +15,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread::{self};
 use std::time::{Duration, Instant};
-use utils::get_resource_path;
+use utils::{get_node_address, get_resource_path};
 
 const PRINT_PINGS: bool = false;
 
@@ -345,8 +344,6 @@ fn handle_node(
                     Err(_) => continue,
                 };
 
-                let node_listening_port = &input[1];
-                // let node_address = format!("127.0.0.1:{}", node_listening_port);
                 let node_address = get_node_address(parsed_port);
 
                 let node_role = match input[2].trim().to_lowercase().as_str() {
@@ -1160,14 +1157,5 @@ fn initialize_replica_promotion(
                 }
             }
         }
-    }
-}
-
-fn get_node_address(port: usize) -> String {
-    let last_digit = port % 10;
-    if DOCKER {
-        format!("node{}:{}", last_digit, port)
-    } else {
-        format!("127.0.0.1:{}", port)
     }
 }

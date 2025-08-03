@@ -746,12 +746,15 @@ pub fn resolve_key_location(
                 && p.hash_range.0 <= hashed_key
                 && p.hash_range.1 > hashed_key
         }) {
+            let ask_address = utils::get_node_address(peer_node.port - 10000);
             let response_string =
-                format!("ASK {} 127.0.0.1:{}", hashed_key, peer_node.port - 10000);
+                format!("ASK {} {}", hashed_key, ask_address);
+            // let response_string =
+            //     format!("ASK {} 127.0.0.1:{}", hashed_key, peer_node.port - 10000);
             let redis_redirect_response = CommandResponse::Array(vec![
                 CommandResponse::String("ASK".to_string()),
                 CommandResponse::String(hashed_key.clone().to_string()),
-                CommandResponse::String(format!("127.0.0.1:{}", peer_node.port - 10000)),
+                CommandResponse::String(ask_address),
             ]);
 
             println!("\n\nHashing para otro nodo: {:?}", response_string.clone());
@@ -768,10 +771,6 @@ pub fn resolve_key_location(
                 CommandResponse::String(hashed_key.clone().to_string()),
             ]);
 
-            // println!(
-            //     "Hashing para nodo indefinido: {:?}",
-            //     response_string.clone()
-            // );
             logger.log(&format!(
                 "Hashing para nodo indefinido: {:?}",
                 response_string.clone()
