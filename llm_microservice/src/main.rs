@@ -5,7 +5,7 @@ use serde_json::json;
 use std::{
     collections::HashMap,
     env,
-    io::{BufRead, BufReader, Write, Error, ErrorKind},
+    io::{BufReader, Write, Error, ErrorKind},
     net::{TcpListener, TcpStream},
     sync::{Arc, Mutex, mpsc::{channel, Receiver, Sender}},
     thread,
@@ -26,8 +26,6 @@ use threadpool::ThreadPool;
 pub struct LlmMicroservice {
     /// Pool de hilos para manejar múltiples conexiones concurrentes
     thread_pool: Arc<ThreadPool>,
-    /// Listener TCP que acepta conexiones entrantes
-    listener: TcpListener,
     /// Streams de conexión a los nodos Redis, indexados por dirección
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
 }
@@ -85,12 +83,10 @@ impl LlmMicroservice {
     /// let microservice = LlmMicroservice::new(4);
     /// ```
     pub fn new(n_threads: usize) -> Self {
-        let thread_pool = Arc::new(ThreadPool::new(n_threads));
-        let listener = TcpListener::bind("0.0.0.0:4030").unwrap();
+        let thread_pool = Arc::new(ThreadPool::new(n_threads));        
 
         LlmMicroservice {
-            thread_pool,
-            listener,
+            thread_pool,        
             node_streams: Arc::new(Mutex::new(HashMap::new())),
         }
     }
