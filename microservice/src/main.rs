@@ -1,29 +1,30 @@
-use std::collections::HashMap;
-use std::env;
-use std::io::BufRead;
-use std::io::BufReader;
-use std::io::Write;
-#[allow(unused_imports)]
-use std::net::TcpListener;
-use std::net::TcpStream;
-#[allow(unused_imports)]
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
-use std::sync::mpsc::{channel, Sender as MpscSender};
-use std::sync::{Arc, Mutex};
-use std::collections::HashSet;
-use std::thread;
+// Standard library imports
+use std::{
+    env,
+    collections::{HashMap, HashSet},
+    io::{BufReader, Write},
+    net::TcpStream,
+    sync::{
+        Arc, 
+        Mutex,
+        mpsc::{channel, Receiver, Sender as MpscSender}        
+    },
+    thread,
+    thread::sleep,
+    time::Duration
+};
+
+// External crate imports
 extern crate rusty_docs;
-use self::logger::*;
-use self::shared::MicroserviceMessage;
-use document::Document;
-use rusty_docs::document;
-use rusty_docs::logger;
-use rusty_docs::resp_parser::{format_resp_command, format_resp_publish, parse_resp_command};
-use rusty_docs::shared;
-use rusty_docs::vars::DOCKER;
-use std::thread::sleep;
-use std::time::Duration;
+
+// Local imports from rusty_docs
+use rusty_docs::{
+    document::Document,
+    logger::{self, Logger},
+    resp_parser::{format_resp_command, format_resp_publish, parse_resp_command},
+    shared::MicroserviceMessage,
+    vars::DOCKER,
+};
 
 /// Microservicio que actúa como intermediario entre clientes y nodos Redis.
 ///
@@ -134,7 +135,7 @@ impl Microservice {
         self.start_automatic_commands();
 
         loop {
-            std::thread::sleep(std::time::Duration::from_secs(1));
+            sleep(std::time::Duration::from_secs(1));
         }
     }
 
