@@ -13,7 +13,7 @@ up:
 stop:
 	sudo docker compose stop
 
-log: 
+logs: 
 	sudo docker compose logs -f $(service)
 
 down:
