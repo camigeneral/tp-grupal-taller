@@ -90,7 +90,7 @@ pub enum AppMsg {
     SendPrompt(DocumentValueInfo),
     UpdateAllFileData(String, Vec<String>),
     UpdateLineFile(String, String, String, String),
-    PublishLlmResponse(Vec<String>),
+    PublishLlmResponse(Vec<String>),    
 }
 
 #[relm4::component(pub)]
@@ -640,6 +640,11 @@ impl SimpleComponent for AppModel {
                 };
                 self.files_manager_cont
                     .emit(FileWorkspaceMsg::AddFile(file_name, doc_type));
+            }
+            AppMsg::PublishLlmResponse(resp_command) => {
+                let resp_command_str = resp_command.iter().map(|s| s.to_string()).collect::<Vec<String>>().join("|");
+                self.command = format!("client-llm-response|{}|{}", resp_command[0], resp_command_str);
+                sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::PublishLlmResponse(resp_command) => {
                 let resp_command_str = resp_command.iter().map(|s| s.to_string()).collect::<Vec<String>>().join("|");
