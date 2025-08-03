@@ -299,7 +299,7 @@ impl SimpleComponent for FileWorkspace {
 
                     let mut new_content = String::new();
                     match doc {
-                        Document::Texto(ref mut doc_lines) => {
+                        Document::Text(ref mut doc_lines) => {
                             if line < doc_lines.len() {
                                 let original_line = &decode_text(doc_lines[line].to_string());
                                 let min_offset = offset.min(original_line.len());
