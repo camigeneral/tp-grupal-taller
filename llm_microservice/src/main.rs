@@ -91,6 +91,54 @@ impl LlmMicroservice {
         }
     }
 
+    /// Envía datos a un stream y maneja errores de conexión
+    /// 
+    /// Si el write falla con errores de broken pipe (32) o host unreachable (113),
+    /// elimina el nodo de node_streams ya que la conexión no es válida.
+    /// 
+    /// # Argumentos
+    /// 
+    /// * `stream` - Stream TCP al que enviar los datos
+    /// * `data` - Datos a enviar
+    /// * `node_id` - Identificador del nodo para eliminarlo en caso de error
+    /// * `node_streams` - Referencia a la colección de streams de nodos
+    /// 
+    /// # Returns
+    /// 
+    /// Result que indica éxito o error en el envío
+    fn write_to_stream_with_error_handling(
+        stream: &mut TcpStream,
+        data: &[u8],
+        node_id: &str,
+        node_streams: &Arc<Mutex<HashMap<String, TcpStream>>>,
+    ) -> std::io::Result<()> {
+        match stream.write_all(data) {
+            Ok(_) => {
+                if let Err(e) = stream.flush() {
+                    eprintln!("Error al hacer flush del stream del nodo {}: {}", node_id, e);
+                }
+                Ok(())
+            }
+            Err(e) => {
+                // Verificar si es un error de broken pipe (32) o host unreachable (113)
+                if e.raw_os_error() == Some(32) || e.raw_os_error() == Some(113) {
+                    eprintln!("Error de conexión con nodo {}: {} (os error {:?})", node_id, e, e.raw_os_error());
+                    
+                    // Eliminar el nodo de node_streams
+                    if let Ok(mut streams_guard) = node_streams.lock() {
+                        streams_guard.remove(node_id);
+                        println!("Nodo {} eliminado de node_streams debido a error de conexión", node_id);
+                    } else {
+                        eprintln!("Error obteniendo lock de node_streams para eliminar nodo {}", node_id);
+                    }
+                } else {
+                    eprintln!("Error al escribir al nodo {}: {}", node_id, e);
+                }
+                Err(e)
+            }
+        }
+    }
+
     /// Obtiene las instrucciones del sistema para el modelo LLM
     /// 
     /// Estas instrucciones definen el formato de respuesta esperado y las reglas
@@ -233,10 +281,9 @@ impl LlmMicroservice {
                         
                         if let Ok(mut streams_guard) = node_streams.lock() {
                             for (node_id, stream) in streams_guard.iter_mut() {
-                                if let Err(e) = stream.write_all(command_resp.as_bytes()) {
+                                if let Err(e) = Self::write_to_stream_with_error_handling(stream, command_resp.as_bytes(), node_id, &node_streams) {
                                     eprintln!("Error enviando publish al nodo {}: {}", node_id, e);
                                 } else {
-                                    let _ = stream.flush();
                                     println!("Comando enviado exitosamente al nodo {}", node_id);
                                 }
                             }
@@ -296,7 +343,7 @@ impl LlmMicroservice {
 
         for (node_id, stream) in streams.iter_mut() {
             let resp_command = resp_parser::format_resp_command(&["llm_microservice"]);
-            if let Err(e) = stream.write_all(resp_command.as_bytes()) {
+            if let Err(e) = Self::write_to_stream_with_error_handling(stream, resp_command.as_bytes(), node_id, &self.node_streams) {
                 eprintln!("Error al escribir al nodo {}: {}", node_id, e);
             }
         }
@@ -407,14 +454,11 @@ impl LlmMicroservice {
                         "Enviando publish: {}",
                         command_resp.replace("\r\n", "\\r\\n")
                     );
-                    if let Err(e) = node_socket_clone.write_all(command_resp.as_bytes()) {
+                    if let Err(e) = Self::write_to_stream_with_error_handling(&mut node_socket_clone, command_resp.as_bytes(), "llm_requests", &node_streams) {
                         println!(
                             "Error al enviar mensaje de actualizacion de archivo: {}",
                             e
                         );
-                    } else {
-                        let _ = node_socket_clone.flush();
-                        
                     }
                 }
                 LlmPromptMessage::RequestedFile { document, content, prompt } => {
