@@ -191,81 +191,71 @@ impl LlmMicroservice {
     /// 
     /// * `stream` - Stream TCP conectado al cliente
     /// * `thread_pool` - Pool de hilos para procesar solicitudes de forma asíncrona
-    fn handle_requests(        
+    fn handle_requests(
         node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
         document: String,
         selection_mode: String,
         line: String,
         offset: String,
         prompt: String,
-        thread_pool: Arc<ThreadPool>) {
-        let mut reader = BufReader::new(stream.try_clone().unwrap());
-
-        loop {
-            let mut input_prompt = String::new();
-            match reader.read_line(&mut input_prompt) {
-                Ok(0) => {
-                    println!("Conexión cerrada por el cliente");
-                    break;
+        thread_pool: Arc<ThreadPool>,
+    ) {
+        let prompt_clone = prompt.clone();
+    
+        thread_pool.execute(move || {
+            let gemini_resp = Self::get_gemini_respond(&prompt_clone);
+    
+            let response_str = match gemini_resp {
+                Ok(resp) => String::from_utf8_lossy(&resp).into_owned(),
+                Err(e) => {
+                    eprintln!("Error en get_gemini_respond: {}", e);
+                    return;
                 }
-                Ok(_) => {
-                    let prompt = input_prompt.trim().to_string();
-
-                    if prompt.is_empty() {
-                        break;
-                    }
-
-                    let mut stream_clone = stream.try_clone().unwrap();
-                    let prompt_clone = prompt.clone();
-
-                    thread_pool.execute(move || {
-                        let gemini_resp = Self::get_gemini_respond(&prompt_clone);
-
-                        let response_str = match gemini_resp {
-                            Ok(resp) => String::from_utf8_lossy(&resp).into_owned(),
-                            Err(e) => {
-                                eprintln!("Error en get_gemini_respond: {}", e);
-                                return;
-                            }
-                        };
-
-                        match serde_json::from_str::<serde_json::Value>(&response_str) {
-                            Ok(parsed) => {
-                                if let Some(text) = parsed["candidates"]
-                                    .get(0)
-                                    .and_then(|c| c["content"]["parts"].get(0))
-                                    .and_then(|p| p["text"].as_str())
-                                {
-                                    let resp = text.trim().trim_end_matches("\n");
-                                    let mut resp_parts = resp
-                                        .split("|")
-                                        .map(|s| s.trim().to_string())
-                                        .collect::<Vec<String>>();
-                                    if let Some(last) = resp_parts.last_mut() {
-                                        *last = last.replace(" ", "");
-                                    }
-                                    let final_resp = resp_parts.join(" ");
-                                    if let Err(e) =
-                                        stream_clone.write_all(format!("{final_resp}\n").as_bytes())
-                                    {
-                                        eprintln!("Error escribiendo al cliente: {}", e);
-                                    }
+            };
+    
+            match serde_json::from_str::<serde_json::Value>(&response_str) {
+                Ok(parsed) => {
+                    if let Some(text) = parsed["candidates"]
+                        .get(0)
+                        .and_then(|c| c["content"]["parts"].get(0))
+                        .and_then(|p| p["text"].as_str())
+                    {
+                        let resp = text.trim().trim_end_matches("\n");
+                        let resp_parts = resp.replace(" ", "");  
+                        let message_parts = &[
+                            "llm-response", 
+                            &resp_parts.clone(),
+                            &document.clone(),
+                            &selection_mode.clone(),
+                            &line.clone(),
+                            &offset.clone(),                
+                            ];
+                            
+                        let message_resp = resp_parser::format_resp_command(message_parts);
+                        let command_resp = resp_parser::format_resp_publish(&document, &message_resp);
+                        println!("GEMINI RESPONSE: {command_resp}");
+                        
+                        if let Ok(mut streams_guard) = node_streams.lock() {
+                            for (node_id, stream) in streams_guard.iter_mut() {
+                                if let Err(e) = stream.write_all(command_resp.as_bytes()) {
+                                    eprintln!("Error enviando publish al nodo {}: {}", node_id, e);
                                 } else {
-                                    println!("Error: no se pudo extraer texto de Gemini");
+                                    let _ = stream.flush();
+                                    println!("Comando enviado exitosamente al nodo {}", node_id);
                                 }
                             }
-                            Err(e) => {
-                                println!("Error parseando JSON: {}", e);
-                            }
+                        } else {
+                            eprintln!("Error obteniendo lock de node_streams");
                         }
-                    });
+                    } else {
+                        println!("Error: no se pudo extraer texto de Gemini");
+                    }
                 }
                 Err(e) => {
-                    eprintln!("Error leyendo del stream: {}", e);
-                    break;
+                    println!("Error parseando JSON: {}", e);
                 }
             }
-        }
+        });
     }
 
     /// Conecta a todos los nodos Redis configurados en la variable de entorno
@@ -387,7 +377,7 @@ impl LlmMicroservice {
             let thread_pool_clone: Arc<ThreadPool> = thread_pool.clone();
             let mut node_socket_clone = node_socket.try_clone()?;
             
-            let (parts, _) = parse_resp_command(&mut reader)?;
+            let (parts, _) = resp_parser::parse_resp_command(&mut reader)?;
             if parts.is_empty() {
                 break;
             }           
@@ -414,9 +404,9 @@ impl LlmMicroservice {
                         &document.clone(),
                         &prompt.clone(),                        
                     ];
-                    let message_resp = format_resp_command(message_parts);
+                    let message_resp = resp_parser::format_resp_command(message_parts);
                     let command_resp =
-                        format_resp_publish(&"llm_requests", &message_resp);
+                    resp_parser::format_resp_publish(&"llm_requests", &message_resp);
                     println!(
                         "Enviando publish: {}",
                         command_resp.replace("\r\n", "\\r\\n")
