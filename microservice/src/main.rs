@@ -369,7 +369,6 @@ impl Microservice {
         let cloned_documents: Arc<Mutex<HashMap<String, Document>>> = Arc::clone(&self.documents);
         let cloned_document_streams = Arc::clone(&self.document_streams);
         let logger = self.logger.clone();
-        let llm_sender: Option<MpscSender<String>> = self.llm_sender.clone();
         let proccesed_commands: Arc<Mutex<HashSet<String>>> = Arc::clone(&self.processed_responses);
 
         thread::spawn(move || {
@@ -381,7 +380,6 @@ impl Microservice {
                 cloned_documents,
                 cloned_document_streams,
                 logger,
-                llm_sender,
                 proccesed_commands
             ) {
                 println!("Error en la conexión con el nodo: {}", e);
@@ -416,7 +414,6 @@ impl Microservice {
         documents: Arc<Mutex<HashMap<String, Document>>>,
         document_streams: Arc<Mutex<HashMap<String, String>>>,
         logger: Logger,
-        llm_sender: Option<MpscSender<String>>,
         processed_responses: Arc<Mutex<HashSet<String>>>
     ) -> std::io::Result<()> {
         for stream in reciever {
@@ -426,7 +423,6 @@ impl Microservice {
             let cloned_last_command = Arc::clone(&last_command_sent);
             let cloned_own_sender = sender.clone();
             let log_clone = logger.clone();
-            let llm_sender: Option<MpscSender<String>> = llm_sender.clone();
             let proccesed_commands_clone: Arc<Mutex<HashSet<String>>> = Arc::clone(&processed_responses);
 
             thread::spawn(move || {
@@ -439,7 +435,6 @@ impl Microservice {
                     cloned_document_streams,
                     cloned_last_command,
                     log_clone,
-                    llm_sender,
                     proccesed_commands_clone
                 ) {
                     logger_clone.log(&format!("Error en la conexión con el nodo: {}", e));
@@ -476,7 +471,6 @@ impl Microservice {
         _document_streams: Arc<Mutex<HashMap<String, String>>>,
         last_command_sent: Arc<Mutex<String>>,
         log_clone: Logger,
-        llm_sender: Option<MpscSender<String>>,
         processed_responses: Arc<Mutex<HashSet<String>>>
     ) -> std::io::Result<()> {
         if let Ok(peer_addr) = microservice_socket.peer_addr() {
@@ -485,7 +479,6 @@ impl Microservice {
 
         let mut reader = BufReader::new(microservice_socket.try_clone()?);
         loop {
-            let llm_sender_clone = llm_sender.clone();
             let (parts, _) = parse_resp_command(&mut reader)?;
             if parts.is_empty() {
                 break;
