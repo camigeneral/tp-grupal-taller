@@ -1,9 +1,9 @@
 extern crate gtk4;
 extern crate relm4;
 
+use self::gtk::gdk_pixbuf::Pixbuf;
 use self::gtk::prelude::*;
 use self::relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
-use self::gtk::gdk_pixbuf::Pixbuf;
 use std::io::Cursor;
 /// Modelo para el formulario de login.
 #[derive(Debug)]

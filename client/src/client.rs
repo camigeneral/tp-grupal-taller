@@ -1,6 +1,7 @@
 extern crate relm4;
 use self::relm4::Sender as UiSender;
 use crate::app::AppMsg;
+use std::collections::HashSet;
 use crate::components::structs::document_value_info::DocumentValueInfo;
 use rusty_docs::resp_parser;
 use rusty_docs::resp_parser::{format_resp_command, format_resp_publish};
@@ -72,6 +73,9 @@ pub struct LocalClient {
     rx_ui: Option<Receiver<String>>,
     /// Registro de canales de escritura para los nodos conectados.
     writer_registry: WriterRegistry,
+    //Regsitro de respuestas ya procesadas
+    processed_responses: Arc<Mutex<HashSet<String>>>,
+
 }
 
 /// Contexto de conexión para un nodo Redis.
@@ -90,6 +94,7 @@ struct NodeConnectionContext {
     ui_sender: Option<UiSender<AppMsg>>,
     /// Registro de canales de escritura para los nodos.
     writer_registry: WriterRegistry,
+    processed_responses: Arc<Mutex<HashSet<String>>>,
 }
 
 impl LocalClient {
@@ -124,6 +129,7 @@ impl LocalClient {
             redis_sender: None,
             rx_ui,
             writer_registry: WriterRegistry::new(),
+            processed_responses: Arc::new(Mutex::new(HashSet::new())),
         })
     }
 
@@ -257,9 +263,17 @@ impl LocalClient {
         if cmd_upper.contains("PROMPT") {
             println!("command: {:#?}", command);
             let splited_command: Vec<&str> = command.split('|').collect();
-            let client_command = format_resp_command(&splited_command);
-            let key = splited_command.get(2).unwrap_or(&"");
-            return format_resp_publish(key, &client_command);
+            let client_command = format_resp_command(&splited_command);            
+            return format_resp_publish("llm_requests", &client_command);
+        }
+
+        if cmd_upper.contains("CLIENT-LLM-RESPONSE") {                     
+            let splited_command: Vec<&str> = command.split('|').collect();
+            let filename = splited_command[1].to_string();
+            let mut final_command = vec![splited_command[0]];
+            final_command.extend_from_slice(&splited_command[2..]);
+            let client_command = format_resp_command(&final_command);            
+            return format_resp_publish(&filename, &client_command);
         }
 
         let key = parts.get(1).unwrap_or(&"");
@@ -452,29 +466,41 @@ impl LocalClient {
     /// # Argumentos
     /// * `response` - Respuesta recibida.
     /// * `ui_sender` - Canal para enviar mensajes a la UI.
-    fn handle_llm_response(response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) {
-        if let Some(sender) = &ui_sender {
-            if response.len() == 3 {
-                let content = response[2].to_string();
-                let file = response[1].to_string();
-                let mut new_lines = Vec::new();
-                new_lines.extend(content.split("<enter>").map(String::from));
-                let _ = sender.send(AppMsg::UpdateAllFileData(
-                    file.to_string(),
-                    new_lines.to_vec(),
-                ));
-            } else {
-                let content = response[3].to_string();
-                let line_parts: Vec<&str> = response[2].split(':').collect();
-                let line = line_parts[1];
-                let file = response[1].to_string();
-                let _ = sender.send(AppMsg::UpdateLineFile(
-                    file.to_string(),
-                    line.to_string(),
-                    content,
-                ));
+    fn handle_client_llm(response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>, local_addr: String) {
+        println!("response handle_client_llm: {:?}", response);
+        println!("local_addr: {}", local_addr);
+
+        let comming_addrs = response[6].clone();
+        if !comming_addrs.contains(&local_addr) {
+            if let Some(sender) = &ui_sender {
+                let selection_mode = response[3].clone();
+                let content = response[2].clone();
+                let file = response[1].clone();
+                match selection_mode.as_str() {
+                    "whole-file" => {
+                        let mut new_lines = Vec::new();
+                        new_lines.extend(content.split("<enter>").map(String::from));
+                        let _ = sender.send(AppMsg::UpdateAllFileData(
+                            file.to_string(),
+                            new_lines.to_vec(),
+                        ));
+                    },
+                    "cursor" => {
+                        let line = response[4].to_string();
+                        let offset = response[5].to_string();
+                        let _ = sender.send(AppMsg::UpdateLineFile(
+                            file.to_string(),
+                            line,
+                            content,
+                            offset,
+                            
+                        ));
+                    },
+                    _ => {}
+                }
             }
-        }
+        } 
+        
     }
 
     /// Maneja respuestas de tipo ERROR, mostrando mensajes de error en la UI.
@@ -493,6 +519,42 @@ impl LocalClient {
                 "Hubo un problema: {}",
                 error_message
             )));
+        }
+    }
+    /// Maneja respuestas de tipo LLM-RESPONSE, actualizando el contenido del documento en la UI.
+    ///
+    /// # Argumentos
+    /// * `response` - Respuesta recibida.
+    /// * `ui_sender` - Canal para enviar mensajes a la UI.
+    fn handle_llm_response(response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) {
+        if let Some(sender) = &ui_sender {
+
+            let selection_mode = response[3].clone();
+
+            let content = response[1].to_string();
+            let file = response[2].to_string();
+            
+            match selection_mode.as_str() {
+                "whole-file" => {
+                    let mut new_lines = Vec::new();
+                    new_lines.extend(content.split("<enter>").map(String::from));
+                    let _ = sender.send(AppMsg::UpdateAllFileData(
+                        file.to_string(),
+                        new_lines.to_vec(),
+                    ));
+                },
+                "cursor" => {
+                    let line = response[4].to_string();
+                    let offset = response[5].to_string();
+                    let _ = sender.send(AppMsg::UpdateLineFile(
+                        file.to_string(),
+                        line,
+                        content,
+                        offset,                        
+                    ));
+                },
+                _ => {}
+            }
         }
     }
     /// Maneja respuestas desconocidas, intentando deducir la acción adecuada.
@@ -562,6 +624,23 @@ impl LocalClient {
                 break;
             }
 
+            let response_id = format!("{}-{:?}", response.join("|"), client_socket_cloned.local_addr());
+        
+            if let Ok(mut processed) = params.processed_responses.lock() {
+                if response[0].to_uppercase() != "ASK" {
+                    if processed.contains(&response_id) {
+                        println!("Respuesta duplicada detectada, omitiendo: {}", response.join(" "));
+                        continue;
+                    }
+                    processed.insert(response_id);
+                }
+
+                if processed.len() > 1000 {
+                    processed.clear();
+                }
+            }
+
+
             let local_addr = match client_socket_cloned.local_addr() {
                 Ok(addr) => addr,
                 Err(e) => {
@@ -585,7 +664,20 @@ impl LocalClient {
                 }
                 RedisClientResponseType::Write => Self::handle_write(response, cloned_ui_sender),
                 RedisClientResponseType::Llm => {
-                    Self::handle_llm_response(response, cloned_ui_sender)
+                    let filename = response[2].clone();
+                    let command_parts = [filename, 
+                    response[1].clone(),
+                     response[3].clone(),
+                     response[4].clone(),
+                     response[5].clone(),
+                      local_addr.to_string()];                    
+                    Self::handle_llm_response(response, cloned_ui_sender.clone());                                                       
+                    if let Some(ui_sender) = cloned_ui_sender.clone() {                    
+                        let _ = ui_sender.send(AppMsg::PublishLlmResponse(command_parts.to_vec()));
+                    }
+                }
+                RedisClientResponseType::ClientLlm => {
+                    Self::handle_client_llm(response, cloned_ui_sender, local_addr.to_string())
                 }
                 RedisClientResponseType::Error => Self::handle_error(response, cloned_ui_sender),
                 RedisClientResponseType::Other => {
@@ -660,7 +752,7 @@ impl LocalClient {
                 std::io::Error::new(std::io::ErrorKind::Other, "Send failed")
             })?;
 
-            std::thread::sleep(std::time::Duration::from_millis(2));
+            std::thread::sleep(std::time::Duration::from_millis(10));
 
             // Si hay documento en el último comando, vuelvo a hacer subscribe
             if let Some(doc_name) = Self::extract_document_name(&last_line_cloned) {
@@ -703,6 +795,7 @@ impl From<&LocalClient> for NodeConnectionContext {
             last_command_sent: Arc::clone(&client.last_command_sent),
             ui_sender: client.ui_sender.clone(),
             writer_registry: client.writer_registry.clone(),
+            processed_responses: Arc::clone(&client.processed_responses),
         }
     }
 }
