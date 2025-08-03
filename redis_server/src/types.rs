@@ -32,6 +32,8 @@ pub type ClientsMap = Arc<Mutex<HashMap<String, Client>>>;
 /// rango de hash asignado, estado, etc. Este mapa es compartido entre múltiples hilos.
 pub type LocalNodeMap = Arc<Mutex<LocalNode>>;
 
+pub type LlmNodesMap = Arc<Mutex<HashMap<String, Vec<Client>>>>;
+
 /// Mapa de nodos peer.
 ///
 /// Almacena información sobre otros nodos en el cluster Redis, donde la clave es la dirección del nodo (String)

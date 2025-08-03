@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
-use types::{ClientsMap, SubscribersMap, WriteClient};
+use types::{ClientsMap, SubscribersMap, WriteClient, LlmNodesMap};
 
 /// Maneja el comando SUBSCRIBE que permite a un cliente suscribirse a un documento
 ///
@@ -144,24 +144,24 @@ pub fn handle_unsubscribe(
     }
 }
 
-fn publish_to_internal_channel(message: &str, subscription_channel: &ClientsMap) -> i64 {
+fn publish_to_particular_channel(message: &str, subscription_channel: &ClientsMap, channel: String) -> i64 {
     let channels_guard = match subscription_channel.lock() {
         Ok(guard) => guard,
         Err(_) => {
-            eprintln!("Failed to lock subscription_channel");
+            eprintln!("Failed to lock {channel}");
             return 0;
         }
     };
-
-    if let Some(microservice) = channels_guard.get("notifications") {
+    
+    if let Some(microservice) = channels_guard.get(&channel) {
         if let Ok(mut stream_guard) = microservice.stream.lock() {
             if let Some(stream) = stream_guard.as_mut() {
                 if let Err(e) = write!(stream, "{}", message) {
-                    eprintln!("Error enviando mensaje al microservicio: {}", e);
+                    eprintln!("Error enviando mensaje al microservicio LLM: {}", e);
                     return 0;
                 } else {
                     println!(
-                        "Mensaje enviado al microservicio del canal interno: {}",
+                        "Mensaje enviado al microservicio LLM: {}",
                         message
                     );
                     return 1;
@@ -171,6 +171,29 @@ fn publish_to_internal_channel(message: &str, subscription_channel: &ClientsMap)
     }
     0
 }
+
+fn publish_to_llm_channel(message: &str, subscription_channel: &LlmNodesMap, channel: String) -> i64 {
+    let mut channels_guard = match subscription_channel.lock() {
+        Ok(guard) => guard,
+        Err(_) => {
+            eprintln!("Failed to lock {channel}");
+            return 0;
+        }
+    };
+    let mut sent_count = 0;
+
+    if let Some(streams) = channels_guard.get_mut(&channel) {
+        for client_stream in streams {            
+            if let Err(e) = write!(client_stream, "{}", message) {
+                eprintln!("Error enviando mensaje al stream LLM: {}", e);
+            } else {
+                sent_count += 1;
+            }
+        }
+    }
+    sent_count
+}
+
 
 fn publish_to_subscribers<T: Write>(
     doc: &str,
@@ -212,6 +235,7 @@ pub fn handle_publish<T: Write>(
     document_subscribers: &SubscribersMap,
     active_clients: &WriteClient<T>,
     subscription_channel: &ClientsMap,
+    llm_channel: &LlmNodesMap,
 ) -> RedisResponse {
     let doc = match &request.key {
         Some(k) => k,
@@ -246,10 +270,11 @@ pub fn handle_publish<T: Write>(
         }
     };
 
-    let sent_count = if doc == "notifications" {
-        publish_to_internal_channel(&message, subscription_channel)
-    } else {
-        publish_to_subscribers(doc, &message, document_subscribers, active_clients)
+    
+    let sent_count = match doc.as_str() {
+        "notifications" => publish_to_particular_channel(&message, subscription_channel, doc.to_string()),
+        "llm_requests" => publish_to_llm_channel(&message, llm_channel, doc.to_string()),         
+        _ => publish_to_subscribers(doc, &message, document_subscribers, active_clients)
     };
 
     RedisResponse::new(
