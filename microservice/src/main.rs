@@ -742,14 +742,16 @@ impl Microservice {
                                         Document::Texto(doc_lines) => {
                                             let mut new_lines = doc_lines.clone();
                                             if parsed_line < new_lines.len() {
-                                                let original_line = &new_lines[parsed_line];
+                                                let original_line = &decode_text(new_lines[parsed_line].to_string());                                                
                                                 let offset = parsed_offset.min(original_line.len());
                                                 let mut new_line = String::new();
+                                                let parsed_content = &decode_text(content.to_string()); 
                                                 new_line.push_str(&original_line[..offset]);
-                                                new_line.push_str("<space>");
-                                                new_line.push_str(&content);
-                                                new_line.push_str("<space>");
+                                                new_line.push_str(" ");
+                                                new_line.push_str(&parsed_content);
+                                                new_line.push_str(" ");
                                                 new_line.push_str(&original_line[offset..]);
+                                                new_line = parse_text(new_line);
                                                 new_lines[parsed_line] = new_line;
                                                 let new_document = Document::Texto(new_lines);
                                                 docs.insert(document.clone(), new_document);
@@ -832,6 +834,25 @@ impl Microservice {
             }
         }
     }
+}
+
+pub fn parse_text(value: String)-> String {
+    let val = value.clone();
+    let mut value_clone = if value.trim_end_matches('\n').is_empty() {
+        "<delete>".to_string()
+    } else {
+        val.replace('\n', "<enter>")
+    };
+    value_clone = value_clone.replace(' ', "<space>");
+    return value_clone;
+}
+
+pub fn decode_text(value: String)-> String {
+    let  value_clone = value.clone();
+    value_clone
+        .replace("<space>", " ")
+        .replace("<enter>", "\n")
+        .replace("<delete>", "")
 }
 
 fn get_nodes_addresses() -> Vec<String> {
