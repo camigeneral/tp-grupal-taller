@@ -260,7 +260,7 @@ impl LocalClient {
             return format_resp_publish(key, &client_command);
         }
 
-        if cmd_upper.contains("CHANGE-LINE") || cmd_upper.contains("WHOLE-FILE")  {
+        if cmd_upper.contains("CHANGE-LINE") || cmd_upper.contains("REQUEST-FILE")  {
             println!("command: {:#?}", command);
             let splited_command: Vec<&str> = command.split('|').collect();
             let client_command = format_resp_command(&splited_command);            
@@ -605,7 +605,7 @@ impl LocalClient {
                 return Err(std::io::Error::other("Socket clone failed"));
             }
         };
-
+        let non_idempotent_commands = vec!["ASK".to_string(), "SUBSCRIBE".to_string()];
         let mut reader: BufReader<TcpStream> = BufReader::new(client_socket);
         let cloned_last_command: Arc<Mutex<String>> = Arc::clone(&params.last_command_sent.clone());
 
@@ -626,8 +626,8 @@ impl LocalClient {
 
             let response_id = format!("{}-{:?}", response.join("|"), client_socket_cloned.local_addr());
         
-            if let Ok(mut processed) = params.processed_responses.lock() {
-                if response[0].to_uppercase() != "ASK" {
+            if let Ok(mut processed) = params.processed_responses.lock() {                
+                if !non_idempotent_commands.contains(&response[0].to_uppercase()) {
                     if processed.contains(&response_id) {
                         println!("Respuesta duplicada detectada, omitiendo: {}", response.join(" "));
                         continue;
