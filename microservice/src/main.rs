@@ -19,7 +19,7 @@ use self::shared::MicroserviceMessage;
 use document::Document;
 use rusty_docs::document;
 use rusty_docs::logger;
-use rusty_docs::resp_parser;
+use rusty_docs::resp_parser::{format_resp_command, format_resp_publish, parse_resp_command};
 use rusty_docs::shared;
 use std::thread::sleep;
 use std::time::Duration;
@@ -142,8 +142,8 @@ impl Microservice {
                 }
 
                 let document = parts[1];
-                let message = resp_parser::format_resp_command(&parts);
-                let resp = resp_parser::format_resp_publish(document, &message);
+                let message = format_resp_command(&parts);
+                let resp = format_resp_publish(document, &message);
 
                 if let Ok(mut streams) = node_streams.lock() {
                     for (id, stream) in streams.iter_mut() {
@@ -206,7 +206,7 @@ impl Microservice {
         self.add_node_stream(&main_address, redis_socket_clone_for_hashmap)?;
 
         let parts: Vec<&str> = command.split_whitespace().collect();
-        let resp_command = resp_parser::format_resp_command(&parts);
+        let resp_command = format_resp_command(&parts);
         println!("RESP enviado: {}", resp_command.replace("\r\n", "\\r\\n"));
         socket.write_all(resp_command.as_bytes())?;
 
@@ -252,7 +252,7 @@ impl Microservice {
                     println!("Microservicio conectado a nodo adicional: {}", addr);
 
                     let parts: Vec<&str> = "Microservicio".split_whitespace().collect();
-                    let resp_command = resp_parser::format_resp_command(&parts);
+                    let resp_command = format_resp_command(&parts);
                     extra_socket.write_all(resp_command.as_bytes())?;
 
                     self.add_node_stream(&addr, extra_socket.try_clone()?)?;
@@ -319,7 +319,7 @@ impl Microservice {
                         // Enviar a todos los nodos disponibles
                         for (stream_id, stream) in streams.iter_mut() {
                             let set_parts = vec!["SET", doc_name, &document_data];
-                            let set_command = resp_parser::format_resp_command(&set_parts);
+                            let set_command = format_resp_command(&set_parts);
 
                             logger_clone.log(&format!(
                                 "Enviando comando SET para persistir documento {} en nodo {}: {}",
@@ -486,7 +486,7 @@ impl Microservice {
         let mut reader = BufReader::new(microservice_socket.try_clone()?);
         loop {
             let llm_sender_clone = llm_sender.clone();
-            let (parts, _) = resp_parser::parse_resp_command(&mut reader)?;
+            let (parts, _) = parse_resp_command(&mut reader)?;
             if parts.is_empty() {
                 break;
             }
@@ -508,9 +508,9 @@ impl Microservice {
                                 &client_id.clone(),
                                 &doc_content.clone(),
                             ];
-                            let message_resp = resp_parser::format_resp_command(message_parts);
+                            let message_resp = format_resp_command(message_parts);
                             let command_resp =
-                                resp_parser::format_resp_publish(&document.clone(), &message_resp);
+                                format_resp_publish(&document.clone(), &message_resp);
                             println!(
                                 "Enviando publish: {}",
                                 command_resp.replace("\r\n", "\\r\\n")
@@ -545,7 +545,7 @@ impl Microservice {
                     if let Ok(mut docs) = documents.lock() {
                         if let Some(documento) = docs.get_mut(&document) {
                             let content = match documento {
-                                Document::Texto(lines) => {
+                                Document::Text(lines) => {
 
                                     lines.join("<enter>").to_string()
                                 },                            
@@ -557,8 +557,8 @@ impl Microservice {
                                 &content.clone(),
                                 &prompt.clone(),                        
                             ];
-                            let message_resp = redis_parser::format_resp_command(message_parts);
-                            let command_resp = redis_parser::format_resp_publish(&"llm_requests", &message_resp);
+                            let message_resp = format_resp_command(message_parts);
+                            let command_resp = format_resp_publish(&"llm_requests", &message_resp);
                             println!("command_resp: {command_resp}");
                             if let Err(e) = microservice_socket.write_all(command_resp.as_bytes()) {
                                 println!(
@@ -680,7 +680,7 @@ impl Microservice {
                         }
                         {
                             let write_parts = vec!["write", &index, &content, "to", &file];
-                            let resp_command = resp_parser::format_resp_command(&write_parts);
+                            let resp_command = format_resp_command(&write_parts);
                             let mut last_command = last_command_sent.lock().unwrap();
                             *last_command = resp_command.clone();
                         }
@@ -715,7 +715,7 @@ impl Microservice {
                             match selection_mode.as_str() {
                                 "whole-file" => {
                                     let lines: Vec<String> = content.split("<enter>").map(|s| s.to_string()).collect();
-                                    let new_document = Document::Texto(lines.clone());
+                                    let new_document = Document::Text(lines.clone());
                                     docs.insert(document.clone(), new_document);
                                     log_clone.log(&format!("Documento '{}' actualizado (whole-file) con {} líneas", document, lines.len()));
                                     println!("Documento '{}' actualizado (whole-file) con {} líneas", document, lines.len());
@@ -740,7 +740,7 @@ impl Microservice {
                                     };                                    
 
                                     match documento {
-                                        Document::Texto(doc_lines) => {
+                                        Document::Text(doc_lines) => {
                                             let mut new_lines = doc_lines.clone();
                                             if parsed_line < new_lines.len() {
                                                 let original_line = &decode_text(new_lines[parsed_line].to_string());                                                
@@ -754,7 +754,7 @@ impl Microservice {
                                                 new_line.push_str(&original_line[offset..]);
                                                 new_line = parse_text(new_line);
                                                 new_lines[parsed_line] = new_line;
-                                                let new_document = Document::Texto(new_lines);
+                                                let new_document = Document::Text(new_lines);
                                                 docs.insert(document.clone(), new_document);
                                                 println!("Insertado en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, content);
                                             } else {
@@ -781,7 +781,7 @@ impl Microservice {
                     if let Ok(mut docs) = documents.lock() {
                         if let Some(documento) = docs.get_mut(&document) {
                             let content = match documento {
-                                Document::Texto(lines) => {
+                                Document::Text(lines) => {
 
                                     lines.join("<enter>").to_string()
                                 },                            
@@ -793,8 +793,8 @@ impl Microservice {
                                 &content.clone(),
                                 &prompt.clone(),                        
                             ];
-                            let message_resp = redis_parser::format_resp_command(message_parts);
-                            let command_resp = redis_parser::format_resp_publish(&"llm_requests", &message_resp);                            
+                            let message_resp = format_resp_command(message_parts);
+                            let command_resp = format_resp_publish(&"llm_requests", &message_resp);                            
                             if let Err(e) = microservice_socket.write_all(command_resp.as_bytes()) {
                                 println!(
                                     "Error al enviar mensaje de actualizacion de archivo: {}",
