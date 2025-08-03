@@ -50,6 +50,7 @@ pub struct Microservice {
     /// Ruta al archivo de log donde se registran los eventos del microservicio.
     logger: Logger,
     llm_sender: Option<MpscSender<String>>,
+    processed_responses: Arc<Mutex<HashSet<String>>>,
 }
 
 impl Microservice {
@@ -76,6 +77,8 @@ impl Microservice {
             document_streams: Arc::new(Mutex::new(HashMap::new())),
             logger,
             llm_sender: None,
+            processed_responses: Arc::new(Mutex::new(HashSet::new()))
+
         })
     }
 
@@ -366,6 +369,7 @@ impl Microservice {
         let cloned_document_streams = Arc::clone(&self.document_streams);
         let logger = self.logger.clone();
         let llm_sender: Option<MpscSender<String>> = self.llm_sender.clone();
+        let proccesed_commands: Arc<Mutex<HashSet<String>>> = Arc::clone(&self.processed_responses);
 
         thread::spawn(move || {
             if let Err(e) = Self::connect_to_nodes(
@@ -377,6 +381,7 @@ impl Microservice {
                 cloned_document_streams,
                 logger,
                 llm_sender,
+                proccesed_commands
             ) {
                 println!("Error en la conexión con el nodo: {}", e);
             }
@@ -411,6 +416,7 @@ impl Microservice {
         document_streams: Arc<Mutex<HashMap<String, String>>>,
         logger: Logger,
         llm_sender: Option<MpscSender<String>>,
+        processed_responses: Arc<Mutex<HashSet<String>>>
     ) -> std::io::Result<()> {
         for stream in reciever {
             let cloned_node_streams = Arc::clone(&node_streams);
@@ -420,6 +426,7 @@ impl Microservice {
             let cloned_own_sender = sender.clone();
             let log_clone = logger.clone();
             let llm_sender: Option<MpscSender<String>> = llm_sender.clone();
+            let proccesed_commands_clone: Arc<Mutex<HashSet<String>>> = Arc::clone(&processed_responses);
 
             thread::spawn(move || {
                 let logger_clone = log_clone.clone();
@@ -432,6 +439,7 @@ impl Microservice {
                     cloned_last_command,
                     log_clone,
                     llm_sender,
+                    proccesed_commands_clone
                 ) {
                     logger_clone.log(&format!("Error en la conexión con el nodo: {}", e));
                     println!("Error en la conexión con el nodo: {}", e);
@@ -468,6 +476,7 @@ impl Microservice {
         last_command_sent: Arc<Mutex<String>>,
         log_clone: Logger,
         llm_sender: Option<MpscSender<String>>,
+        processed_responses: Arc<Mutex<HashSet<String>>>
     ) -> std::io::Result<()> {
         if let Ok(peer_addr) = microservice_socket.peer_addr() {
             println!("Escuchando respuestas del nodo: {}", peer_addr);
@@ -683,6 +692,23 @@ impl Microservice {
                         "LLMResponse recibido: documento {}, selection_mode {}, línea {:?}, offset {:?}",
                         document, selection_mode, line, offset
                     ));
+                    println!(
+                        "LLMResponse recibido: documento {}, selection_mode {}, línea {:?}, offset {:?}, contenido: {:?}",
+                        document, selection_mode, line, offset, content);
+                    let response_id = format!("{}-{}-{}-{}-{}", document, content, selection_mode, line, offset);
+                    if let Ok(mut processed) = processed_responses.lock() {
+                        if parts[0].to_uppercase() == "CLIENT-LLM-RESPONSE" {
+                            if processed.contains(&response_id) {
+                                println!("Respuesta duplicada detectada, omitiendo: {}", parts.join(" "));
+                                continue;
+                            }
+                            processed.insert(response_id);
+                        }
+        
+                        if processed.len() > 1000 {
+                            processed.clear();
+                        }
+                    }
                     if let Ok(mut docs) = documents.lock() {
                         if let Some(documento) = docs.get(&document) {
                             match selection_mode.as_str() {
@@ -692,7 +718,6 @@ impl Microservice {
                                     docs.insert(document.clone(), new_document);
                                     log_clone.log(&format!("Documento '{}' actualizado (whole-file) con {} líneas", document, lines.len()));
                                     println!("Documento '{}' actualizado (whole-file) con {} líneas", document, lines.len());
-                                    println!("Documento: {:#?}", docs);
                                 },
                                 "cursor" => {
                                     let parsed_line = match line.parse::<usize>() {
