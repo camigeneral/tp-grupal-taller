@@ -9,6 +9,6 @@ pub struct ServerContext {
     pub peer_nodes: PeerNodeMap,
     pub logged_clients: LoggedClientsMap,
     pub internal_subscription_channel: ClientsMap,
-    pub llm_channel: ClientsMap,
+    pub llm_channel: LlmNodesMap,
     pub main_addrs: String,
 }

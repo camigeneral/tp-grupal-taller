@@ -15,6 +15,7 @@ pub struct DocumentValueInfo {
     pub offset: i32,
     pub prompt: String,
     pub selection_mode: String,
+    pub line_content: String,
 }
 
 impl DocumentValueInfo {
@@ -27,6 +28,7 @@ impl DocumentValueInfo {
             offset: 0,
             prompt: String::new(),
             selection_mode: String::new(),
+            line_content: String::new()
         }
     }
 
