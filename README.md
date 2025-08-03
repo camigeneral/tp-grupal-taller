@@ -15,6 +15,7 @@ Para compilar y ejecutar este proyecto, es necesario tener instalado:
 
 - [Rust](https://www.rust-lang.org/tools/install)
 - Cargo (incluido con Rust)
+- Docker y Docker Compose
 - Las siguientes dependencias del sistema para compilar con `Relm4` y `GTK4`:
 
 ```bash
@@ -28,7 +29,7 @@ sudo apt-get install -y \
 
 ## Arquitectura
 
-El proyecto está estructurado en tres componentes principales que se comunican entre sí:
+El proyecto está estructurado en múltiples componentes que se comunican entre sí:
 
 ### Componentes
 
@@ -41,6 +42,7 @@ El proyecto está estructurado en tres componentes principales que se comunican 
 2. **Microservicio**
    - Distribuye actualizaciones a los clientes suscritos
    - Persiste periódicamente el contenido de los documentos en Redis
+   - Maneja múltiples nodos Redis
 
 3. **Servidor Redis**
    - Almacena los documentos y su contenido
@@ -48,70 +50,236 @@ El proyecto está estructurado en tres componentes principales que se comunican 
    - Implementa el protocolo RESP
    - Gestiona las suscripciones
 
+4. **Microservicio LLM**
+   - Procesa solicitudes de lenguaje natural
+   - Se conecta a la API de Gemini
+   - Maneja múltiples conexiones concurrentes
+
 ## Estructura del Proyecto
 
 ```
-src/
-├── bin/                    # Binarios ejecutables
-│   └── run_microservice.rs # Punto de entrada del microservicio
-├── lib.rs                  # Biblioteca principal
-├── client.rs              # Implementación del cliente
-├── microservice.rs        # Lógica del microservicio
-├── redis_server.rs        # Servidor Redis
-└── commands/              # Comandos y tipos compartidos
-    └── client.rs         # Definición de comandos del cliente
+├── client/                 # Cliente GUI
+├── microservice/          # Microservicio de control
+├── llm_microservice/     # Microservicio LLM
+├── redis_server/         # Servidor Redis
+├── rusty_docs/           # Biblioteca compartida
+├── docker-compose.yml    # Configuración de Docker
+├── Makefile              # Comandos de automatización
+└── README.md
+```
+
+## Comandos Disponibles
+
+El proyecto incluye un Makefile con comandos útiles para desarrollo y despliegue:
+
+### Desarrollo Local
+
+```bash
+# Ejecutar el cliente en local
+make client port=4000
+
+# Construir todos los servicios
+make build
+
+# Construir un servicio específico
+make build service=redis_server
+```
+
+### Gestión de Contenedores
+
+```bash
+# Levantar todos los servicios
+make up
+
+# Levantar un servicio específico
+make up service=redis_server
+
+# Ver logs de un servicio
+make logs service=redis_server
+
+# Detener todos los servicios
+make stop
+
+# Detener un servicio específico
+make stop service=microservice
+
+# Bajar y eliminar volúmenes
+make down
+
+# Reiniciar todos los servicios
+make restart
+
+# Reiniciar un servicio específico
+make restart service=llm_microservice
+```
+
+### Utilidades
+
+```bash
+# Ver servicios corriendo
+make ps
+
+# Acceder a un contenedor
+make exec service=redis_server
+
+# Acceder con comando específico
+make exec service=microservice cmd="cargo test"
+
+# Eliminar contenedores parados
+make rm
+
+# Limpiar todo (containers, networks, volumes, images)
+make prune
+
+# Rebuild forzado (sin cache)
+make rebuild
+
+# Limpiar completamente
+make clean
 ```
 
 ## Ejecución
 
-Para ejecutar el proyecto completo necesitas iniciar los tres componentes:
+### Opción 1: Con Docker (Recomendado)
 
-1. Servidor Redis:
+1. **Levantar todos los servicios:**
 ```bash
-cargo run --bin redis_server <puerto>
-```
-
-2. Microservicio:
-```bash
-make microservice
+make up
 ```
 
-3. Cliente:
+2. **Ver logs de un servicio específico:**
 ```bash
-make client
+make logs service=microservice
 ```
 
-## Ejecución con Docker
-
-1. Construir y levantar los contenedores:
+3. **Acceder a un contenedor:**
 ```bash
-docker compose up --build
-```
-2. Detener y eliminar los contenedores:
-```bash
-docker compose down
+make exec service=redis_server
 ```
 
-Para construir y levantar cada componente individualmente:
-1. Contruir el servidor:
+### Opción 2: Desarrollo Local
+
+1. **Servidor Redis:**
 ```bash
-sudo docker build -f redis_server/Dockerfile -t redis-node .
+cargo run --bin redis_server 4000
 ```
-2. Construir el microservicio:
+
+2. **Microservicio:**
 ```bash
-sudo docker build -f microservice/Dockerfile -t microservice .
+cd microservice && cargo run
 ```
-3. Levantar los nodos:
+
+3. **Microservicio LLM:**
 ```bash
-sudo docker compose up <node1/node2/node3>
+cd llm_microservice && cargo run
 ```
-4. Levantar el microservicio:
+
+4. **Cliente:**
 ```bash
-sudo docker compose up microservice
+make client port=4000
 ```
+
+## Configuración
+
+### Variables de Entorno
+
+Para el modo Docker, configura las siguientes variables:
+
+```bash
+# API Key para Gemini (LLM) - REQUERIDA
+export GEMINI_API_KEY="tu_api_key_aqui"
+
+# Direcciones de los nodos Redis (opcional, ya configurado en docker-compose.yml)
+export REDIS_NODE_HOSTS="node0:4000,node1:4001,node2:4002"
+```
+
+### Configuración de la API Key de Gemini
+
+1. **Obtener una API Key:**
+   - Ve a [Google AI Studio](https://makersuite.google.com/app/apikey)
+   - Crea una nueva API key
+   - Copia la clave generada
+
+2. **Configurar la API Key:**
+
+   **Opción A: Variable de entorno (Recomendado)**
+   ```bash
+   export GEMINI_API_KEY="tu_api_key_aqui"
+   make up
+   ```
+
+   **Opción B: Archivo .env**
+   ```bash
+   # Copia el archivo de ejemplo
+   cp env.example .env
    
-## Como testear
-Ejecutando el siguiente comando se correran los tests unitarios
+   # Edita .env y agrega tu API key
+   nano .env
+   
+   # Levanta los servicios
+   make up
+   ```
+
+   **Opción C: Docker Compose directo**
+   ```bash
+   GEMINI_API_KEY="tu_api_key_aqui" docker compose up -d
+   ```
+
+3. **Verificar la configuración:**
+   ```bash
+   # Ver logs del microservicio LLM
+   make logs service=llm_microservice
+   ```
+
+### Archivos de Configuración
+
+- `microservice.conf`: Configuración del microservicio
+- `docker-compose.yml`: Configuración de servicios Docker
+- `env.example`: Ejemplo de variables de entorno
+- `.env`: Variables de entorno locales (crear desde env.example)
+
+## Testing
+
+Ejecutar tests unitarios:
+
 ```bash
+# Todos los tests
 cargo test
+
+# Tests de un componente específico
+cd microservice && cargo test
+```
+
+## Troubleshooting
+
+### Problemas Comunes
+
+1. **Puerto ocupado:**
+```bash
+make stop
+make down
+make up
+```
+
+2. **Problemas de permisos Docker:**
+```bash
+sudo usermod -aG docker $USER
+# Reiniciar sesión
+```
+
+3. **Limpiar completamente:**
+```bash
+make clean
+make prune
+make rebuild
+```
+
+### Logs y Debugging
+
+```bash
+# Ver logs en tiempo real
+make logs service=microservice
+
+# Acceder al contenedor para debugging
+make exec service=redis_server cmd="redis-cli"
 ```
