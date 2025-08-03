@@ -47,9 +47,6 @@ pub struct Microservice {
     /// Documents almacenados en memoria recibidos de los nodos Redis.
     documents: Arc<Mutex<HashMap<String, Document>>>,
 
-    /// Mapeo de documentos a stream_ids para saber a qué stream enviar cada documento.
-    document_streams: Arc<Mutex<HashMap<String, String>>>,
-
     /// Ruta al archivo de log donde se registran los eventos del microservicio.
     logger: Logger,
     processed_responses: Arc<Mutex<HashSet<String>>>,
@@ -76,7 +73,6 @@ impl Microservice {
             node_streams: Arc::new(Mutex::new(HashMap::new())),
             last_command_sent: Arc::new(Mutex::new("".to_string())),
             documents: Arc::new(Mutex::new(HashMap::new())),
-            document_streams: Arc::new(Mutex::new(HashMap::new())),
             logger,
             processed_responses: Arc::new(Mutex::new(HashSet::new()))
 
@@ -120,7 +116,7 @@ impl Microservice {
         self.logger
             .log(&format!("Microservicio envia {:?}", command));
 
-        self.start_node_connection_handler(connect_node_sender.clone(), connect_nodes_receiver);
+        self.start_node_connection_handler(connect_nodes_receiver);
 
         self.add_node_stream(&main_address, redis_socket_clone_for_hashmap)?;
 
@@ -164,7 +160,6 @@ impl Microservice {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let other_ports = get_nodes_addresses();
         for addr in other_ports {
-            // let addr = format!("127.0.0.1:{}", port);
             match TcpStream::connect(&addr) {
                 Ok(mut extra_socket) => {
                     self.logger.log(&format!("Microservicio envia {:?}", addr));
@@ -280,24 +275,18 @@ impl Microservice {
 
     fn start_node_connection_handler(
         &self,
-        connect_node_sender: MpscSender<TcpStream>,
         connect_nodes_receiver: Receiver<TcpStream>,
     ) {
-        let cloned_node_streams = Arc::clone(&self.node_streams);
         let cloned_last_command = Arc::clone(&self.last_command_sent);
         let cloned_documents: Arc<Mutex<HashMap<String, Document>>> = Arc::clone(&self.documents);
-        let cloned_document_streams = Arc::clone(&self.document_streams);
         let logger = self.logger.clone();
         let proccesed_commands: Arc<Mutex<HashSet<String>>> = Arc::clone(&self.processed_responses);
 
         thread::spawn(move || {
-            if let Err(e) = Self::connect_to_nodes(
-                connect_node_sender,
-                connect_nodes_receiver,
-                cloned_node_streams,
+            if let Err(e) = Self::connect_to_nodes(                
+                connect_nodes_receiver,                
                 cloned_last_command,
-                cloned_documents,
-                cloned_document_streams,
+                cloned_documents,                
                 logger,
                 proccesed_commands
             ) {
@@ -326,32 +315,23 @@ impl Microservice {
     /// * `Ok(())` si todas las conexiones se procesaron correctamente.
     /// * `Err(std::io::Error)` si ocurre un error en algún hilo.
     fn connect_to_nodes(
-        sender: MpscSender<TcpStream>,
         reciever: Receiver<TcpStream>,
-        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
         last_command_sent: Arc<Mutex<String>>,
         documents: Arc<Mutex<HashMap<String, Document>>>,
-        document_streams: Arc<Mutex<HashMap<String, String>>>,
         logger: Logger,
         processed_responses: Arc<Mutex<HashSet<String>>>
     ) -> std::io::Result<()> {
-        for stream in reciever {
-            let cloned_node_streams = Arc::clone(&node_streams);
-            let cloned_documents = Arc::clone(&documents);
-            let cloned_document_streams = Arc::clone(&document_streams);
-            let cloned_last_command = Arc::clone(&last_command_sent);
-            let cloned_own_sender = sender.clone();
+        for stream in reciever {            
+            let cloned_documents = Arc::clone(&documents);            
+            let cloned_last_command = Arc::clone(&last_command_sent);            
             let log_clone = logger.clone();
             let proccesed_commands_clone: Arc<Mutex<HashSet<String>>> = Arc::clone(&processed_responses);
 
             thread::spawn(move || {
                 let logger_clone = log_clone.clone();
                 if let Err(e) = Self::listen_to_redis_response(
-                    stream,
-                    cloned_own_sender,
-                    cloned_node_streams,
-                    cloned_documents,
-                    cloned_document_streams,
+                    stream,                                        
+                    cloned_documents,                    
                     cloned_last_command,
                     log_clone,
                     proccesed_commands_clone
@@ -383,11 +363,8 @@ impl Microservice {
     /// * `Ok(())` si la escucha y el procesamiento fueron exitosos.
     /// * `Err(std::io::Error)` si ocurre un error de IO.
     fn listen_to_redis_response(
-        mut microservice_socket: TcpStream,
-        _connect_node_sender: MpscSender<TcpStream>,
-        _node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
-        documents: Arc<Mutex<HashMap<String, Document>>>,
-        _document_streams: Arc<Mutex<HashMap<String, String>>>,
+        mut microservice_socket: TcpStream,        
+        documents: Arc<Mutex<HashMap<String, Document>>>,        
         last_command_sent: Arc<Mutex<String>>,
         log_clone: Logger,
         processed_responses: Arc<Mutex<HashSet<String>>>
