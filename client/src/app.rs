@@ -101,9 +101,9 @@ impl SimpleComponent for AppModel {
 
     view! {
     gtk::Window {
-        set_default_width: 800,
-        set_width_request: 800,
-        set_default_height: 600,
+        connect_map: |window| {
+            window.maximize();
+        },
         #[wrap(Some)]
         set_titlebar = model.header_cont.widget(),
 
