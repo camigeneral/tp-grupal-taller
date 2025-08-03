@@ -1,28 +1,30 @@
-use std::collections::HashMap;
-use std::env;
-use std::io::BufRead;
-use std::io::BufReader;
-use std::io::Write;
-#[allow(unused_imports)]
-use std::net::TcpListener;
-use std::net::TcpStream;
-#[allow(unused_imports)]
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
-use std::sync::mpsc::{channel, Sender as MpscSender};
-use std::sync::{Arc, Mutex};
-use std::collections::HashSet;
-use std::thread;
+// Standard library imports
+use std::{
+    env,
+    collections::{HashMap, HashSet},
+    io::{BufReader, Write},
+    net::TcpStream,
+    sync::{
+        Arc, 
+        Mutex,
+        mpsc::{channel, Receiver, Sender as MpscSender}        
+    },
+    thread,
+    thread::sleep,
+    time::Duration
+};
+
+// External crate imports
 extern crate rusty_docs;
-use self::logger::*;
-use self::shared::MicroserviceMessage;
-use document::Document;
-use rusty_docs::document;
-use rusty_docs::logger;
-use rusty_docs::resp_parser::{format_resp_command, format_resp_publish, parse_resp_command};
-use rusty_docs::shared;
-use std::thread::sleep;
-use std::time::Duration;
+
+// Local imports from rusty_docs
+use rusty_docs::{
+    document::Document,
+    logger::{self, Logger},
+    resp_parser::{format_resp_command, format_resp_publish, parse_resp_command},
+    shared::MicroserviceMessage,
+    vars::DOCKER,
+};
 
 /// Microservicio que actúa como intermediario entre clientes y nodos Redis.
 ///
@@ -45,12 +47,8 @@ pub struct Microservice {
     /// Documents almacenados en memoria recibidos de los nodos Redis.
     documents: Arc<Mutex<HashMap<String, Document>>>,
 
-    /// Mapeo de documentos a stream_ids para saber a qué stream enviar cada documento.
-    document_streams: Arc<Mutex<HashMap<String, String>>>,
-
     /// Ruta al archivo de log donde se registran los eventos del microservicio.
     logger: Logger,
-    llm_sender: Option<MpscSender<String>>,
     processed_responses: Arc<Mutex<HashSet<String>>>,
 }
 
@@ -75,92 +73,10 @@ impl Microservice {
             node_streams: Arc::new(Mutex::new(HashMap::new())),
             last_command_sent: Arc::new(Mutex::new("".to_string())),
             documents: Arc::new(Mutex::new(HashMap::new())),
-            document_streams: Arc::new(Mutex::new(HashMap::new())),
             logger,
-            llm_sender: None,
             processed_responses: Arc::new(Mutex::new(HashSet::new()))
 
         })
-    }
-
-    fn connect_to_llm(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let llm_address = format!("llm_microservice:4030");
-        let (tx, rx) = channel::<String>();
-
-        self.llm_sender = Some(tx);
-        self.logger.log(&format!(
-            "Microservicio conectandose al server de llm en {:?}",
-            llm_address
-        ));
-        let node_streams = Arc::clone(&self.node_streams);
-
-        thread::spawn(move || {
-            let mut socket = loop {
-                match TcpStream::connect(llm_address.clone()) {
-                    Ok(s) => break s,
-                    Err(e) => {
-                        eprintln!(
-                            "No se pudo conectar al LLM: {}. Reintentando en 15 segundos...",
-                            e
-                        );
-                        sleep(Duration::from_secs(15));
-                    }
-                }
-            };
-            let mut reader = BufReader::new(socket.try_clone().unwrap());
-
-            for prompt in rx {
-                if prompt.trim().is_empty() {
-                    break;
-                }
-
-                let prompt = format!("{}\n", prompt.trim().trim_end_matches("\n"));
-                if let Err(e) = socket.write_all(prompt.as_bytes()) {
-                    eprintln!("Error escribiendo al LLM: {}", e);
-                    break;
-                }
-                if let Err(e) = socket.flush() {
-                    eprintln!("Error flusheando al LLM: {}", e);
-                    break;
-                }
-
-                let mut response = String::new();
-                if let Err(e) = reader.read_line(&mut response) {
-                    eprintln!("Error leyendo del LLM: {}", e);
-                    break;
-                }
-
-                let parts: Vec<&str> = response
-                    .split(' ')
-                    .map(|s| s.trim())
-                    .filter(|s| !s.is_empty())
-                    .collect();
-
-                if parts.len() < 2 {
-                    eprintln!("Respuesta malformada del LLM: {:?}", response);
-                    continue;
-                }
-
-                let document = parts[1];
-                let message = format_resp_command(&parts);
-                let resp = format_resp_publish(document, &message);
-
-                if let Ok(mut streams) = node_streams.lock() {
-                    for (id, stream) in streams.iter_mut() {
-                        if let Err(e) = stream.write_all(resp.as_bytes()) {
-                            eprintln!("Error escribiendo a nodo {}: {}", id, e);
-                        } else {
-                            println!("Respuesta del LLM enviada a nodo {}: {}", id, resp);
-                            let _ = stream.flush();
-                        }
-                    }
-                } else {
-                    eprintln!("Error obteniendo lock de node_streams");
-                }
-            }
-        });
-
-        Ok(())
     }
 
     /// Inicia el microservicio y establece las conexiones con los nodos Redis.
@@ -191,7 +107,6 @@ impl Microservice {
             main_address
         ));
         let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
-        self.connect_to_llm()?;
         let redis_socket = socket.try_clone()?;
         let redis_socket_clone_for_hashmap = socket.try_clone()?;
 
@@ -201,7 +116,7 @@ impl Microservice {
         self.logger
             .log(&format!("Microservicio envia {:?}", command));
 
-        self.start_node_connection_handler(connect_node_sender.clone(), connect_nodes_receiver);
+        self.start_node_connection_handler(connect_nodes_receiver);
 
         self.add_node_stream(&main_address, redis_socket_clone_for_hashmap)?;
 
@@ -216,7 +131,7 @@ impl Microservice {
         self.start_automatic_commands();
 
         loop {
-            std::thread::sleep(std::time::Duration::from_secs(1));
+            sleep(std::time::Duration::from_secs(1));
         }
     }
 
@@ -245,7 +160,6 @@ impl Microservice {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let other_ports = get_nodes_addresses();
         for addr in other_ports {
-            // let addr = format!("127.0.0.1:{}", port);
             match TcpStream::connect(&addr) {
                 Ok(mut extra_socket) => {
                     self.logger.log(&format!("Microservicio envia {:?}", addr));
@@ -361,24 +275,18 @@ impl Microservice {
 
     fn start_node_connection_handler(
         &self,
-        connect_node_sender: MpscSender<TcpStream>,
         connect_nodes_receiver: Receiver<TcpStream>,
     ) {
-        let cloned_node_streams = Arc::clone(&self.node_streams);
         let cloned_last_command = Arc::clone(&self.last_command_sent);
         let cloned_documents: Arc<Mutex<HashMap<String, Document>>> = Arc::clone(&self.documents);
-        let cloned_document_streams = Arc::clone(&self.document_streams);
         let logger = self.logger.clone();
         let proccesed_commands: Arc<Mutex<HashSet<String>>> = Arc::clone(&self.processed_responses);
 
         thread::spawn(move || {
-            if let Err(e) = Self::connect_to_nodes(
-                connect_node_sender,
-                connect_nodes_receiver,
-                cloned_node_streams,
+            if let Err(e) = Self::connect_to_nodes(                
+                connect_nodes_receiver,                
                 cloned_last_command,
-                cloned_documents,
-                cloned_document_streams,
+                cloned_documents,                
                 logger,
                 proccesed_commands
             ) {
@@ -407,32 +315,23 @@ impl Microservice {
     /// * `Ok(())` si todas las conexiones se procesaron correctamente.
     /// * `Err(std::io::Error)` si ocurre un error en algún hilo.
     fn connect_to_nodes(
-        sender: MpscSender<TcpStream>,
         reciever: Receiver<TcpStream>,
-        node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
         last_command_sent: Arc<Mutex<String>>,
         documents: Arc<Mutex<HashMap<String, Document>>>,
-        document_streams: Arc<Mutex<HashMap<String, String>>>,
         logger: Logger,
         processed_responses: Arc<Mutex<HashSet<String>>>
     ) -> std::io::Result<()> {
-        for stream in reciever {
-            let cloned_node_streams = Arc::clone(&node_streams);
-            let cloned_documents = Arc::clone(&documents);
-            let cloned_document_streams = Arc::clone(&document_streams);
-            let cloned_last_command = Arc::clone(&last_command_sent);
-            let cloned_own_sender = sender.clone();
+        for stream in reciever {            
+            let cloned_documents = Arc::clone(&documents);            
+            let cloned_last_command = Arc::clone(&last_command_sent);            
             let log_clone = logger.clone();
             let proccesed_commands_clone: Arc<Mutex<HashSet<String>>> = Arc::clone(&processed_responses);
 
             thread::spawn(move || {
                 let logger_clone = log_clone.clone();
                 if let Err(e) = Self::listen_to_redis_response(
-                    stream,
-                    cloned_own_sender,
-                    cloned_node_streams,
-                    cloned_documents,
-                    cloned_document_streams,
+                    stream,                                        
+                    cloned_documents,                    
                     cloned_last_command,
                     log_clone,
                     proccesed_commands_clone
@@ -464,11 +363,8 @@ impl Microservice {
     /// * `Ok(())` si la escucha y el procesamiento fueron exitosos.
     /// * `Err(std::io::Error)` si ocurre un error de IO.
     fn listen_to_redis_response(
-        mut microservice_socket: TcpStream,
-        _connect_node_sender: MpscSender<TcpStream>,
-        _node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
-        documents: Arc<Mutex<HashMap<String, Document>>>,
-        _document_streams: Arc<Mutex<HashMap<String, String>>>,
+        mut microservice_socket: TcpStream,        
+        documents: Arc<Mutex<HashMap<String, Document>>>,        
         last_command_sent: Arc<Mutex<String>>,
         log_clone: Logger,
         processed_responses: Arc<Mutex<HashSet<String>>>
@@ -750,7 +646,7 @@ impl Microservice {
                                 _ => String::new()
                             };
                             let message_parts = &[
-                                "file-requested",
+                                "requested-file",
                                 &document.clone(),
                                 &content.clone(),
                                 &prompt.clone(),                        
@@ -819,13 +715,18 @@ pub fn decode_text(value: String)-> String {
 }
 
 fn get_nodes_addresses() -> Vec<String> {
-    match env::var("REDIS_NODE_HOSTS") {
-        Ok(val) => val.split(',').map(|s| s.to_string()).collect(),
-        Err(_) => {
-            eprintln!("REDIS_NODE_HOSTS no está seteada");
-            vec![]
+    if DOCKER {
+        match env::var("REDIS_NODE_HOSTS") {
+            Ok(val) => val.split(',').map(|s| s.to_string()).collect(),
+            Err(_) => {
+                eprintln!("REDIS_NODE_HOSTS no está seteada");
+                vec![]
+            }
         }
+    } else {
+        return vec!["127.0.0.1:4008".to_string(), "127.0.0.1:4007".to_string(), "127.0.0.1:4006".to_string(), "127.0.0.1:4005".to_string(), "127.0.0.1:4004".to_string(), "127.0.0.1:4003".to_string(), "127.0.0.1:4002".to_string(), "127.0.0.1:4001".to_string()];
     }
+
 }
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {

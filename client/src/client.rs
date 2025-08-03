@@ -260,7 +260,7 @@ impl LocalClient {
             return format_resp_publish(key, &client_command);
         }
 
-        if cmd_upper.contains("PROMPT") {
+        if cmd_upper.contains("CHANGE-LINE") || cmd_upper.contains("REQUEST-FILE")  {
             println!("command: {:#?}", command);
             let splited_command: Vec<&str> = command.split('|').collect();
             let client_command = format_resp_command(&splited_command);            
@@ -393,8 +393,16 @@ impl LocalClient {
         if response.len() < 3 {
             println!("Nodo de redireccion no disponible");
         } else {
+            let mut new_response = response.clone();
+            
+            if let Some(addr) = response.get(2) {
+                if let Some((_, port)) = addr.split_once(':') {
+                    new_response[2] = format!("127.0.0.1:{}", port);
+                }
+            }
+    
             let _ = Self::send_command_to_nodes(
-                response,
+                new_response,
                 connect_node_sender.clone(),
                 contenxt.clone(),
             );
@@ -605,7 +613,7 @@ impl LocalClient {
                 return Err(std::io::Error::other("Socket clone failed"));
             }
         };
-
+        let non_idempotent_commands = vec!["ASK".to_string(), "SUBSCRIBE".to_string(), "STATUS".to_string(), "-ERR".to_string()];
         let mut reader: BufReader<TcpStream> = BufReader::new(client_socket);
         let cloned_last_command: Arc<Mutex<String>> = Arc::clone(&params.last_command_sent.clone());
 
@@ -626,8 +634,8 @@ impl LocalClient {
 
             let response_id = format!("{}-{:?}", response.join("|"), client_socket_cloned.local_addr());
         
-            if let Ok(mut processed) = params.processed_responses.lock() {
-                if response[0].to_uppercase() != "ASK" {
+            if let Ok(mut processed) = params.processed_responses.lock() {                
+                if !non_idempotent_commands.contains(&response[0].to_uppercase()) {
                     if processed.contains(&response_id) {
                         println!("Respuesta duplicada detectada, omitiendo: {}", response.join(" "));
                         continue;

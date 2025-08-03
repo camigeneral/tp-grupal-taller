@@ -13,11 +13,11 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::thread;
+use std::thread::{self};
 use std::time::{Duration, Instant};
-use utils::get_resource_path;
+use utils::{get_node_address, get_resource_path};
 
-const PRINT_PINGS: bool = true;
+const PRINT_PINGS: bool = false;
 
 extern crate base64;
 use self::base64::{engine::general_purpose, Engine as _};
@@ -126,51 +126,63 @@ pub fn start_node_connection(
         }
     };
 
+    let start_time = Instant::now();
+    let max_attempts = 2;
     for connection_port in node_ports {
         if connection_port != locked_local_node.port {
-            // let node_address_to_connect = format!("127.0.0.1:{}", connection_port);
             let node_address_to_connect = get_node_address(connection_port);
             let peer_addr = node_address_to_connect.clone();
 
-            match TcpStream::connect(&node_address_to_connect) {
-                Ok(stream) => {
-                    let mut cloned_stream = stream.try_clone()?;
-
-                    let message = format!(
-                        "{:?} {} {:?} {} {} {}\n",
-                        RedisMessage::Node,
-                        locked_local_node.port,
-                        locked_local_node.role,
-                        locked_local_node.hash_range.0,
-                        locked_local_node.hash_range.1,
-                        locked_local_node.priority,
-                    );
-
-                    println!("Recibido comando: {}", message);
-
-                    let encrypted_b64 = encrypt_message(&cipher, &message);
-                    cloned_stream.write_all(encrypted_b64.as_bytes())?;
-
-                    lock_peer_nodes.insert(
-                        peer_addr,
-                        peer_node::PeerNode::new(
-                            stream,
-                            connection_port,
-                            NodeRole::Unknown,
-                            (0, 16383),
-                            NodeState::Active,
-                            0,
-                            0,
-                        ),
-                    );
+            let mut attempt = 1;
+            let stream = loop {
+                match TcpStream::connect(&node_address_to_connect) {
+                    Ok(s) => break Some(s),
+                    Err(_) => {
+                        if attempt == max_attempts {
+                            println!("Error connecting with peer node");
+                            break None;
+                        }
+                        attempt += 1;
+                        continue;
+                    }
                 }
-                Err(_) => {
-                    println!("Error connecting with peer node");
-                    continue;
-                }
+            };
+
+            if let Some(stream) = stream {
+                let mut cloned_stream = stream.try_clone()?;
+
+                let message = format!(
+                    "{:?} {} {:?} {} {} {}\n",
+                    RedisMessage::Node,
+                    locked_local_node.port,
+                    locked_local_node.role,
+                    locked_local_node.hash_range.0,
+                    locked_local_node.hash_range.1,
+                    locked_local_node.priority,
+                );
+
+                println!("Recibido comando: {}", message);
+
+                let encrypted_b64 = encrypt_message(&cipher, &message);
+                cloned_stream.write_all(encrypted_b64.as_bytes())?;
+
+                lock_peer_nodes.insert(
+                    peer_addr,
+                    peer_node::PeerNode::new(
+                        stream,
+                        connection_port,
+                        NodeRole::Unknown,
+                        (0, 16383),
+                        NodeState::Active,
+                        0,
+                        0,
+                    ),
+                );
             }
         }
     }
+    let total_time = start_time.elapsed();
+    println!("Time: {:.2?}", total_time);
 
     Ok(())
 }
@@ -332,8 +344,6 @@ fn handle_node(
                     Err(_) => continue,
                 };
 
-                let node_listening_port = &input[1];
-                // let node_address = format!("127.0.0.1:{}", node_listening_port);
                 let node_address = get_node_address(parsed_port);
 
                 let node_role = match input[2].trim().to_lowercase().as_str() {
@@ -567,7 +577,6 @@ fn handle_node(
                             poisoned.into_inner()
                         }
                     };
-                    // let address = format!("127.0.0.1:{}", port);
                     let address = get_node_address(port);
 
                     if let Some(replica_node) = locked_peer_nodes.get_mut(&address) {
@@ -1148,9 +1157,4 @@ fn initialize_replica_promotion(
             }
         }
     }
-}
-
-fn get_node_address(port: usize) -> String {
-    let last_digit = port % 10;
-    format!("node{}:{}", last_digit, port)
 }
