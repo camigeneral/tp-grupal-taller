@@ -541,37 +541,6 @@ impl Microservice {
                         log_clone.log("Error obteniendo lock de documents para client-subscribed");
                     }
                 },
-                MicroserviceMessage::RequestFile { document, prompt } => {                    
-                    if let Ok(mut docs) = documents.lock() {
-                        if let Some(documento) = docs.get_mut(&document) {
-                            let content = match documento {
-                                Document::Text(lines) => {
-
-                                    lines.join("<enter>").to_string()
-                                },                            
-                                _ => String::new()
-                            };
-                            let message_parts = &[
-                                "requested-file",
-                                &document.clone(),
-                                &content.clone(),
-                                &prompt.clone(),                        
-                            ];
-                            let message_resp = format_resp_command(message_parts);
-                            let command_resp = format_resp_publish(&"llm_requests", &message_resp);
-                            println!("command_resp: {command_resp}");
-                            if let Err(e) = microservice_socket.write_all(command_resp.as_bytes()) {
-                                println!(
-                                    "Error al enviar mensaje de actualizacion de archivo: {}",
-                                    e
-                                );
-                            } else {
-                                let _ = microservice_socket.flush();
-                                
-                            }
-                        }
-                    }
-                },
                 MicroserviceMessage::Doc {
                     document,
                     content,
