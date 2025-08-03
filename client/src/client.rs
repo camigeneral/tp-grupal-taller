@@ -605,7 +605,7 @@ impl LocalClient {
                 return Err(std::io::Error::other("Socket clone failed"));
             }
         };
-        let non_idempotent_commands = vec!["ASK".to_string(), "SUBSCRIBE".to_string()];
+        let non_idempotent_commands = vec!["ASK".to_string(), "SUBSCRIBE".to_string(), "STATUS".to_string(), "-ERR".to_string()];
         let mut reader: BufReader<TcpStream> = BufReader::new(client_socket);
         let cloned_last_command: Arc<Mutex<String>> = Arc::clone(&params.last_command_sent.clone());
 
