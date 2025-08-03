@@ -525,7 +525,6 @@ impl LlmMicroservice {
     /// - Hay problemas con el listener TCP
     pub fn run(&mut self) -> std::io::Result<()> {
         self.connect_to_redis_nodes()?;
-        //self.connect_to_replica_nodes(&connect_node_sender)?;
         let (connect_node_sender, connect_nodes_receiver) = channel::<TcpStream>();
         self.start_node_connection_handler(connect_nodes_receiver);
         self.send_connected_nodes_to_handler(&connect_node_sender)?;
