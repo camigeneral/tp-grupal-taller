@@ -105,12 +105,35 @@ impl LlmMicroservice {
     /// String con las instrucciones del sistema para el modelo LLM
     fn get_llm_instruction() -> String {
         return r#"INSTRUCCIONES
-            Respondé únicamente con la respuesta solicitada. No agregues introducciones, explicaciones, comentarios, aclaraciones ni conclusiones. No uses frases como 'Claro', 'Aquí está', 'Como modelo de lenguaje', etc. Respondé únicamente con el texto generado.
-            Usá <space> para representar espacios reales y <enter> para representar saltos de línea. NO TERMINES NI EMPIECES el <contenido_codificado> CON <enter>. NO uses \n en ningún caso. NO uses espacios literales. NO uses dobles <space>. NO uses texto fuera del bloque generado.
-            FORMATO DEL RESULTADO
-            Debe devolverse como una única línea de texto con el siguiente formato:
-            <contenido_codificado>
-            "#.to_string();
+        Respondé únicamente con la respuesta solicitada. No agregues introducciones, explicaciones, comentarios, aclaraciones ni conclusiones. No uses frases como 'Claro', 'Aquí está', 'Como modelo de lenguaje', etc. Respondé únicamente con el texto generado.
+        
+        FORMATO DE RESPUESTA:
+        -  Ese contenido es tu única respuesta, y debe estar codificado usando los siguientes tags:
+        - Usá <space> para representar espacios reales.
+        - Usá <enter> para representar saltos de línea.
+        - NO uses \n. NO uses espacios literales. NO uses dobles <space>. NO agregues texto fuera del bloque de salida.
+        - El bloque NO debe empezar ni terminar con <enter>. Los tags <space> y <enter> deben estar en inglés.
+        
+        CRITERIO DE RESPUESTA:
+        - Siempre asumí que el input es una instrucción implícita, incluso si no hay verbos. Por ejemplo:
+        - Entrada: "una planta" → Salida: Rose
+        - Entrada: "un planeta" → Salida: Mars
+        - Entrada: "un perro" → Salida: Golden<space>Retriever
+        
+        - Si el input tiene forma:  
+        `content-to-change:{contenido}, user-prompt:{instrucción}`  
+        Entonces:
+        - Si se pide traducir o modificar el contenido, trabajá sobre él.
+        - Pero si se entiende que se está pidiendo algo nuevo (generación desde cero), ignorá `content-to-change` y generá nuevo contenido.
+        - En ese caso, si producís varios párrafos, separalos con <enter> (uno solo entre párrafos).
+        - NO uses <enter> al inicio ni al final del bloque, incluso si hay varios párrafos.
+        
+        EJEMPLOS:
+        - Entrada: 'traduci hola<enter>como a frances'  
+        → Salida: Bonjour<enter>comme
+        - Entrada: 'content-to-change:{lorem ipsum}, user-prompt:{Generá un ensayo sobre Marte}'  
+        → Salida: Marte<space>es<space>el<space>cuarto<space>planeta<space>del<space>sistema<space>solar.<enter>Es<space>conocido<space>por<space>su<space>color<space>rojo...
+        "#.to_string();
     }
 
     /// Envía una solicitud al modelo Gemini y obtiene la respuesta
@@ -380,8 +403,8 @@ impl LlmMicroservice {
                         println!("change linge {document}, {line}, {offset}, {prompt}");
                         let node_streams_clone: Arc<Mutex<HashMap<String, TcpStream>>>= Arc::clone(&node_streams);
 
-                        let final_prompt =  format!(
-                            "user-prompt:{prompt}",                        
+                          let final_prompt =  format!(
+                            "{prompt}",                        
                         );
                         Self::handle_requests(node_streams_clone, document, "cursor".to_string(), line, offset, final_prompt, thread_pool_clone);
                 },
