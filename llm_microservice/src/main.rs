@@ -516,15 +516,6 @@ impl LlmMicroservice {
         self.send_connected_nodes_to_handler(&connect_node_sender)?;
         self.send_initial_command();
 
-
-        /* for stream in self.listener.incoming() {
-            let stream = stream?;
-            println!("Se conecto el microservicio");
-            let pool = Arc::clone(&self.thread_pool);
-            thread::spawn(move || { //Esto va a ser el listen_to_redis_response
-                Self::handle_requests(stream, pool);
-            });
-        } */
         loop {
             std::thread::sleep(std::time::Duration::from_secs(1));
         }  
