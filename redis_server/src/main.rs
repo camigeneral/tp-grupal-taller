@@ -87,7 +87,7 @@ fn start_server(
 ) -> std::io::Result<()> {
     let config_path = "redis.conf";
     let logger = logger::Logger::init(
-        logger::Logger::get_log_path_from_config(config_path, "server_log_path="),
+        logger::Logger::get_log_path_from_config(config_path, ""),
         port,
     );
 

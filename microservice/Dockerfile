@@ -1,22 +1,7 @@
-# FROM rust:latest AS builder
-
-# WORKDIR /app
-# COPY . .
-
-# RUN rustup target add x86_64-unknown-linux-musl
-
-# RUN cargo build --release -p microservice
-
-# FROM alpine:latest
-
-# RUN apk add --no-cache ca-certificates
-
-# COPY --from=builder /app/target/release/microservice /usr/local/bin/microservice_bin
-# CMD ["microservice_bin"]
-
 FROM rust:latest AS builder
 
 WORKDIR /app
+
 COPY Cargo.toml Cargo.lock ./
 COPY . .
 
@@ -28,6 +13,11 @@ FROM alpine:latest
 
 RUN apk add --no-cache ca-certificates
 
-COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/microservice /usr/local/bin/microservice_bin
+COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/microservice /app/microservice_bin
 
-CMD ["microservice_bin"]
+RUN mkdir -p /app/logs
+
+VOLUME ["/app/logs"]
+
+# Entrypoint
+CMD ["/app/microservice_bin"]
