@@ -1,5 +1,6 @@
-use std::fs::OpenOptions;
 use std::io::Write;
+use std::fs::{OpenOptions, create_dir_all};
+use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 extern crate chrono;
@@ -13,7 +14,10 @@ pub struct Logger {
 impl Logger {
     pub fn init(log_path: String, port: usize) -> Self {
         let (tx, rx): (Sender<String>, Receiver<String>) = channel();
+        println!("log_path _{log_path}");
 
+        let log_dir = Path::new(&log_path).parent().expect("No se pudo obtener el directorio padre del log");
+        create_dir_all(log_dir).expect("No se pudo crear el directorio de logs");
         // Hilo dedicado al logger
         thread::spawn(move || {
             let mut file = OpenOptions::new()
@@ -49,17 +53,23 @@ impl Logger {
     }
 
     pub fn get_log_path_from_config(config_path: &str, key: &str) -> String {
+        if let Ok(env_path) = std::env::var("LOG_FILE") {
+            return env_path;
+        }
+    
         let config = std::fs::read_to_string(config_path).unwrap_or_default();
         for line in config.lines() {
             if let Some(path) = line.strip_prefix(key) {
                 return path.trim().to_string();
             }
         }
-        // Valor por defecto
+    
         match key {
-            "server_log_path=" => "/logs/server.log".to_string(),
-            "microservice_log_path=" => "/logs/microservice.log".to_string(),
-            _ => "/logs/server.log".to_string(),
+            "server_log_path=" => "/app/logs/server.log".to_string(),
+            "microservice_log_path=" => "/app/logs/microservice.log".to_string(),
+            "llm_microservice_path" => "/app/logs/llm_microservice.log".to_string(),
+            _ => "/app/logs/server.log".to_string()
         }
     }
+    
 }
