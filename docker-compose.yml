@@ -249,6 +249,8 @@ services:
     image: microservice
     container_name: microservice    
     working_dir: /app
+    volumes:
+      - ./logs:/app/logs
     depends_on:
       - node0
       - node1
