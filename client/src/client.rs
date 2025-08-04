@@ -268,11 +268,10 @@ impl LocalClient {
 
         if cmd_upper.contains("CLIENT-LLM-RESPONSE") {
             let splited_command: Vec<&str> = command.split('|').collect();
-            let filename = splited_command[1].to_string();
             let mut final_command = vec![splited_command[0]];
             final_command.extend_from_slice(&splited_command[2..]);
             let client_command = format_resp_command(&final_command);
-            return format_resp_publish(&filename, &client_command);
+            return format_resp_publish(&"llm_requests", &client_command);
         }
 
         let key = parts.get(1).unwrap_or(&"");
@@ -478,11 +477,9 @@ impl LocalClient {
         ui_sender: Option<UiSender<AppMsg>>,
         local_addr: String,
     ) {
-        println!("response handle_client_llm: {:?}", response);
-        println!("local_addr: {}", local_addr);
-
-        let comming_addrs = response[6].clone();
-        if !comming_addrs.contains(&local_addr) {
+        let comming_addrs = response[6].trim();
+        let local_addr_trimmed = local_addr.trim();
+        if comming_addrs != local_addr_trimmed {
             if let Some(sender) = &ui_sender {
                 let selection_mode = response[3].clone();
                 let content = response[2].clone();
@@ -636,7 +633,7 @@ impl LocalClient {
             if response.is_empty() {
                 break;
             }
-
+            
             let response_id = format!(
                 "{}-{:?}",
                 response.join("|"),
@@ -646,10 +643,6 @@ impl LocalClient {
             if let Ok(mut processed) = params.processed_responses.lock() {
                 if !non_idempotent_commands.contains(&response[0].to_uppercase()) {
                     if processed.contains(&response_id) {
-                        println!(
-                            "Respuesta duplicada detectada, omitiendo: {}",
-                            response.join(" ")
-                        );
                         continue;
                     }
                     processed.insert(response_id);
@@ -669,8 +662,6 @@ impl LocalClient {
             };
             let cloned_ui_sender = params.ui_sender.clone();
 
-            println!("Respuesta de redis: {}", response.join(" "));
-
             let response_type = RedisClientResponseType::from(response[0].as_str());
             let cloned_connect_node_sender = connect_node_sender.clone();
 
@@ -683,6 +674,8 @@ impl LocalClient {
                 }
                 RedisClientResponseType::Write => Self::handle_write(response, cloned_ui_sender),
                 RedisClientResponseType::Llm => {
+                    println!("Respuesta de redis: {}", response.join(" "));
+
                     let filename = response[2].clone();
                     let command_parts = [
                         filename,
@@ -698,6 +691,7 @@ impl LocalClient {
                     }
                 }
                 RedisClientResponseType::ClientLlm => {
+                    println!("Respuesta de redis: {}", response.join(" "));
                     Self::handle_client_llm(response, cloned_ui_sender, local_addr.to_string())
                 }
                 RedisClientResponseType::Error => Self::handle_error(response, cloned_ui_sender),
