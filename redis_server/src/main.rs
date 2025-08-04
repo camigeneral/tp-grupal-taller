@@ -178,17 +178,23 @@ fn start_server(
     Ok(())
 }
 
-/// Inicializa el mapa de suscriptores para cada documento y los sets para cada documento.
+/// Inicializa los mapas de suscriptores y sets para cada documento existente.
 ///
-/// Crea una entrada vacía en el mapa y en el set de suscriptores para cada documento
-/// existente en la base de datos
+/// Esta función recorre todos los documentos actuales y crea una entrada vacía
+/// en el mapa de suscriptores y en el set de suscriptores para cada documento.
 ///
 /// # Argumentos
-/// * `documents` - HashMap con los documentos existentes
+/// * `documents` - Mapa compartido de documentos existentes (`RedisDocumentsMap`)
 ///
 /// # Retorna
-/// (Arc::new(Mutex::new(subscriber_map)), Arc::new(Mutex::new(doc_set))) con las listas de suscriptores
-/// inicializadas y los sets iniciales
+/// Una tupla con:
+/// - `SubscribersMap`: Mapa compartido de listas de suscriptores por documento.
+/// - `SetsMap`: Mapa compartido de sets de suscriptores por documento.
+///
+/// # Ejemplo
+/// ```rust
+/// let (subs, sets) = initialize_datasets(&shared_documents);
+/// ```
 fn initialize_datasets(documents: &RedisDocumentsMap) -> (SubscribersMap, SetsMap) {
     // Intentamos obtener la lista de keys; si falla el lock, devolvemos vectores vacíos
     let document_keys: Vec<String> = match documents.lock() {
@@ -214,6 +220,16 @@ fn initialize_datasets(documents: &RedisDocumentsMap) -> (SubscribersMap, SetsMa
     )
 }
 
+/// Determina si un cliente es un microservicio a partir de su ID.
+///
+/// Consulta el mapa de clientes activos y verifica si el tipo de cliente es `Microservice`.
+///
+/// # Argumentos
+/// * `ctx` - Contexto compartido del servidor.
+/// * `client_id` - Identificador del cliente a consultar.
+///
+/// # Retorna
+/// `true` si el cliente es un microservicio, `false` en caso contrario.
 fn is_client_microservice(ctx: &Arc<ServerContext>, client_id: String) -> bool {
     let clients_result = ctx.active_clients.lock();
 
@@ -225,6 +241,23 @@ fn is_client_microservice(ctx: &Arc<ServerContext>, client_id: String) -> bool {
     false
 }
 
+/// Maneja la conexión de un nuevo cliente al servidor.
+///
+/// Realiza el handshake inicial, determina el tipo de cliente (normal, microservicio o LLM),
+/// lo registra en el contexto, y lanza un hilo para manejar su comunicación.
+///
+/// # Argumentos
+/// * `client_stream` - Stream TCP del cliente.
+/// * `ctx` - Contexto compartido del servidor.
+/// * `logger` - Logger para registrar eventos.
+///
+/// # Retorna
+/// `Ok(())` si la conexión se maneja correctamente, o un error de IO en caso contrario.
+///
+/// # Detalles
+/// - Si el cliente es un microservicio, lo suscribe automáticamente a todos los documentos.
+/// - Si es LLM o microservicio, lo suscribe a los canales internos correspondientes.
+/// - Lanza un hilo para manejar la comunicación con el cliente.
 fn handle_new_client_connection(
     mut client_stream: TcpStream,
     ctx: Arc<ServerContext>,
@@ -349,12 +382,14 @@ fn handle_new_client_connection(
     Ok(())
 }
 
-/// Suscribe al microservicio al canal de llm_requests
+/// Suscribe un cliente LLM-microservicio al canal de solicitudes LLM (`llm_requests`).
 ///
 /// # Argumentos
-/// * `ctx` - Contexto del servidor
-/// * `client` - Cliente microservicio a suscribir
+/// * `ctx` - Contexto compartido del servidor.
+/// * `client` - Estructura del cliente a suscribir.
 ///
+/// # Detalles
+/// Agrega el cliente al vector de suscriptores del canal `llm_requests`.
 pub fn subscribe_to_llm_request_channel(ctx: Arc<ServerContext>, client: client_info::Client) {
     let mut channels_guard = match ctx.llm_channel.lock() {
         Ok(lock) => lock,
@@ -369,12 +404,14 @@ pub fn subscribe_to_llm_request_channel(ctx: Arc<ServerContext>, client: client_
     println!("Microservicio/llm suscrito al canal interno subscriptions");
 }
 
-/// Suscribe al microservicio al canal de suscripciones
+/// Suscribe un microservicio al canal interno de notificaciones (`notifications`).
 ///
 /// # Argumentos
-/// * `ctx` - Contexto del servidor
-/// * `microservice` - Cliente microservicio a suscribir
+/// * `ctx` - Contexto compartido del servidor.
+/// * `client` - Estructura del cliente microservicio a suscribir.
 ///
+/// # Detalles
+/// Inserta el cliente como único suscriptor del canal `notifications`.
 pub fn subscribe_to_internal_channel(ctx: Arc<ServerContext>, client: client_info::Client) {
     let mut channels_guard = match ctx.internal_subscription_channel.lock() {
         Ok(lock) => lock,
@@ -387,12 +424,22 @@ pub fn subscribe_to_internal_channel(ctx: Arc<ServerContext>, client: client_inf
 
 /// Maneja la comunicación con un cliente conectado.
 ///
-/// Esta función:
-/// 1. Lee comandos del cliente
-/// 2. Procesa los comandos recibidos
-/// 3. Envía respuestas al cliente
-/// 4. Publica actualizaciones a otros clientes suscritos
+/// Lee comandos del cliente, los procesa, envía respuestas y publica actualizaciones
+/// a otros clientes suscritos si corresponde. También persiste documentos tras un `SET`.
 ///
+/// # Argumentos
+/// * `stream` - Stream TCP del cliente.
+/// * `ctx` - Contexto compartido del servidor.
+/// * `client_id` - Identificador del cliente.
+/// * `logger` - Logger para registrar eventos.
+///
+/// # Retorna
+/// `Ok(())` si la comunicación finaliza correctamente, o un error de IO en caso contrario.
+///
+/// # Detalles
+/// - Si el cliente se desconecta, limpia sus recursos.
+/// - Si el comando es `subscribe`, notifica al microservicio.
+/// - Si el comando es `set`, persiste los documentos o notifica al microservicio según el tipo de cliente.
 fn handle_client(
     stream: &mut TcpStream,
     ctx: Arc<ServerContext>,
@@ -506,18 +553,21 @@ fn handle_client(
     Ok(())
 }
 
-/// Ejecuta un comando internamente, manejando la resolución de ubicación de keys y la propagación a réplicas.
-///
-/// Esta función extrae la lógica de ejecución de comandos de handle_client para poder
-/// ser reutilizada por funciones internas como notify_microservice.
+/// Ejecuta un comando internamente, resolviendo la ubicación de la key y propagando a réplicas si es necesario.
 ///
 /// # Argumentos
-/// * `command_request` - El comando a ejecutar
-/// * `ctx` - Contexto del servidor
-/// * `client_id` - ID del cliente que ejecuta el comando (puede ser interno)
+/// * `command_request` - Comando a ejecutar.
+/// * `ctx` - Contexto compartido del servidor.
+/// * `client_id` - Identificador del cliente que ejecuta el comando.
+/// * `logger` - Logger para registrar eventos.
 ///
 /// # Retorna
-/// Result con la respuesta del comando o un error
+/// `Ok(CommandResponse)` con la respuesta del comando, o `Err(String)` si ocurre un error.
+///
+/// # Detalles
+/// - Si la key no corresponde al nodo actual, retorna una respuesta `ASK` para redirección.
+/// - Propaga el comando a réplicas si corresponde.
+/// - Publica actualizaciones si el comando lo requiere.
 fn execute_command_internal(
     command_request: CommandRequest,
     ctx: Arc<ServerContext>,
@@ -585,13 +635,13 @@ fn execute_command_internal(
     Ok(response)
 }
 
-/// Obtiene el microservicio del canal interno de suscripciones y devuelve su dirección peer
+/// Obtiene la dirección peer del microservicio suscrito al canal interno.
 ///
 /// # Argumentos
-/// * `ctx` - Contexto del servidor
+/// * `ctx` - Contexto compartido del servidor.
 ///
 /// # Retorna
-/// Option con la dirección peer del microservicio si existe
+/// `Some(String)` con la dirección peer si existe, o `None` si no se encuentra.
 fn get_microservice_peer_addr(ctx: &Arc<ServerContext>) -> Option<String> {
     let channels_guard = match ctx.internal_subscription_channel.lock() {
         Ok(lock) => lock,
@@ -611,6 +661,16 @@ fn get_microservice_peer_addr(ctx: &Arc<ServerContext>) -> Option<String> {
     None
 }
 
+/// Notifica al microservicio sobre una suscripción o creación de archivo.
+///
+/// Envía un mensaje al microservicio a través del canal interno de notificaciones,
+/// indicando que un cliente se suscribió o que se creó un archivo.
+///
+/// # Argumentos
+/// * `ctx` - Contexto compartido del servidor.
+/// * `doc` - Nombre del documento.
+/// * `client_id` - Identificador del cliente.
+/// * `create_file` - Si es `true`, notifica creación de archivo; si es `false`, suscripción.
 pub fn notify_microservice(
     ctx: Arc<ServerContext>,
     doc: String,
@@ -660,6 +720,14 @@ pub fn notify_microservice(
     );
 }
 
+/// Verifica si un cliente está autorizado (logueado) en el sistema.
+///
+/// # Argumentos
+/// * `logged_clients` - Mapa compartido de clientes logueados.
+/// * `client_id` - Identificador del cliente.
+///
+/// # Retorna
+/// `true` si el cliente está autorizado, `false` en caso contrario.
 fn _is_authorized_client(logged_clients: LoggedClientsMap, client_id: String) -> bool {
     let locked = match logged_clients.lock() {
         Ok(lock) => lock,
@@ -685,13 +753,20 @@ fn _is_authorized_client(logged_clients: LoggedClientsMap, client_id: String) ->
     }
 }
 
-/// Determina si la key recibida corresponde al nodo actual o si debe ser redirigida a otro nodo,
-/// a traves del mensaje "ASK *key hasheada* *ip del nodo correspondiente*". En el caso de que
-/// no se encuentre el nodo correspondiente, se manda el mensaje sin ip.
+/// Determina si la key recibida corresponde al nodo actual o debe ser redirigida.
 ///
-/// # Devuelve
-/// - "Ok(())" si la key corresponde al nodo actual
-/// - "Err(CommandResponse)" con el mensaje "ASK" si corresponde a otro nodo
+/// Si la key no corresponde al nodo actual, retorna una respuesta `ASK` con la dirección
+/// del nodo correspondiente o sin dirección si no se encuentra.
+///
+/// # Argumentos
+/// * `key` - Key a resolver.
+/// * `local_node` - Nodo local.
+/// * `peer_nodes` - Mapa de nodos pares.
+/// * `logger` - Logger para registrar eventos.
+///
+/// # Retorna
+/// - `Ok(())` si la key corresponde al nodo actual.
+/// - `Err(CommandResponse)` con el mensaje `ASK` si corresponde a otro nodo.
 pub fn resolve_key_location(
     key: String,
     local_node: &LocalNodeMap,
@@ -774,8 +849,15 @@ pub fn resolve_key_location(
 
 /// Publica una actualización a todos los clientes suscritos a un documento.
 ///
-/// # Errores
-/// Retorna un error si hay problemas al escribir en algún stream de cliente
+/// # Argumentos
+/// * `active_clients` - Mapa compartido de clientes activos.
+/// * `document_subscribers` - Mapa compartido de suscriptores por documento.
+/// * `update_message` - Mensaje a publicar.
+/// * `document_id` - ID del documento.
+/// * `logger` - Logger para registrar eventos.
+///
+/// # Retorna
+/// `Ok(())` si la publicación fue exitosa, o un error de IO si falla.
 pub fn publish_update(
     active_clients: &ClientsMap,
     document_subscribers: &SubscribersMap,
@@ -828,12 +910,15 @@ pub fn publish_update(
     Ok(())
 }
 
-/// Limpia los recursos asociados a un cliente cuando se desconecta.
+/// Limpia los recursos asociados a un cliente desconectado.
 ///
-/// Elimina al cliente de:
-/// - La lista de clientes activos
-/// - Las listas de suscriptores de documentos
+/// Elimina al cliente de la lista de clientes activos y de todas las listas de suscriptores.
 ///
+/// # Argumentos
+/// * `client_id` - Identificador del cliente.
+/// * `active_clients` - Mapa compartido de clientes activos.
+/// * `document_subscribers` - Mapa compartido de suscriptores por documento.
+/// * `logger` - Logger para registrar eventos.
 fn cleanup_client_resources(
     client_id: &str,
     active_clients: &ClientsMap,
@@ -873,10 +958,16 @@ fn cleanup_client_resources(
     }
 }
 
-/// Persiste el estado actual de los documentos en el archivo.
+/// Persiste el estado actual de los documentos en un archivo RDB.
 ///
-/// # Errores
-/// Retorna un error si hay problemas al escribir en el archivo
+/// Guarda el contenido de todos los documentos en un archivo específico del nodo.
+///
+/// # Argumentos
+/// * `documents` - Mapa compartido de documentos.
+/// * `local_node` - Nodo local.
+///
+/// # Retorna
+/// `Ok(())` si la persistencia fue exitosa, o un error de IO si falla.
 pub fn persist_documents(
     documents: &RedisDocumentsMap,
     local_node: &LocalNodeMap,
@@ -921,11 +1012,13 @@ pub fn persist_documents(
     Ok(())
 }
 
-/// Carga los documentos persistidos desde el archivo.
+/// Carga los documentos persistidos desde un archivo RDB.
+///
+/// # Argumentos
+/// * `file_path` - Ruta al archivo de persistencia.
 ///
 /// # Retorna
-/// HashMap con los documentos y sus mensajes, o un error si hay problemas
-/// al leer el archivo
+/// `Ok(HashMap<String, String>)` con los documentos cargados, o un error si falla la lectura.
 pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, String>, String> {
     let mut documents = HashMap::new();
 
@@ -956,6 +1049,18 @@ pub fn load_persisted_data(file_path: &String) -> Result<HashMap<String, String>
     Ok(documents)
 }
 
+/// Suscribe automáticamente al microservicio a todos los documentos existentes.
+///
+/// Envía al microservicio los datos de cada documento al que se suscribe.
+///
+/// # Argumentos
+/// * `client_stream` - Stream TCP del microservicio.
+/// * `addr` - Dirección del microservicio.
+/// * `docs` - Mapa compartido de documentos.
+/// * `clients_on_docs` - Mapa compartido de suscriptores por documento.
+/// * `logger` - Logger para registrar eventos.
+/// * `main_addrs` - Dirección principal del servidor.
+/// * `client_type` - Tipo de cliente (Microservice o LlmMicroservice).
 pub fn subscribe_microservice_to_all_docs(
     mut client_stream: TcpStream,
     addr: String,
@@ -1020,10 +1125,12 @@ pub fn subscribe_microservice_to_all_docs(
     }
 }
 
-/// Inicializa los canales de comunicación internos del sistema
+/// Inicializa el canal interno de notificaciones del sistema.
+///
+/// Crea un canal con una entrada para el microservicio.
 ///
 /// # Retorna
-/// InternalChannelsMap con los canales internos inicializados
+/// Un `ClientsMap` con el canal `notifications` inicializado.
 fn initialize_subscription_channel() -> ClientsMap {
     let mut internal_channels: HashMap<String, client_info::Client> = HashMap::new();
     internal_channels.insert(
@@ -1037,10 +1144,12 @@ fn initialize_subscription_channel() -> ClientsMap {
     Arc::new(Mutex::new(internal_channels))
 }
 
-/// Inicializa los canales de comunicación internos del sistema
+/// Inicializa el canal interno de solicitudes LLM del sistema.
+///
+/// Crea un canal con una entrada para el LLM-microservicio.
 ///
 /// # Retorna
-/// InternalChannelsMap con los canales internos inicializados
+/// Un `LlmNodesMap` con el canal `llm_request` inicializado.
 fn initialize_llm_request_channel() -> LlmNodesMap {
     let mut internal_channels: HashMap<String, Vec<client_info::Client>> = HashMap::new();
 

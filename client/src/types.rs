@@ -12,7 +12,7 @@ pub enum RedisClientResponseType {
 }
 
 /// Implementación para convertir un &str en un RedisClientResponseType.
-impl  RedisClientResponseType {
+impl RedisClientResponseType {
     pub fn from_parts(parts: Vec<String>) -> Self {
         if parts.is_empty() {
             return RedisClientResponseType::Error;

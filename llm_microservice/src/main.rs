@@ -514,7 +514,6 @@ impl LlmMicroservice {
                     logger.log(format!("Error al parsear JSON de Gemini: {:?}", e).as_str());
                 }
             }
-
         });
     }
 
