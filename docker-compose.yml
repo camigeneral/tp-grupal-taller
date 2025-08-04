@@ -18,6 +18,7 @@ services:
       - "4000:4000"
     volumes:
       - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
+      - ./server.log:/logs/server.log
     ulimits:
       nofile:
         soft: 65536
@@ -38,6 +39,7 @@ services:
       - "4001:4001"
     volumes:
       - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
+      - ./server.log:/logs/server.log
     ulimits:
       nofile:
         soft: 65536
@@ -58,6 +60,7 @@ services:
       - "4002:4002"
     volumes:
       - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
+      - ./server.log:/logs/server.log
     ulimits:
       nofile:
         soft: 65536
@@ -78,6 +81,7 @@ services:
       - "4003:4003"
     volumes:
       - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
+      - ./server.log:/logs/server.log
     ulimits:
       nofile:
         soft: 65536
@@ -98,6 +102,7 @@ services:
       - "4004:4004"
     volumes:
       - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
+      - ./server.log:/logs/server.log
     ulimits:
       nofile:
         soft: 65536
@@ -118,6 +123,7 @@ services:
       - "4005:4005"
     volumes:
       - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
+      - ./server.log:/logs/server.log
     ulimits:
       nofile:
         soft: 65536
@@ -138,6 +144,7 @@ services:
       - "4006:4006"
     volumes:
       - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
+      - ./server.log:/logs/server.log
     ulimits:
       nofile:
         soft: 65536
@@ -158,6 +165,7 @@ services:
       - "4007:4007"
     volumes:
       - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
+      - ./server.log:/logs/server.log
     ulimits:
       nofile:
         soft: 65536
@@ -178,6 +186,7 @@ services:
       - "4008:4008"
     volumes:
       - ./redis_server/rdb_files:/usr/local/bin/redis_server/rdb_files
+      - ./server.log:/logs/server.log
     ulimits:
       nofile:
         soft: 65536
@@ -220,6 +229,8 @@ services:
     image: microservice
     container_name: microservice
     working_dir: /usr/local/bin
+    volumes:
+      - ./microservice.log:/logs/microservice.log
     depends_on:
       - node0
       - node1
