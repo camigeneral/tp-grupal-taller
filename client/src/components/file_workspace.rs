@@ -178,12 +178,13 @@ impl SimpleComponent for FileWorkspace {
                 self.current_file = file.clone();
                 self.current_file_type = file_type.clone();
 
-                let mut items: Vec<String> = content.split(',').map(|s| s.to_string()).collect();
+                let mut items: Vec<String> = content.split("<enter>").map(|s| decode_text(s.to_string())).collect();
                 let qty = qty_subs.parse::<i32>().unwrap_or(0);
 
                 match file_type {
                     FileType::Text => {
                         let text_content = items.join("\n");
+                        println!("contenido fileworls_ {text_content}, items {:#?}", items);
                         self.files.insert(
                             (file.clone(), file_type.clone()),
                             Document::Text(items.clone()),
@@ -367,6 +368,7 @@ impl SimpleComponent for FileWorkspace {
                                     }
                                     lines.insert(parsed_index, val.clone());
                                 }
+                                println!("lineas {:#?}", lines);
                                 val = lines.join("\n");
                             }
                         }

@@ -625,8 +625,10 @@ impl SimpleComponent for AppModel {
                 } else {
                     FileType::Text
                 };
-                let mut doc_file = DocumentValueInfo::new(content, 0);
+                let mut doc_file = DocumentValueInfo::new(content.clone(), 0);
                 doc_file.decode_text();
+                println!("ontent desde app: {content}, parsedcontent {}", doc_file.value);
+                
                 self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(
                     file_id.clone(),
                     "1".to_string(), // qty_subs

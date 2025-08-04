@@ -152,7 +152,7 @@ impl SimpleComponent for TextEditorModel {
             programmatic_update: programmatic_update.clone(),
             cursor_position: cursor_position.clone(),
             buffer: gtk::TextBuffer::new(None),
-            selection_mode: SelectionMode::Cursor,
+            selection_mode: SelectionMode::WholeFile,
         };
 
         model.buffer = gtk::TextBuffer::builder().text(&model.content).build();
@@ -250,8 +250,9 @@ impl SimpleComponent for TextEditorModel {
 
                 self.file_name = file_name;
                 self.num_contributors = contributors;
-                self.content = content;
-                self.buffer.set_text(&format!("{}\n", self.content));
+                println!("content {}", content);
+                self.content = content;                
+                self.buffer.set_text(&format!("{}", self.content));
 
                 self.content_changed_manually = true;
                 *self.programmatic_update.borrow_mut() = false;
