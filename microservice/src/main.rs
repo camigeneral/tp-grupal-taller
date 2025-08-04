@@ -735,7 +735,7 @@ impl Microservice {
                                                 let offset = parsed_offset.min(original_line.len());
                                                 let mut new_line = String::new();
                                                 let parsed_content =
-                                                    &decode_text(content.to_string());
+                                                &decode_text(content.to_string());                                                                            
                                                 new_line.push_str(&original_line[..offset]);
                                                 new_line.push_str(" ");
                                                 new_line.push_str(&parsed_content);
@@ -747,7 +747,7 @@ impl Microservice {
                                                 docs.insert(document.clone(), new_document);
                                                 println!("Insertado en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, content);
                                             } else {
-                                                //log_clone.log(&format!("Línea {} fuera de rango para documento '{}'", line_num, document));
+                                                log_clone.log(&format!("Línea {} fuera de rango para documento '{}'", parsed_line, document));
                                             }
                                         }
                                         _ => {}
