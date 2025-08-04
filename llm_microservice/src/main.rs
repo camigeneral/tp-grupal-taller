@@ -197,7 +197,10 @@ impl LlmMicroservice {
     /// - Hay problemas de conectividad con la API de Gemini
     /// - La respuesta no es válida
     fn get_gemini_respond(prompt: &str) -> Result<Vec<u8>, reqwest::Error> {
-        let api_key = "AIzaSyDSyVJnHxJnUXDRnM7SxphBTwEPGtOjMEI";
+        let api_key = env::var("GEMINI_API_KEY").unwrap_or_else(|_| {
+            eprintln!("GEMINI_API_KEY no está configurada, usando API key por defecto");
+            "AIzaSyDSyVJnHxJnUXDRnM7SxphBTwEPGtOjMEI".to_string()
+        });
 
         let body = json!({
             "system_instruction": {
@@ -215,7 +218,7 @@ impl LlmMicroservice {
         let client = reqwest::blocking::Client::new();
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        headers.insert("X-goog-api-key", HeaderValue::from_str(api_key).unwrap());
+        headers.insert("X-goog-api-key", HeaderValue::from_str(&api_key).unwrap());
 
         let res = client
             .post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent")
