@@ -279,7 +279,7 @@ impl Microservice {
             Document::Text(lines) => {
                 let mut data: String = format!("");
                 for linea in lines {
-                    data.push_str(linea);
+                    data.push_str(linea.trim().trim_end_matches('\n').trim_start_matches('\n'));
                     data.push_str("/--/");
                 }
                 data
@@ -287,7 +287,7 @@ impl Microservice {
             Document::Spreadsheet(lines) => {
                 let mut data: String = format!("");
                 for linea in lines {
-                    data.push_str(linea);
+                    data.push_str(linea.trim().trim_end_matches('\n').trim_start_matches('\n'));
                     data.push_str("/--/");
                 }
                 data
@@ -494,7 +494,7 @@ impl Microservice {
                     if let Ok(docs) = documents.lock() {
                         if let Some(documento) = docs.get(&document) {
                             let doc_content = match documento {
-                                Document::Text(lines) => lines.join(","),
+                                Document::Text(lines) => lines.join("<enter>"),
                                 Document::Spreadsheet(lines) => lines.join(","),
                             };
                             let message_parts = &[
@@ -506,10 +506,6 @@ impl Microservice {
                             let message_resp = format_resp_command(message_parts);
                             let command_resp =
                                 format_resp_publish(&document.clone(), &message_resp);
-                            println!(
-                                "Enviando publish: {}",
-                                command_resp.replace("\r\n", "\\r\\n")
-                            );
                             log_clone.log(&format!(
                                 "Enviando publish para client-subscribed: {}",
                                 command_resp
@@ -581,6 +577,10 @@ impl Microservice {
                         "Write recibido: índice {}, contenido '{}', archivo {}",
                         index, content, file
                     ));
+                    println!(
+                        "Write recibido: índice {}, contenido '{}', archivo {}",
+                        index, content, file
+                    );
                     if let Ok(mut docs) = documents.lock() {
                         if let Some(documento) = docs.get_mut(&file) {
                             let parsed_index = match index.parse::<usize>() {
@@ -603,11 +603,25 @@ impl Microservice {
 
                                             if parsed_index < lines.len() {
                                                 lines[parsed_index] = before_newline.to_string();
+                                                println!("ANTES del insert:");
+                                                for (i, line) in lines.iter().enumerate() {
+                                                    println!("  [{}]: '{}'", i, line);
+                                                }
+                                                println!(
+                                                    "Insertando '{}' en posición {}",
+                                                    after_newline,
+                                                    parsed_index + 1
+                                                );
 
                                                 lines.insert(
                                                     parsed_index + 1,
                                                     after_newline.to_string(),
                                                 );
+
+                                                println!("DESPUÉS del insert:");
+                                                for (i, line) in lines.iter().enumerate() {
+                                                    println!("  [{}]: '{}'", i, line);
+                                                }
                                             } else {
                                                 while lines.len() < parsed_index {
                                                     lines.push(String::new());
@@ -729,30 +743,52 @@ impl Microservice {
                                         Document::Text(doc_lines) => {
                                             let mut new_lines = doc_lines.clone();
                                             if parsed_line < new_lines.len() {
-                                                let original_line = &decode_text(
-                                                    new_lines[parsed_line].to_string(),
-                                                );
-                                                let offset = parsed_offset.min(original_line.len());
-                                                let mut new_line = String::new();
+                                                let original_line_decoded =
+                                                    decode_text(new_lines[parsed_line].to_string());
                                                 let parsed_content =
-                                                    &decode_text(content.to_string());
-                                                new_line.push_str(&original_line[..offset]);
-                                                new_line.push_str(" ");
-                                                new_line.push_str(&parsed_content);
-                                                new_line.push_str(" ");
-                                                new_line.push_str(&original_line[offset..]);
+                                                    decode_text(content.to_string());
+
+                                                // Convertimos offset en caracteres a offset en bytes
+                                                let byte_offset = original_line_decoded
+                                                    .char_indices()
+                                                    .nth(parsed_offset)
+                                                    .map(|(i, _)| i)
+                                                    .unwrap_or(original_line_decoded.len());
+
+                                                let before = &original_line_decoded[..byte_offset];
+                                                let after = &original_line_decoded[byte_offset..];
+
+                                                let mut new_line = String::new();
+                                                new_line.push_str(before);
+
+                                                if !after.starts_with(&parsed_content) {
+                                                    if !before.ends_with(' ') {
+                                                        new_line.push(' ');
+                                                    }
+                                                    new_line.push_str(&parsed_content);
+                                                    if !after.starts_with(' ') {
+                                                        new_line.push(' ');
+                                                    }
+                                                }
+
+                                                new_line.push_str(after);
                                                 new_line = parse_text(new_line);
+
                                                 new_lines[parsed_line] = new_line;
                                                 let new_document = Document::Text(new_lines);
                                                 docs.insert(document.clone(), new_document);
-                                                println!("Insertado en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, content);
+
+                                                println!(
+        "Insertado en documento '{}' en línea {}, offset {}: {}",
+        document, parsed_line, parsed_offset, content
+    );
                                             } else {
                                                 let parsed_content =
                                                     &decode_text(content.to_string());
                                                 let mut new_line = String::new();
-                                                                                              
+
                                                 new_line.push_str(&parsed_content);
-                                                new_line.push_str(" ");                                                
+                                                new_line.push_str(" ");
                                                 new_line = parse_text(new_line);
                                                 new_lines.push(new_line);
                                                 let new_document = Document::Text(new_lines);
