@@ -353,7 +353,9 @@ fn handle_new_client_connection(
             if client_type == ClientType::Microservice {
                 subscribe_to_internal_channel(Arc::clone(&ctx), client.clone())
             }
-            subscribe_to_llm_request_channel(Arc::clone(&ctx), client.clone())
+            if client_type == ClientType::LlmMicroservice {
+                subscribe_to_llm_request_channel(Arc::clone(&ctx), client.clone());
+            }
         }
     }
 
@@ -400,8 +402,6 @@ pub fn subscribe_to_llm_request_channel(ctx: Arc<ServerContext>, client: client_
         .entry("llm_requests".to_string())
         .or_insert_with(Vec::new)
         .push(client);
-
-    println!("Microservicio/llm suscrito al canal interno subscriptions");
 }
 
 /// Suscribe un microservicio al canal interno de notificaciones (`notifications`).

@@ -265,9 +265,10 @@ impl LocalClient {
         if cmd_upper.contains("CLIENT-LLM-RESPONSE") {
             let splited_command: Vec<&str> = command.split('|').collect();
             let mut final_command = vec![splited_command[0]];
+            let doc = splited_command[1];
             final_command.extend_from_slice(&splited_command[2..]);
             let client_command = format_resp_command(&final_command);
-            return format_resp_publish(&"llm_requests", &client_command);
+            return format_resp_publish(&doc, &client_command);
         }
 
         let key = parts.get(1).unwrap_or(&"");
@@ -416,8 +417,7 @@ impl LocalClient {
         let doc = response[1].clone();
         let content: String = response[3].clone();
         if let Some(sender) = &ui_sender {
-            let mut document = DocumentValueInfo::new(content, 0);
-            document.decode_text();
+            let document = DocumentValueInfo::new(content.clone(), 0);
             let _ = sender.send(AppMsg::ManageSubscribeResponse(
                 doc.to_string(),
                 "1".to_string(),
@@ -444,16 +444,11 @@ impl LocalClient {
             let file = response[4].to_string();
 
             let split_text = text.split("<enter>").collect::<Vec<_>>();
-
             if split_text.len() == 2 {
-                let (before_newline, after_newline) = (split_text[0], split_text[1]);
-
-                for (offset, content) in [(0, before_newline), (1, after_newline)] {
-                    let mut doc_info = DocumentValueInfo::new(content.to_string(), index + offset);
-                    doc_info.file = file.clone();
-                    doc_info.decode_text();
-                    let _ = sender.send(AppMsg::RefreshData(doc_info));
-                }
+                let mut doc_info = DocumentValueInfo::new(text.to_string(), index);
+                doc_info.file = file.clone();
+                doc_info.decode_text();
+                let _ = sender.send(AppMsg::RefreshData(doc_info));
             } else {
                 let mut doc_info = DocumentValueInfo::new(text, index);
                 doc_info.file = file.clone();

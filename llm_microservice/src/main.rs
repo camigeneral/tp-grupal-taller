@@ -3,7 +3,7 @@ extern crate rusty_docs;
 extern crate serde_json;
 use serde_json::json;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     env,
     io::{BufReader, Error, ErrorKind, Write},
     net::TcpStream,
@@ -39,6 +39,8 @@ pub struct LlmMicroservice {
     node_streams: NodeStreams,
     /// Ruta al archivo de log donde se registran los eventos del microservicio.
     logger: logger::Logger,
+    /// Consultas activas en el microservicio, para evitar procesamiento duplicado.
+    active_queries: Arc<Mutex<HashSet<String>>>, // <--- NUEVO
 }
 
 /// Contexto de una solicitud LLM para procesamiento en el pool de hilos.
@@ -69,6 +71,7 @@ pub struct RequestContext {
     pub prompt: String,
     pub thread_pool: Arc<ThreadPool>,
     pub logger: Logger,
+    pub active_queries: Arc<Mutex<HashSet<String>>>,
 }
 
 /// Enum que representa los distintos tipos de mensajes que puede procesar el microservicio LLM.
@@ -163,6 +166,7 @@ impl LlmMicroservice {
             thread_pool,
             node_streams: Arc::new(Mutex::new(HashMap::new())),
             logger,
+            active_queries: Arc::new(Mutex::new(HashSet::new())), // <--- NUEVO
         }
     }
 
@@ -204,17 +208,10 @@ impl LlmMicroservice {
             let data_clone = data.to_vec();
             let node_streams_clone = Arc::clone(node_streams);
 
-            println!(
-                "[DEBUG] Stream encontrado, intentando obtener lock del stream del nodo: {}",
-                node_id_clone
-            );
-
             match stream_arc.lock() {
                 Ok(mut stream) => match stream.write_all(&data_clone) {
                     Ok(_) => match stream.flush() {
-                        Ok(_) => {
-                            println!("[DEBUG] Flush exitoso para el nodo {}", node_id_clone);
-                        }
+                        Ok(_) => {}
                         Err(e) => {
                             eprintln!(
                                 "[ERROR] Error al hacer flush del stream del nodo {}: {}",
@@ -331,6 +328,7 @@ impl LlmMicroservice {
         - Usá <enter> para representar saltos de línea.
         - NO uses \n. NO uses espacios literales. NO uses dobles <space>. NO agregues texto fuera del bloque de salida.
         - El bloque NO debe empezar ni terminar con <enter>. Los tags <space> y <enter> deben estar en inglés.
+        - Si te piden algo extenso con parrafos, o devolves parrafos, NO uses \n, usa <enter>
         
         CRITERIO DE RESPUESTA:
         - Siempre asumí que el input es una instrucción implícita, incluso si no hay verbos. Por ejemplo:
@@ -430,6 +428,19 @@ impl LlmMicroservice {
             return;
         }
 
+        let query_key = format!(
+            "{}|{}|{}|{}|{}",
+            ctx.document, ctx.selection_mode, ctx.line, ctx.offset, ctx.prompt
+        );
+
+        {
+            let mut active = ctx.active_queries.lock().unwrap();
+            if active.contains(&query_key) {
+                return;
+            }
+            active.insert(query_key.clone());
+        }
+
         let prompt_clone = ctx.prompt.clone();
         let thread_pool = Arc::clone(&ctx.thread_pool);
         let logger = ctx.logger.clone();
@@ -438,6 +449,7 @@ impl LlmMicroservice {
         let selection_mode = ctx.selection_mode.clone();
         let line = ctx.line.clone();
         let offset = ctx.offset.clone();
+        let active_queries = Arc::clone(&ctx.active_queries);
 
         thread_pool.execute(move || {
             let gemini_resp = Self::get_gemini_respond(&prompt_clone);
@@ -514,6 +526,9 @@ impl LlmMicroservice {
                     logger.log(format!("Error al parsear JSON de Gemini: {:?}", e).as_str());
                 }
             }
+
+            let mut active = active_queries.lock().unwrap();
+            active.remove(&query_key);
         });
     }
 
@@ -651,38 +666,19 @@ impl LlmMicroservice {
         thread_pool: Arc<ThreadPool>,
         node_streams: NodeStreams,
         logger: Logger,
+        active_queries: Arc<Mutex<HashSet<String>>>, // <--- AGREGADO
     ) -> std::io::Result<()> {
-        let peer_addr = match node_socket.peer_addr() {
-            Ok(addr) => addr,
-            Err(e) => {
-                eprintln!("Error obteniendo peer_addr: {}", e);
-                return Err(e);
-            }
-        };
-        let mut correct_port = String::new();
-        if let Some((_, port)) = peer_addr.to_string().split_once(':') {
-            if let Some(last_char) = port.chars().last() {
-                correct_port = format!("node{}:{}", last_char, port);
-            } else {
-                eprintln!(
-                    "[ERROR] No se pudo obtener el último carácter del puerto: {}",
-                    port
-                );
-            }
-        } else {
-            eprintln!("[ERROR] Dirección inválida (no tiene ':'): {}", peer_addr);
-        }
-
+        
         let mut reader = BufReader::new(node_socket.try_clone()?);
 
         loop {
             let thread_pool_clone = Arc::clone(&thread_pool);
             let logger_clone = logger.clone();
+            let active_queries_clone = Arc::clone(&active_queries);
             let (parts, _) = resp_parser::parse_resp_command(&mut reader)?;
             if parts.is_empty() {
                 break;
             }
-            let correct_addr_clone = correct_port.clone();
             let llm_message = LlmPromptMessage::from_parts(&parts);
             match llm_message {
                 LlmPromptMessage::ChangeLine {
@@ -707,6 +703,7 @@ impl LlmMicroservice {
                         prompt,
                         thread_pool: Arc::clone(&thread_pool_clone),
                         logger: logger_clone.clone(),
+                        active_queries: Arc::clone(&active_queries_clone), 
                     };
 
                     Self::handle_requests(ctx);
@@ -722,7 +719,7 @@ impl LlmMicroservice {
 
                     let message_resp = resp_parser::format_resp_command(message_parts);
                     let command_resp =
-                        resp_parser::format_resp_publish(&"llm_requests", &message_resp);
+                        resp_parser::format_resp_publish(&"notifications", &message_resp);
 
                     println!(
                         "Enviando publish: {}",
@@ -735,13 +732,7 @@ impl LlmMicroservice {
                         )
                         .as_str(),
                     );
-
-                    Self::send_to_node(
-                        &node_streams,
-                        &correct_addr_clone.to_string(),
-                        command_resp.as_bytes(),
-                        logger_clone,
-                    );
+                    Self::send_to_all_nodes(&node_streams, command_resp.as_bytes(), logger_clone);
                 }
 
                 LlmPromptMessage::RequestedFile {
@@ -764,6 +755,7 @@ impl LlmMicroservice {
                         prompt: final_prompt,
                         thread_pool: Arc::clone(&thread_pool_clone),
                         logger: logger_clone.clone(),
+                        active_queries: Arc::clone(&active_queries_clone), 
                     };
 
                     Self::handle_requests(ctx);
@@ -775,30 +767,18 @@ impl LlmMicroservice {
         Ok(())
     }
 
-    /// Maneja las conexiones entrantes de nodos en un hilo separado.
-    ///
-    /// Por cada nueva conexión recibida en el canal, lanza un hilo que
-    /// ejecuta `listen_node_responses` para procesar los mensajes de ese nodo.
-    ///
-    /// # Argumentos
-    /// * `receiver` - Canal para recibir streams TCP de nuevos nodos.
-    /// * `thread_pool` - Referencia al pool de hilos.
-    /// * `node_streams` - Referencia al mapa compartido de streams de nodos.
-    /// * `logger` - Logger para registrar eventos y errores.
-    ///
-    /// # Returns
-    /// * `Ok(())` si todas las conexiones se procesaron correctamente.
-    /// * `Err(std::io::Error)` si ocurre un error en algún hilo.
     fn handle_node_connections(
         receiver: Receiver<TcpStream>,
         thread_pool: Arc<ThreadPool>,
         node_streams: NodeStreams,
         logger: Logger,
+        active_queries: Arc<Mutex<HashSet<String>>>, 
     ) -> std::io::Result<()> {
         for stream in receiver {
             let thread_pool_clone = Arc::clone(&thread_pool);
             let cloned_node_streams = Arc::clone(&node_streams);
             let logger_clone = logger.clone();
+            let active_queries_clone = Arc::clone(&active_queries); 
 
             thread::spawn(move || {
                 if let Err(e) = Self::listen_node_responses(
@@ -806,6 +786,7 @@ impl LlmMicroservice {
                     thread_pool_clone,
                     cloned_node_streams,
                     logger_clone,
+                    active_queries_clone, 
                 ) {
                     println!("Error en la conexión con el nodo: {}", e);
                 }
@@ -814,23 +795,18 @@ impl LlmMicroservice {
         Ok(())
     }
 
-    /// Inicia el manejador de conexiones de nodos en un hilo separado.
-    ///
-    /// Crea un hilo que se encarga de procesar las conexiones entrantes de los nodos Redis,
-    /// delegando el procesamiento a `handle_node_connections`.
-    ///
-    /// # Argumentos
-    /// * `receiver` - Canal para recibir streams TCP de nuevos nodos.
     fn start_node_connection_handler(&self, receiver: Receiver<TcpStream>) {
         let thread_pool_clone = Arc::clone(&self.thread_pool);
         let cloned_node_streams = Arc::clone(&self.node_streams);
         let logger_clone = self.logger.clone();
+        let active_queries_clone = Arc::clone(&self.active_queries); 
         thread::spawn(move || {
             if let Err(e) = Self::handle_node_connections(
                 receiver,
                 thread_pool_clone,
                 cloned_node_streams,
                 logger_clone,
+                active_queries_clone, 
             ) {
                 println!("Error en la conexión con el nodo: {}", e);
             }

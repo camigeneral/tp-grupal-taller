@@ -625,7 +625,7 @@ impl SimpleComponent for AppModel {
                 } else {
                     FileType::Text
                 };
-                let mut doc_file = DocumentValueInfo::new(content, 0);
+                let mut doc_file = DocumentValueInfo::new(content.clone(), 0);
                 doc_file.decode_text();
                 self.files_manager_cont.emit(FileWorkspaceMsg::OpenFile(
                     file_id.clone(),
