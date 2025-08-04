@@ -417,8 +417,7 @@ impl LocalClient {
         let doc = response[1].clone();
         let content: String = response[3].clone();
         if let Some(sender) = &ui_sender {
-            let document = DocumentValueInfo::new(content.clone(), 0);            
-            println!("handle status content {}, contenido sin parsear {}", document.value, content);
+            let document = DocumentValueInfo::new(content.clone(), 0);
             let _ = sender.send(AppMsg::ManageSubscribeResponse(
                 doc.to_string(),
                 "1".to_string(),
@@ -450,7 +449,6 @@ impl LocalClient {
                 doc_info.file = file.clone();
                 doc_info.decode_text();
                 let _ = sender.send(AppMsg::RefreshData(doc_info));
-            
             } else {
                 let mut doc_info = DocumentValueInfo::new(text, index);
                 doc_info.file = file.clone();
