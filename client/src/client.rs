@@ -1,11 +1,11 @@
 extern crate relm4;
 use self::relm4::Sender as UiSender;
 use crate::app::AppMsg;
-use std::collections::HashSet;
 use crate::components::structs::document_value_info::DocumentValueInfo;
 use rusty_docs::resp_parser;
 use rusty_docs::resp_parser::{format_resp_command, format_resp_publish};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::io::{BufReader, BufWriter, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::{channel, Receiver, Sender as MpscSender};
@@ -75,7 +75,6 @@ pub struct LocalClient {
     writer_registry: WriterRegistry,
     //Regsitro de respuestas ya procesadas
     processed_responses: Arc<Mutex<HashSet<String>>>,
-
 }
 
 /// Contexto de conexión para un nodo Redis.
@@ -260,19 +259,19 @@ impl LocalClient {
             return format_resp_publish(key, &client_command);
         }
 
-        if cmd_upper.contains("CHANGE-LINE") || cmd_upper.contains("REQUEST-FILE")  {
+        if cmd_upper.contains("CHANGE-LINE") || cmd_upper.contains("REQUEST-FILE") {
             println!("command: {:#?}", command);
             let splited_command: Vec<&str> = command.split('|').collect();
-            let client_command = format_resp_command(&splited_command);            
+            let client_command = format_resp_command(&splited_command);
             return format_resp_publish("llm_requests", &client_command);
         }
 
-        if cmd_upper.contains("CLIENT-LLM-RESPONSE") {                     
+        if cmd_upper.contains("CLIENT-LLM-RESPONSE") {
             let splited_command: Vec<&str> = command.split('|').collect();
             let filename = splited_command[1].to_string();
             let mut final_command = vec![splited_command[0]];
             final_command.extend_from_slice(&splited_command[2..]);
-            let client_command = format_resp_command(&final_command);            
+            let client_command = format_resp_command(&final_command);
             return format_resp_publish(&filename, &client_command);
         }
 
@@ -394,13 +393,13 @@ impl LocalClient {
             println!("Nodo de redireccion no disponible");
         } else {
             let mut new_response = response.clone();
-            
+
             if let Some(addr) = response.get(2) {
                 if let Some((_, port)) = addr.split_once(':') {
                     new_response[2] = format!("127.0.0.1:{}", port);
                 }
             }
-    
+
             let _ = Self::send_command_to_nodes(
                 new_response,
                 connect_node_sender.clone(),
@@ -474,7 +473,11 @@ impl LocalClient {
     /// # Argumentos
     /// * `response` - Respuesta recibida.
     /// * `ui_sender` - Canal para enviar mensajes a la UI.
-    fn handle_client_llm(response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>, local_addr: String) {
+    fn handle_client_llm(
+        response: Vec<String>,
+        ui_sender: Option<UiSender<AppMsg>>,
+        local_addr: String,
+    ) {
         println!("response handle_client_llm: {:?}", response);
         println!("local_addr: {}", local_addr);
 
@@ -492,7 +495,7 @@ impl LocalClient {
                             file.to_string(),
                             new_lines.to_vec(),
                         ));
-                    },
+                    }
                     "cursor" => {
                         let line = response[4].to_string();
                         let offset = response[5].to_string();
@@ -501,14 +504,12 @@ impl LocalClient {
                             line,
                             content,
                             offset,
-                            
                         ));
-                    },
+                    }
                     _ => {}
                 }
             }
-        } 
-        
+        }
     }
 
     /// Maneja respuestas de tipo ERROR, mostrando mensajes de error en la UI.
@@ -536,12 +537,11 @@ impl LocalClient {
     /// * `ui_sender` - Canal para enviar mensajes a la UI.
     fn handle_llm_response(response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) {
         if let Some(sender) = &ui_sender {
-
             let selection_mode = response[3].clone();
 
             let content = response[1].to_string();
             let file = response[2].to_string();
-            
+
             match selection_mode.as_str() {
                 "whole-file" => {
                     let mut new_lines = Vec::new();
@@ -550,7 +550,7 @@ impl LocalClient {
                         file.to_string(),
                         new_lines.to_vec(),
                     ));
-                },
+                }
                 "cursor" => {
                     let line = response[4].to_string();
                     let offset = response[5].to_string();
@@ -558,9 +558,9 @@ impl LocalClient {
                         file.to_string(),
                         line,
                         content,
-                        offset,                        
+                        offset,
                     ));
-                },
+                }
                 _ => {}
             }
         }
@@ -613,7 +613,12 @@ impl LocalClient {
                 return Err(std::io::Error::other("Socket clone failed"));
             }
         };
-        let non_idempotent_commands = vec!["ASK".to_string(), "SUBSCRIBE".to_string(), "STATUS".to_string(), "-ERR".to_string()];
+        let non_idempotent_commands = vec![
+            "ASK".to_string(),
+            "SUBSCRIBE".to_string(),
+            "STATUS".to_string(),
+            "-ERR".to_string(),
+        ];
         let mut reader: BufReader<TcpStream> = BufReader::new(client_socket);
         let cloned_last_command: Arc<Mutex<String>> = Arc::clone(&params.last_command_sent.clone());
 
@@ -632,12 +637,19 @@ impl LocalClient {
                 break;
             }
 
-            let response_id = format!("{}-{:?}", response.join("|"), client_socket_cloned.local_addr());
-        
-            if let Ok(mut processed) = params.processed_responses.lock() {                
+            let response_id = format!(
+                "{}-{:?}",
+                response.join("|"),
+                client_socket_cloned.local_addr()
+            );
+
+            if let Ok(mut processed) = params.processed_responses.lock() {
                 if !non_idempotent_commands.contains(&response[0].to_uppercase()) {
                     if processed.contains(&response_id) {
-                        println!("Respuesta duplicada detectada, omitiendo: {}", response.join(" "));
+                        println!(
+                            "Respuesta duplicada detectada, omitiendo: {}",
+                            response.join(" ")
+                        );
                         continue;
                     }
                     processed.insert(response_id);
@@ -647,7 +659,6 @@ impl LocalClient {
                     processed.clear();
                 }
             }
-
 
             let local_addr = match client_socket_cloned.local_addr() {
                 Ok(addr) => addr,
@@ -673,14 +684,16 @@ impl LocalClient {
                 RedisClientResponseType::Write => Self::handle_write(response, cloned_ui_sender),
                 RedisClientResponseType::Llm => {
                     let filename = response[2].clone();
-                    let command_parts = [filename, 
-                    response[1].clone(),
-                     response[3].clone(),
-                     response[4].clone(),
-                     response[5].clone(),
-                      local_addr.to_string()];                    
-                    Self::handle_llm_response(response, cloned_ui_sender.clone());                                                       
-                    if let Some(ui_sender) = cloned_ui_sender.clone() {                    
+                    let command_parts = [
+                        filename,
+                        response[1].clone(),
+                        response[3].clone(),
+                        response[4].clone(),
+                        response[5].clone(),
+                        local_addr.to_string(),
+                    ];
+                    Self::handle_llm_response(response, cloned_ui_sender.clone());
+                    if let Some(ui_sender) = cloned_ui_sender.clone() {
                         let _ = ui_sender.send(AppMsg::PublishLlmResponse(command_parts.to_vec()));
                     }
                 }

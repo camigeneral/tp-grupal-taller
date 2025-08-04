@@ -7,13 +7,13 @@ use std::sync::{Arc, Mutex};
 
 /// Mapa de suscriptores a documentos.
 ///
-/// Almacena para cada documento (String) una lista de IDs de clientes (Vec<String>)
+/// Almacena para cada documento (String) una lista de IDs de clientes (`Vec<String>`)
 /// que están suscritos a recibir actualizaciones de ese documento.
 pub type SubscribersMap = Arc<Mutex<HashMap<String, Vec<String>>>>;
 
 /// Mapa de sets para cada documento.
 ///
-/// Almacena para cada documento (String) un conjunto de elementos (HashSet<String>).
+/// Almacena para cada documento (String) un conjunto de elementos (`HashSet<String>`).
 /// Útil para operaciones de conjuntos como unión, intersección, etc.
 pub type SetsMap = Arc<Mutex<HashMap<String, HashSet<String>>>>;
 
