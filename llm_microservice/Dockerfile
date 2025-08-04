@@ -12,8 +12,13 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /usr/local/bin
+WORKDIR /app
 
-COPY --from=builder /app/target/release/llm_microservice /usr/local/bin/llm_microservice_bin
+# Crear directorio para logs
+RUN mkdir -p /app/logs
 
-CMD ["llm_microservice_bin"]
+COPY --from=builder /app/target/release/llm_microservice /app/llm_microservice_bin
+
+VOLUME ["/app/logs"]
+
+CMD ["/app/llm_microservice_bin"]
