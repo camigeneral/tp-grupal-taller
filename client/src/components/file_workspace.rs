@@ -182,9 +182,11 @@ impl SimpleComponent for FileWorkspace {
 
                 match file_type {
                     FileType::Text => {
-                        let items: Vec<String> = content.split("<enter>").map(|s| decode_text(s.to_string())).collect();                        
+                        let items: Vec<String> = content
+                            .split("<enter>")
+                            .map(|s| decode_text(s.to_string()))
+                            .collect();
                         let text_content = items.join("\n");
-                        println!("contenido fileworls_ {text_content}, items {:#?}", items);
                         self.files.insert(
                             (file.clone(), file_type.clone()),
                             Document::Text(items.clone()),
@@ -200,7 +202,10 @@ impl SimpleComponent for FileWorkspace {
                             .unwrap();
                     }
                     FileType::Sheet => {
-                        let mut items: Vec<String> = content.split(",").map(|s| decode_text(s.to_string())).collect();
+                        let mut items: Vec<String> = content
+                            .split(",")
+                            .map(|s| decode_text(s.to_string()))
+                            .collect();
                         while items.len() < 100 {
                             items.push(String::new());
                         }
@@ -302,7 +307,8 @@ impl SimpleComponent for FileWorkspace {
                     match doc {
                         Document::Text(ref mut doc_lines) => {
                             if line < doc_lines.len() {
-                               let original_line_decoded = decode_text(doc_lines[line].to_string());
+                                let original_line_decoded =
+                                    decode_text(doc_lines[line].to_string());
                                 let parsed_content = decode_text(content.to_string());
 
                                 // Convertís el offset (en chars) a offset en bytes
@@ -331,7 +337,6 @@ impl SimpleComponent for FileWorkspace {
 
                                 new_line.push_str(after);
                                 doc_lines[line] = parse_text(new_line);
-
                             }
                             new_content = doc_lines.join("\n");
                             println!("new_content {new_content}");
@@ -380,11 +385,13 @@ impl SimpleComponent for FileWorkspace {
                                 }
                             }
                             Document::Text(lines) => {
-
                                 if val.contains("<enter>") {
-                                    let splited_val = val.split("<enter>").collect::<Vec<_>>();                                    
+                                    let splited_val = val.split("<enter>").collect::<Vec<_>>();
                                     lines[parsed_index] = splited_val[0].to_string().clone();
-                                    lines.insert(parsed_index + 1,splited_val[1].to_string().clone());                                    
+                                    lines.insert(
+                                        parsed_index + 1,
+                                        splited_val[1].to_string().clone(),
+                                    );
                                 } else {
                                     if parsed_index < lines.len() {
                                         lines[parsed_index] = val.clone();
@@ -395,7 +402,7 @@ impl SimpleComponent for FileWorkspace {
                                         lines.insert(parsed_index, val.clone());
                                     }
                                 }
-                                
+
                                 println!("lineas {:#?}, val: {val}", lines);
                                 val = lines.join("\n");
                             }
