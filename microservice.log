@@ -211,28 +211,3 @@ doc1.txt/++/estoy-en-doc1,escribiendo<space>en<space>doc1
 [2025-07-16 14:13:37] Write recibido: índice 4, contenido '<delete>', archivo doc1.txt
 [2025-07-16 14:13:37] Enviando comandos SET para persistir 3 documentos
 [2025-07-16 14:13:40] Enviando comandos SET para persistir 3 documentos
-[2025-08-04 00:29:39] Microservicio conectandose al server de redis en "node0:4000"
-[2025-08-04 00:29:39] Microservicio envia "Microservicio\r\n"
-[2025-08-04 00:29:39] Document recibido: lm_prueba.txt con 1204 líneas del stream 0.0.0.0:4000
-[2025-08-04 00:29:39] Document recibido: prueba.txt con 58 líneas del stream 0.0.0.0:4000
-[2025-08-04 00:29:39] Microservicio envia "node8:4008"
-[2025-08-04 00:29:39] Microservicio envia "node7:4007"
-[2025-08-04 00:29:39] Microservicio envia "node6:4006"
-[2025-08-04 00:29:39] Document recibido: doc1.txt con 92 líneas del stream 0.0.0.0:4006
-[2025-08-04 00:29:39] Microservicio envia "node5:4005"
-[2025-08-04 00:29:39] Document recibido: doc1.txt con 92 líneas del stream 0.0.0.0:4005
-[2025-08-04 00:29:39] Microservicio envia "node4:4004"
-[2025-08-04 00:29:39] Document recibido: prueba.txt con 58 líneas del stream 0.0.0.0:4004
-[2025-08-04 00:29:39] Document recibido: lm_prueba.txt con 1204 líneas del stream 0.0.0.0:4004
-[2025-08-04 00:29:39] Microservicio envia "node3:4003"
-[2025-08-04 00:29:39] Document recibido: lm_prueba.txt con 1204 líneas del stream 0.0.0.0:4003
-[2025-08-04 00:29:39] Document recibido: prueba.txt con 58 líneas del stream 0.0.0.0:4003
-[2025-08-04 00:29:39] Microservicio envia "node2:4002"
-[2025-08-04 00:29:39] Microservicio envia "node1:4001"
-[2025-08-04 00:29:39] Enviando comandos SET para persistir 3 documentos
-[2025-08-04 00:29:39] Document recibido: doc1.txt con 92 líneas del stream 0.0.0.0:4001
-[2025-08-04 00:29:42] Enviando comandos SET para persistir 3 documentos
-[2025-08-04 00:29:45] Enviando comandos SET para persistir 3 documentos
-[2025-08-04 00:29:48] Enviando comandos SET para persistir 3 documentos
-[2025-08-04 00:29:51] Enviando comandos SET para persistir 3 documentos
-[2025-08-04 00:29:54] Enviando comandos SET para persistir 3 documentos
