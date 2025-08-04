@@ -800,16 +800,25 @@ impl Microservice {
                             ];
                             let message_resp = format_resp_command(message_parts);
                             let command_resp = format_resp_publish(&"llm_requests", &message_resp);
-                            if let Err(e) = Self::write_to_stream_with_error_handling(
-                                &mut microservice_socket,
-                                command_resp.as_bytes(),
-                                &document,
-                                &node_streams,
-                            ) {
-                                println!(
-                                    "Error al enviar mensaje de actualizacion de archivo: {}",
-                                    e
-                                );
+                            log_clone.log(&format!(
+                                "Documento encontrado para LLMResponse: {}",
+                                document
+                            ));
+
+                            if let Ok(mut streams) = node_streams.lock() {
+                                for (node_id, stream) in streams.iter_mut() {
+                                    if let Err(e) = Self::write_to_stream_with_error_handling(
+                                        stream,
+                                        command_resp.as_bytes(),
+                                        node_id,
+                                        &node_streams,
+                                    ) {
+                                        println!(
+                                            "Error al enviar mensaje de actualizacion de archivo a nodo {}: {}",
+                                            node_id, e
+                                        );
+                                    }
+                                }
                             }
                         }
                     }

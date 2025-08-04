@@ -204,16 +204,10 @@ impl LlmMicroservice {
             let data_clone = data.to_vec();
             let node_streams_clone = Arc::clone(node_streams);
 
-            println!(
-                "[DEBUG] Stream encontrado, intentando obtener lock del stream del nodo: {}",
-                node_id_clone
-            );
-
             match stream_arc.lock() {
                 Ok(mut stream) => match stream.write_all(&data_clone) {
                     Ok(_) => match stream.flush() {
                         Ok(_) => {
-                            println!("[DEBUG] Flush exitoso para el nodo {}", node_id_clone);
                         }
                         Err(e) => {
                             eprintln!(
@@ -722,7 +716,7 @@ impl LlmMicroservice {
 
                     let message_resp = resp_parser::format_resp_command(message_parts);
                     let command_resp =
-                        resp_parser::format_resp_publish(&"llm_requests", &message_resp);
+                        resp_parser::format_resp_publish(&"notifications", &message_resp);
 
                     println!(
                         "Enviando publish: {}",
@@ -735,13 +729,7 @@ impl LlmMicroservice {
                         )
                         .as_str(),
                     );
-
-                    Self::send_to_node(
-                        &node_streams,
-                        &correct_addr_clone.to_string(),
-                        command_resp.as_bytes(),
-                        logger_clone,
-                    );
+                    Self::send_to_all_nodes(&node_streams, command_resp.as_bytes(), logger_clone);                    
                 }
 
                 LlmPromptMessage::RequestedFile {
