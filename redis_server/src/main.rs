@@ -472,12 +472,6 @@ fn handle_client(
         let is_subscribed_command = command == "subscribe";
         if is_subscribed_command && !response.get_resp().contains("ASK") {
             notify_microservice(Arc::clone(&ctx), doc.clone(), client_id.to_string(), false);
-
-            if let Ok(clients_guard) = ctx.active_clients.lock() {
-                if let Some(client) = clients_guard.get(&client_id) {
-                    subscribe_to_llm_request_channel(Arc::clone(&ctx), client.clone());
-                }
-            }
         }
 
         if command.to_lowercase() == "set" {
