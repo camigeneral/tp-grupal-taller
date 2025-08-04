@@ -354,8 +354,8 @@ fn handle_new_client_connection(
                 subscribe_to_internal_channel(Arc::clone(&ctx), client.clone())
             }
             if client_type == ClientType::LlmMicroservice {
-               subscribe_to_llm_request_channel(Arc::clone(&ctx), client.clone());
-            }            
+                subscribe_to_llm_request_channel(Arc::clone(&ctx), client.clone());
+            }
         }
     }
 
