@@ -747,9 +747,19 @@ impl Microservice {
                                                 docs.insert(document.clone(), new_document);
                                                 println!("Insertado en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, content);
                                             } else {
+                                                let parsed_content =
+                                                    &decode_text(content.to_string());
+                                                let mut new_line = String::new();
+                                                                                              
+                                                new_line.push_str(&parsed_content);
+                                                new_line.push_str(" ");                                                
+                                                new_line = parse_text(new_line);
+                                                new_lines.push(new_line);
+                                                let new_document = Document::Text(new_lines);
+                                                docs.insert(document.clone(), new_document);
+                                                println!("Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, content);
                                                 log_clone.log(&format!(
-                                                    "Línea {} fuera de rango para documento '{}'",
-                                                    parsed_line, document
+                                                    "Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, content
                                                 ));
                                             }
                                         }
