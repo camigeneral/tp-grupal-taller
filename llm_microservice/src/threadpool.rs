@@ -1,4 +1,7 @@
-use std::sync::{mpsc::{channel, Receiver, Sender} ,Arc, Mutex};
+use std::sync::{
+    mpsc::{channel, Receiver, Sender},
+    Arc, Mutex,
+};
 use std::thread;
 /// Un pool de hilos simple para ejecutar tareas concurrentemente.
 ///
@@ -57,7 +60,7 @@ use std::thread;
 /// ```
 pub struct ThreadPool {
     workers: Vec<Worker>,
-    sender: Option<Sender<Job>>, 
+    sender: Option<Sender<Job>>,
 }
 
 /// Representa un hilo trabajador dentro del pool.
@@ -82,7 +85,7 @@ impl ThreadPool {
     /// let pool = ThreadPool::new(4);
     /// ```
     pub fn new(size: usize) -> ThreadPool {
-        let (sender, receiver) = channel(); 
+        let (sender, receiver) = channel();
         let receiver = Arc::new(Mutex::new(receiver));
 
         let mut workers = Vec::with_capacity(size);
@@ -124,10 +127,10 @@ impl ThreadPool {
     ///
     /// Cierra el canal de envío y espera a que cada worker termine su ejecución.
     /// Útil para una finalización ordenada del programa.
-    pub fn shutdown(&mut self) {        
+    pub fn shutdown(&mut self) {
         if let Some(sender) = self.sender.take() {
-            drop(sender); 
-        }                
+            drop(sender);
+        }
         for worker in &mut self.workers {
             if let Some(thread) = worker.thread.take() {
                 thread.join().unwrap();

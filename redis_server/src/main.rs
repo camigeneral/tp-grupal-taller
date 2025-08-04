@@ -276,7 +276,7 @@ fn handle_new_client_connection(
         } else {
             ClientType::LlmMicroservice
         };
-        
+
         if client_type == ClientType::Microservice {
             subscribe_microservice_to_all_docs(
                 client_stream_clone,
@@ -287,7 +287,7 @@ fn handle_new_client_connection(
                 ctx.main_addrs.clone(),
                 client_type.clone(),
             );
-        }    
+        }
 
         client_type
     } else {
@@ -321,7 +321,7 @@ fn handle_new_client_connection(
                 subscribe_to_internal_channel(Arc::clone(&ctx), client.clone())
             }
             subscribe_to_llm_request_channel(Arc::clone(&ctx), client.clone())
-        }           
+        }
     }
 
     let client_addr_str = client_addr.to_string();
@@ -355,10 +355,7 @@ fn handle_new_client_connection(
 /// * `ctx` - Contexto del servidor
 /// * `client` - Cliente microservicio a suscribir
 ///
-pub fn subscribe_to_llm_request_channel(
-    ctx: Arc<ServerContext>,
-    client: client_info::Client,
-) {
+pub fn subscribe_to_llm_request_channel(ctx: Arc<ServerContext>, client: client_info::Client) {
     let mut channels_guard = match ctx.llm_channel.lock() {
         Ok(lock) => lock,
         Err(poisoned) => poisoned.into_inner(),
@@ -387,7 +384,6 @@ pub fn subscribe_to_internal_channel(ctx: Arc<ServerContext>, client: client_inf
     channels_guard.insert("notifications".to_string(), client);
     println!("Microservicio suscrito al canal interno subscriptions");
 }
-
 
 /// Maneja la comunicación con un cliente conectado.
 ///
@@ -666,7 +662,7 @@ pub fn notify_microservice(
         &ctx.active_clients,
         &ctx.logged_clients,
         &ctx.internal_subscription_channel,
-        &ctx.llm_channel
+        &ctx.llm_channel,
     );
 }
 
@@ -747,8 +743,7 @@ pub fn resolve_key_location(
                 && p.hash_range.1 > hashed_key
         }) {
             let ask_address = utils::get_node_address(peer_node.port - 10000);
-            let response_string =
-                format!("ASK {} {}", hashed_key, ask_address);
+            let response_string = format!("ASK {} {}", hashed_key, ask_address);
             // let response_string =
             //     format!("ASK {} 127.0.0.1:{}", hashed_key, peer_node.port - 10000);
             let redis_redirect_response = CommandResponse::Array(vec![
@@ -1063,9 +1058,6 @@ fn initialize_llm_request_channel() -> LlmNodesMap {
     };
 
     vector.push(client);
-    internal_channels.insert(
-        "llm_request".to_string(),
-        vector,
-    );
+    internal_channels.insert("llm_request".to_string(), vector);
     Arc::new(Mutex::new(internal_channels))
 }

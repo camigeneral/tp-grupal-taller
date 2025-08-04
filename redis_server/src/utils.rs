@@ -1,6 +1,6 @@
+use rusty_docs::vars::DOCKER;
 use std::env;
 use std::path::Path;
-use rusty_docs::vars::DOCKER;
 
 pub fn get_resource_path<P: AsRef<Path>>(relative_path: P) -> String {
     let cwd = env::current_dir().expect("Failed to get directory");

@@ -287,7 +287,7 @@ impl SimpleComponent for FileWorkspace {
                 }
             }
 
-            FileWorkspaceMsg::UpdateLLMFile(document, line , offset , content ) => {
+            FileWorkspaceMsg::UpdateLLMFile(document, line, offset, content) => {
                 let file_type = if document.ends_with(".xlsx") {
                     FileType::Sheet
                 } else {
@@ -296,7 +296,6 @@ impl SimpleComponent for FileWorkspace {
 
                 let file_editor_sender = self.file_editor_ctrl.sender().clone();
                 if let Some(doc) = self.files.get_mut(&(document.clone(), file_type.clone())) {
-
                     let mut new_content = String::new();
                     match doc {
                         Document::Text(ref mut doc_lines) => {
@@ -304,20 +303,20 @@ impl SimpleComponent for FileWorkspace {
                                 let original_line = &decode_text(doc_lines[line].to_string());
                                 let min_offset = offset.min(original_line.len());
                                 let mut new_line = String::new();
-                                let parsed_content = &decode_text(content.to_string()); 
+                                let parsed_content = &decode_text(content.to_string());
                                 new_line.push_str(&original_line[..min_offset]);
                                 new_line.push_str(" ");
                                 new_line.push_str(&parsed_content);
                                 new_line.push_str(" ");
                                 new_line.push_str(&original_line[min_offset..]);
                                 new_line = parse_text(new_line);
-                                doc_lines[line] = new_line;                            
+                                doc_lines[line] = new_line;
                             }
                             new_content = doc_lines.join("\n");
                             println!("new_content {new_content}");
-                        },
+                        }
                         _ => {}
-                    };      
+                    };
 
                     let mut document_info = DocumentValueInfo::new(new_content, line as i32);
                     document_info.decode_text();
@@ -332,7 +331,6 @@ impl SimpleComponent for FileWorkspace {
                         .unwrap();
                 }
             }
-
 
             FileWorkspaceMsg::UpdateFile(doc_info) => {
                 let file_type = if doc_info.file.ends_with(".xlsx") {
@@ -409,7 +407,7 @@ impl SimpleComponent for FileWorkspace {
     }
 }
 
-pub fn parse_text(value: String)-> String {
+pub fn parse_text(value: String) -> String {
     let val = value.clone();
     let mut value_clone = if value.trim_end_matches('\n').is_empty() {
         "<delete>".to_string()
@@ -420,8 +418,8 @@ pub fn parse_text(value: String)-> String {
     return value_clone;
 }
 
-pub fn decode_text(value: String)-> String {
-    let  value_clone = value.clone();
+pub fn decode_text(value: String) -> String {
+    let value_clone = value.clone();
     value_clone
         .replace("<space>", " ")
         .replace("<enter>", "\n")

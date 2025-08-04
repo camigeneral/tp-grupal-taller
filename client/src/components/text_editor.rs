@@ -215,17 +215,17 @@ impl SimpleComponent for TextEditorModel {
     fn update(&mut self, message: TextEditorMessage, sender: ComponentSender<Self>) {
         match message {
             TextEditorMessage::SendPrompt => {
-                if self.prompt.len() == 0{
+                if self.prompt.len() == 0 {
                     return;
                 }
-             
+
                 if let Some((line, offset)) = self.cursor_position.borrow().clone() {
                     let mut document = DocumentValueInfo::new(self.content.clone(), line);
                     document.offset = offset;
                     document.prompt = self.prompt.clone();
                     document.file = self.file_name.clone();
                     document.selection_mode = self.selection_mode.to_string();
-                    self.prompt = "".to_string(); 
+                    self.prompt = "".to_string();
                     let _ = sender.output(TextEditorOutputMessage::SendPrompt(document));
                 }
             }
