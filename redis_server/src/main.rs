@@ -363,7 +363,7 @@ pub fn subscribe_to_llm_request_channel(
         Ok(lock) => lock,
         Err(poisoned) => poisoned.into_inner(),
     };
-
+    println!("Se suscribio a llm_channesl : {:#?}", client);
     channels_guard
         .entry("llm_requests".to_string())
         .or_insert_with(Vec::new)
