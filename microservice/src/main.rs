@@ -833,8 +833,8 @@ impl Microservice {
 /// Convierte texto normal a formato codificado para el sistema
 ///
 /// Esta función toma texto normal y lo convierte al formato interno del sistema,
-/// reemplazando espacios con "<space>", saltos de línea con "<enter>", y
-/// strings vacíos con "<delete>".
+/// reemplazando espacios con "`<space>`", saltos de línea con "`<enter>`", y
+/// strings vacíos con "`<delete>`".
 ///
 /// # Argumentos
 ///
@@ -856,9 +856,9 @@ pub fn parse_text(value: String)-> String {
 
 /// Convierte texto codificado a formato normal
 ///
-/// Esta función toma un string codificado (con "<space>", "<enter>", "<delete>")
-/// y lo convierte a un string normal, reemplazando "<space>" con espacios,
-/// "<enter>" con saltos de línea, y "<delete>" con strings vacíos.
+/// Esta función toma un string codificado (con "`<space>`", "`<enter>`", "`<delete>`")
+/// y lo convierte a un string normal, reemplazando "`<space>`" con espacios,
+/// "`<enter>`" con saltos de línea, y "`<delete>`" con strings vacíos.
 ///
 /// # Argumentos
 ///
