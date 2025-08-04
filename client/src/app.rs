@@ -74,6 +74,7 @@ pub enum AppMsg {
     ManageUnsubscribeResponse(String),
     SetContentFileCommand(String),
     Error(String),
+    ErrorLLM(String),
     /// Mensaje para alternar la visibilidad del popover para nuevos archivos.
     ToggleNewFilePopover,
     SetFileName(String),
@@ -90,7 +91,7 @@ pub enum AppMsg {
     SendPrompt(DocumentValueInfo),
     UpdateAllFileData(String, Vec<String>),
     UpdateLineFile(String, String, String, String),
-    PublishLlmResponse(Vec<String>),    
+    PublishLlmResponse(Vec<String>),
 }
 
 #[relm4::component(pub)]
@@ -329,6 +330,10 @@ impl SimpleComponent for AppModel {
             AppMsg::Error(error_message) => {
                 self.error_modal.emit(ErrorModalMsg::Show(error_message));
             }
+            AppMsg::ErrorLLM(error_message) => {
+                self.error_modal.emit(ErrorModalMsg::Show(error_message));
+                self.loading_modal.emit(LoadingModalMsg::Hide);
+            }
             AppMsg::PrepareAndExecuteCommand(command, username) => {
                 self.command = command;
                 self.username = username;
@@ -401,28 +406,20 @@ impl SimpleComponent for AppModel {
                 sender.input(AppMsg::ExecuteCommand);
             }
 
-            AppMsg::SendPrompt(doc_info) => {                
+            AppMsg::SendPrompt(doc_info) => {
                 self.command = match doc_info.selection_mode.as_str() {
                     "cursor" => format!(
                         "change-line|{}|{}|{}|{}",
-                        doc_info.file,                                    
-                        doc_info.index,
-                        doc_info.offset,
-                        doc_info.prompt
+                        doc_info.file, doc_info.index, doc_info.offset, doc_info.prompt
                     ),
-                    "whole-file" => format!(
-                        "request-file|{}|{}",
-                        doc_info.file,                        
-                        doc_info.prompt
-                    ),
-                    _ => String::new()
+                    "whole-file" => format!("request-file|{}|{}", doc_info.file, doc_info.prompt),
+                    _ => String::new(),
                 };
-                
+
                 self.loading_modal.emit(LoadingModalMsg::Show);
                 sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::AddContent(doc_info) => {
-                println!("Doc info: {:#?}", doc_info);
                 self.command = format!(
                     "WRITE|{}|{}|{}|{}",
                     doc_info.index, doc_info.value, doc_info.timestamp, doc_info.file
@@ -514,9 +511,14 @@ impl SimpleComponent for AppModel {
 
                 self.loading_modal.emit(LoadingModalMsg::Hide);
                 self.files_manager_cont
-                    .emit(FileWorkspaceMsg::UpdateLLMFile(file, parsed_index, parsed_offset, content));
+                    .emit(FileWorkspaceMsg::UpdateLLMFile(
+                        file,
+                        parsed_index,
+                        parsed_offset,
+                        content,
+                    ));
             }
-            
+
             AppMsg::CloseApplication => {
                 if let Some(channel_sender) = &self.command_sender {
                     if let Err(e) = channel_sender.send("close".to_string()) {
@@ -642,8 +644,15 @@ impl SimpleComponent for AppModel {
                     .emit(FileWorkspaceMsg::AddFile(file_name, doc_type));
             }
             AppMsg::PublishLlmResponse(resp_command) => {
-                let resp_command_str = resp_command.iter().map(|s| s.to_string()).collect::<Vec<String>>().join("|");
-                self.command = format!("client-llm-response|{}|{}", resp_command[0], resp_command_str);
+                let resp_command_str = resp_command
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<String>>()
+                    .join("|");
+                self.command = format!(
+                    "client-llm-response|{}|{}",
+                    resp_command[0], resp_command_str
+                );
                 sender.input(AppMsg::ExecuteCommand);
             }
         }

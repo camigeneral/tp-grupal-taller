@@ -1,95 +1,164 @@
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{
+    mpsc::{channel, Receiver, Sender},
+    Arc, Mutex,
+};
 use std::thread;
+/// Un pool de hilos simple para ejecutar tareas concurrentemente.
+///
+/// # Descripción general
+/// El `ThreadPool` permite ejecutar múltiples tareas (jobs) en paralelo utilizando un número fijo de hilos (workers).
+/// Cada tarea es una función o closure que se envía al pool mediante el método `execute`.
+/// Los workers esperan nuevas tareas en un canal y las ejecutan a medida que llegan.
+///
+/// # Funcionamiento interno
+/// - Al crear el pool (`ThreadPool::new(size)`), se inicializan `size` workers.
+/// - Cada worker es un hilo que espera tareas en un canal compartido.
+/// - Cuando se llama a `execute`, la tarea se envía al canal.
+/// - Un worker toma la tarea del canal y la ejecuta.
+/// - Si el canal se cierra (por ejemplo, al llamar a `shutdown`), los workers terminan su bucle y el hilo se cierra.
+///
+/// # Diagrama ASCII
+/// ```text
+/// +-------------------+
+/// |   ThreadPool      |
+/// +-------------------+
+/// | [Worker 0]        |
+/// | [Worker 1]        |
+/// |   ...             |
+/// | [Worker N-1]      |
+/// +-------------------+
+///          |
+///          v
+///   +----------------+
+///   |   Sender<Job>  |
+///   +----------------+
+///          |
+///          v
+///   +----------------+
+///   |  Receiver<Job> |<---------------------------+
+///   +----------------+                            |
+///          |                                     |
+///          v                                     |
+///   +----------------+    +----------------+     |
+///   |   Worker 0     |    |   Worker 1     | ... |
+///   +----------------+    +----------------+     |
+///   | loop {         |    | loop {         |     |
+///   |   job = recv() |    |   job = recv() |     |
+///   |   job()        |    |   job()        |     |
+///   | }              |    | }              |     |
+///   +----------------+    +----------------+     |
+///          ^                                     |
+///          +-------------------------------------+
+/// ```
+///
+/// # Ejemplo de uso
+/// ```text
+/// let pool = ThreadPool::new(4);
+/// pool.execute(|| {
+///     println!("Tarea ejecutada en un hilo del pool");
+/// });
+/// ```
+pub struct ThreadPool {
+    workers: Vec<Worker>,
+    sender: Option<Sender<Job>>,
+}
 
-enum Message {
-    NewJob(Job),
-    Terminate,
+/// Representa un hilo trabajador dentro del pool.
+///
+/// Cada worker espera tareas en el canal y las ejecuta en un bucle.
+/// Cuando el canal se cierra, el worker termina.
+struct Worker {
+    id: usize,
+    thread: Option<thread::JoinHandle<()>>,
 }
 
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
-pub struct ThreadPool {
-    workers: Vec<Worker>,
-    sender: mpsc::Sender<Message>,
-}
-
 impl ThreadPool {
+    /// Crea un nuevo pool de hilos con la cantidad de workers especificada.
+    ///
+    /// # Argumentos
+    /// * `size` - Número de hilos (workers) en el pool.
+    ///
+    /// # Ejemplo
+    /// ```text
+    /// let pool = ThreadPool::new(4);
+    /// ```
     pub fn new(size: usize) -> ThreadPool {
-        assert!(size > 0);
-
-        let (sender, receiver) = mpsc::channel();
+        let (sender, receiver) = channel();
         let receiver = Arc::new(Mutex::new(receiver));
+
         let mut workers = Vec::with_capacity(size);
 
         for id in 0..size {
             workers.push(Worker::new(id, Arc::clone(&receiver)));
         }
 
-        ThreadPool { workers, sender }
+        ThreadPool {
+            workers,
+            sender: Some(sender),
+        }
     }
 
+    /// Envía una tarea (closure) al pool para ser ejecutada por algún worker disponible.
+    ///
+    /// # Argumentos
+    /// * `f` - Closure o función que será ejecutada en un hilo del pool.
+    ///
+    /// # Ejemplo
+    /// ```text
+    /// pool.execute(|| {
+    ///     println!("Tarea concurrente");
+    /// });
+    /// ```
+    ///
+    /// # Funcionamiento
+    /// - El closure se empaqueta en un `Box<dyn FnOnce()>` y se envía por el canal.
+    /// - Algún worker que esté esperando en el canal recibirá la tarea y la ejecutará.
     pub fn execute<F>(&self, f: F)
     where
         F: FnOnce() + Send + 'static,
     {
-        let job: Job = Box::new(f);
-        if let Err(e) = self.sender.send(Message::NewJob(job)) {
-            eprintln!("Error enviando tarea al thread pool: {}", e);
-        }
+        let job = Box::new(f);
+        self.sender.as_ref().unwrap().send(job).unwrap();
     }
-}
 
-impl Drop for ThreadPool {
-    fn drop(&mut self) {
-        println!("Enviando mensajes de terminación a los workers.");
-
-        for _ in &self.workers {
-            if let Err(e) = self.sender.send(Message::Terminate) {
-                eprintln!("Error enviando mensaje de terminación: {}", e);
-            }
+    /// Finaliza el pool de hilos, esperando que todos los workers terminen.
+    ///
+    /// Cierra el canal de envío y espera a que cada worker termine su ejecución.
+    /// Útil para una finalización ordenada del programa.
+    pub fn shutdown(&mut self) {
+        if let Some(sender) = self.sender.take() {
+            drop(sender);
         }
-
-        println!("Cerrando todos los workers.");
-
         for worker in &mut self.workers {
-            println!("Esperando a que finalice el worker {}", worker.id);
             if let Some(thread) = worker.thread.take() {
-                if let Err(e) = thread.join() {
-                    eprintln!("Error al esperar al worker {}: {:?}", worker.id, e);
-                }
+                thread.join().unwrap();
+                println!("Worker {} cerrado", worker.id);
             }
         }
+        println!("Todos los workers han terminado correctamente");
     }
-}
-
-struct Worker {
-    id: usize,
-    thread: Option<thread::JoinHandle<()>>,
 }
 
 impl Worker {
-    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Message>>>) -> Worker {
+    /// Crea un nuevo worker que espera tareas en el canal y las ejecuta.
+    ///
+    /// # Argumentos
+    /// * `id` - Identificador único del worker.
+    /// * `receiver` - Canal compartido desde donde recibe las tareas.
+    fn new(id: usize, receiver: Arc<Mutex<Receiver<Job>>>) -> Worker {
         let thread = thread::spawn(move || loop {
-            println!("Worker {} esperando tarea...", id);
-            let message = match receiver.lock() {
-                Ok(guard) => guard.recv(),
-                Err(e) => {
-                    eprintln!("Worker {} no pudo bloquear el receiver: {}", id, e);
-                    return;
-                }
-            };
+            println!("Worker {id} Iniciado y esperando un job...");
+            let message = receiver.lock().unwrap().recv();
 
             match message {
-                Ok(Message::NewJob(job)) => {
-                    println!("Worker {} recibió un trabajo, ejecutando.", id);
+                Ok(job) => {
+                    println!("Worker {id} got a job; executing.");
                     job();
                 }
-                Ok(Message::Terminate) => {
-                    println!("Worker {} recibió orden de terminación.", id);
-                    break;
-                }
-                Err(e) => {
-                    println!("Worker {} no pudo recibir mensaje: {}", id, e);
+                Err(_) => {
+                    println!("Worker {id} disconnected; shutting down.");
                     break;
                 }
             }

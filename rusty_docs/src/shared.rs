@@ -19,17 +19,17 @@ pub enum MicroserviceMessage {
         file: String,
     },
 
-    RequestFile {        
+    RequestFile {
         document: String,
         prompt: String,
     },
-    
+
     ClientLlmResponse {
         document: String,
         content: String,
         selection_mode: String,
         line: String,
-        offset:String
+        offset: String,
     },
     Error(String),
     Unknown(String),
@@ -62,11 +62,18 @@ impl MicroserviceMessage {
                 }
             }
 
-            "CLIENT-LLM-RESPONSE" => MicroserviceMessage::ClientLlmResponse { document: parts[1].clone(), content: parts[2].clone(), selection_mode: parts[3].clone(), line: parts[4].clone(), offset: parts[5].clone() },
+            "CLIENT-LLM-RESPONSE" => MicroserviceMessage::ClientLlmResponse {
+                document: parts[1].clone(),
+                content: parts[2].clone(),
+                selection_mode: parts[3].clone(),
+                line: parts[4].clone(),
+                offset: parts[5].clone(),
+            },
 
-            "MICROSERVICE-REQUEST-FILE" => {
-                MicroserviceMessage::RequestFile { document: parts[1].clone(), prompt: parts[2].clone() }
-            }
+            "MICROSERVICE-REQUEST-FILE" => MicroserviceMessage::RequestFile {
+                document: parts[1].clone(),
+                prompt: parts[2].clone(),
+            },
 
             cmd if cmd.starts_with("-ERR") => MicroserviceMessage::Error(cmd.to_string()),
             other => MicroserviceMessage::Unknown(other.to_string()),

@@ -33,7 +33,7 @@ pub fn execute_command(
             document_subscribers,
             active_clients,
             suscription_channel,
-            llm_channel
+            llm_channel,
         ),
         "scard" => set::handle_scard(&request, shared_sets),
         "smembers" => set::handle_smembers(&request, shared_sets),

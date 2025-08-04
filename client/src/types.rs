@@ -1,4 +1,5 @@
 /// Enum que representa los diferentes tipos de respuesta del cliente Redis.
+#[derive(Debug)]
 pub enum RedisClientResponseType {
     Ask,
     Status,
@@ -7,17 +8,24 @@ pub enum RedisClientResponseType {
     Llm,
     ClientLlm,
     Other,
+    Ignore,
 }
 
 /// Implementación para convertir un &str en un RedisClientResponseType.
-impl From<&str> for RedisClientResponseType {
-    fn from(s: &str) -> Self {
-        match s.to_uppercase().as_str() {
+impl  RedisClientResponseType {
+    pub fn from_parts(parts: Vec<String>) -> Self {
+        if parts.is_empty() {
+            return RedisClientResponseType::Error;
+        }
+
+        match parts[0].to_uppercase().as_str() {
             "ASK" => Self::Ask,
             "STATUS" => Self::Status,
             "WRITE" => Self::Write,
             "LLM-RESPONSE" => Self::Llm,
             "CLIENT-LLM-RESPONSE" => Self::ClientLlm,
+            "LLM-RESPONSE-ERROR" => Self::Error,
+            "OK" => Self::Ignore,
             s if s.starts_with("-ERR") => Self::Error,
             _ => Self::Other,
         }
