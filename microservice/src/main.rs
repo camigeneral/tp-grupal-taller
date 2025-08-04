@@ -152,7 +152,7 @@ impl Microservice {
         let main_address = format!("node0:4000");
 
         println!("Conectándome al server de redis en {:?}", main_address);
-        let mut socket: TcpStream = TcpStream::connect(&main_address)?;
+        let mut socket: TcpStream = Self::connect_to_node_with_retry(&main_address, &self.logger)?;
         self.logger.log(&format!(
             "Microservicio conectandose al server de redis en {:?}",
             main_address
@@ -214,7 +214,7 @@ impl Microservice {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let other_ports = get_nodes_addresses();
         for addr in other_ports {
-            match TcpStream::connect(&addr) {
+            match Self::connect_to_node_with_retry(&addr, &self.logger) {
                 Ok(mut extra_socket) => {
                     self.logger.log(&format!("Microservicio envia {:?}", addr));
                     println!("Microservicio conectado a nodo adicional: {}", addr);
@@ -770,6 +770,48 @@ impl Microservice {
                     std::io::ErrorKind::Other,
                     format!("Error obteniendo lock de node_streams: {}", e),
                 )))
+            }
+        }
+    }
+
+    /// Intenta conectarse a un nodo con reintentos y espera entre intentos.
+    fn connect_to_node_with_retry(address: &str, logger: &Logger) -> std::io::Result<TcpStream> {
+        let mut attempts = 0;
+        const MAX_ATTEMPTS: u32 = 15;
+        const RETRY_DELAY_SECONDS: u64 = 10;
+
+        loop {
+            attempts += 1;
+            logger.log(&format!("Intento {} de conectar a {}", attempts, address));
+            println!("Intento {} de conectar a {}", attempts, address);
+
+            match TcpStream::connect(address) {
+                Ok(socket) => {
+                    logger.log(&format!("Conexión exitosa a {}", address));
+                    println!("Conexión exitosa a {}", address);
+                    return Ok(socket);
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Error conectando a {} (intento {}): {}",
+                        address, attempts, e
+                    );
+                    logger.log(&format!("Error conectando a {} (intento {}): {}", address, attempts, e));
+
+                    if attempts >= MAX_ATTEMPTS {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::ConnectionRefused,
+                            format!(
+                                "No se pudo conectar a {} después de {} intentos",
+                                address, MAX_ATTEMPTS
+                            ),
+                        ));
+                    }
+
+                    println!("Reintentando en {} segundos...", RETRY_DELAY_SECONDS);
+                    logger.log(&format!("Reintentando en {} segundos...", RETRY_DELAY_SECONDS));
+                    thread::sleep(Duration::from_secs(RETRY_DELAY_SECONDS));
+                }
             }
         }
     }
