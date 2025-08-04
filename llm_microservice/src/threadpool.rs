@@ -1,65 +1,11 @@
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc::{channel, Receiver, Sender} ,Arc, Mutex};
 use std::thread;
-
-enum Message {
-    NewJob(Job),
-    Terminate,
-}
 
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
 pub struct ThreadPool {
     workers: Vec<Worker>,
-    sender: mpsc::Sender<Message>,
-}
-
-impl ThreadPool {
-    pub fn new(size: usize) -> ThreadPool {
-        assert!(size > 0);
-
-        let (sender, receiver) = mpsc::channel();
-        let receiver = Arc::new(Mutex::new(receiver));
-        let mut workers = Vec::with_capacity(size);
-
-        for id in 0..size {
-            workers.push(Worker::new(id, Arc::clone(&receiver)));
-        }
-
-        ThreadPool { workers, sender }
-    }
-
-    pub fn execute<F>(&self, f: F)
-    where
-        F: FnOnce() + Send + 'static,
-    {
-        let job: Job = Box::new(f);
-        if let Err(e) = self.sender.send(Message::NewJob(job)) {
-            eprintln!("Error enviando tarea al thread pool: {}", e);
-        }
-    }
-}
-
-impl Drop for ThreadPool {
-    fn drop(&mut self) {
-        println!("Enviando mensajes de terminación a los workers.");
-
-        for _ in &self.workers {
-            if let Err(e) = self.sender.send(Message::Terminate) {
-                eprintln!("Error enviando mensaje de terminación: {}", e);
-            }
-        }
-
-        println!("Cerrando todos los workers.");
-
-        for worker in &mut self.workers {
-            println!("Esperando a que finalice el worker {}", worker.id);
-            if let Some(thread) = worker.thread.take() {
-                if let Err(e) = thread.join() {
-                    eprintln!("Error al esperar al worker {}: {:?}", worker.id, e);
-                }
-            }
-        }
-    }
+    sender: Option<Sender<Job>>, 
 }
 
 struct Worker {
@@ -67,29 +13,59 @@ struct Worker {
     thread: Option<thread::JoinHandle<()>>,
 }
 
+impl ThreadPool {
+    pub fn new(size: usize) -> ThreadPool {
+        let (sender, receiver) = channel(); 
+        let receiver = Arc::new(Mutex::new(receiver));
+
+        let mut workers = Vec::with_capacity(size);
+
+        for id in 0..size {
+            workers.push(Worker::new(id, Arc::clone(&receiver)));
+        }
+
+        ThreadPool {
+            workers,
+            sender: Some(sender),
+        }
+    }
+
+    pub fn execute<F>(&self, f: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        let job = Box::new(f);
+        self.sender.as_ref().unwrap().send(job).unwrap();
+    }
+
+    pub fn shutdown(&mut self) {        
+        if let Some(sender) = self.sender.take() {
+            drop(sender); 
+        }                
+        for worker in &mut self.workers {
+            if let Some(thread) = worker.thread.take() {
+                thread.join().unwrap();
+                println!("Worker {} cerrado", worker.id);
+            }
+        }
+        println!("Todos los workers han terminado correctamente");
+    }
+}
+
+
 impl Worker {
-    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Message>>>) -> Worker {
+    fn new(id: usize, receiver: Arc<Mutex<Receiver<Job>>>) -> Worker {
         let thread = thread::spawn(move || loop {
-            println!("Worker {} esperando tarea...", id);
-            let message = match receiver.lock() {
-                Ok(guard) => guard.recv(),
-                Err(e) => {
-                    eprintln!("Worker {} no pudo bloquear el receiver: {}", id, e);
-                    return;
-                }
-            };
+            println!("Worker {id} Iniciado y esperando un job...");
+            let message = receiver.lock().unwrap().recv();
 
             match message {
-                Ok(Message::NewJob(job)) => {
-                    println!("Worker {} recibió un trabajo, ejecutando.", id);
+                Ok(job) => {
+                    println!("Worker {id} got a job; executing.");
                     job();
                 }
-                Ok(Message::Terminate) => {
-                    println!("Worker {} recibió orden de terminación.", id);
-                    break;
-                }
-                Err(e) => {
-                    println!("Worker {} no pudo recibir mensaje: {}", id, e);
+                Err(_) => {
+                    println!("Worker {id} disconnected; shutting down.");
                     break;
                 }
             }
