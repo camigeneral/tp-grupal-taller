@@ -18,6 +18,7 @@ impl From<&str> for RedisClientResponseType {
             "WRITE" => Self::Write,
             "LLM-RESPONSE" => Self::Llm,
             "CLIENT-LLM-RESPONSE" => Self::ClientLlm,
+            "LLM-RESPONSE-ERROR" => Self::Error,
             s if s.starts_with("-ERR") => Self::Error,
             _ => Self::Other,
         }

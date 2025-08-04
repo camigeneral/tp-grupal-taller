@@ -74,6 +74,7 @@ pub enum AppMsg {
     ManageUnsubscribeResponse(String),
     SetContentFileCommand(String),
     Error(String),
+    ErrorLLM(String),
     /// Mensaje para alternar la visibilidad del popover para nuevos archivos.
     ToggleNewFilePopover,
     SetFileName(String),
@@ -328,6 +329,10 @@ impl SimpleComponent for AppModel {
             }
             AppMsg::Error(error_message) => {
                 self.error_modal.emit(ErrorModalMsg::Show(error_message));
+            }
+            AppMsg::ErrorLLM(error_message) => {
+                self.error_modal.emit(ErrorModalMsg::Show(error_message));
+                self.loading_modal.emit(LoadingModalMsg::Hide);
             }
             AppMsg::PrepareAndExecuteCommand(command, username) => {
                 self.command = command;

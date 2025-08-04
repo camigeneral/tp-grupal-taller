@@ -453,13 +453,40 @@ impl LlmMicroservice {
 
             match serde_json::from_str::<serde_json::Value>(&response_str) {
                 Ok(parsed) => {
+                    // Manejo explícito de errores de Gemini
+                    if let Some(error) = parsed.get("error") {
+                        let code = error.get("code").and_then(|c| c.as_u64());
+                        if code == Some(503) {
+                            let message_parts = &[
+                                "llm-response-error",
+                                "ups, la ia esta sobresaturada. Intente mas tarde",
+                                &document,
+                            ];
+
+                            let message_resp = resp_parser::format_resp_command(message_parts);
+                            let command_resp =
+                                resp_parser::format_resp_publish(&document, &message_resp);
+
+                            println!("Error 503 de Gemini: servicio sobresaturado");
+                            logger.log("Error 503 de Gemini: servicio sobresaturado");
+
+                            Self::send_to_all_nodes(&node_streams, command_resp.as_bytes(), logger);
+                            return;
+                        } else {
+                            println!("Error inesperado de Gemini: {:?}", error);
+                            logger.log(format!("Gemini API error: {:?}", error).as_str());
+                            return;
+                        }
+                    }
+
+                    // Caso exitoso: extracción del texto generado
                     if let Some(text) = parsed["candidates"]
                         .get(0)
                         .and_then(|c| c["content"]["parts"].get(0))
                         .and_then(|p| p["text"].as_str())
                     {
-                        let resp = text.trim().trim_end_matches("\n");
-                        let resp_parts = resp.replace(" ", "");
+                        let resp = text.trim().trim_end_matches('\n');
+                        let resp_parts = resp.replace(' ', "");
                         let message_parts = &[
                             "llm-response",
                             &resp_parts,
@@ -478,13 +505,16 @@ impl LlmMicroservice {
 
                         Self::send_to_all_nodes(&node_streams, command_resp.as_bytes(), logger);
                     } else {
-                        println!("Error: no se pudo extraer texto de Gemini");
+                        println!("Error: no se pudo extraer texto de Gemini {:#?}", parsed);
+                        logger.log("Error: formato inesperado en respuesta de Gemini");
                     }
                 }
                 Err(e) => {
-                    println!("Error parseando JSON: {}", e);
+                    println!("Error al parsear JSON de Gemini: {:?}", e);
+                    logger.log(format!("Error al parsear JSON de Gemini: {:?}", e).as_str());
                 }
             }
+
         });
     }
 
