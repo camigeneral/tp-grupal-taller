@@ -513,23 +513,19 @@ impl LocalClient {
     fn handle_error(response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) {
         if let Some(sender) = &ui_sender {
             if response[0].to_string() == "llm-response-error" {
-                let _ = sender.send(AppMsg::ErrorLLM(format!(
-                        "{}",
-                        response[1].to_string()
-                    )));
+                let _ = sender.send(AppMsg::ErrorLLM(format!("{}", response[1].to_string())));
             } else {
                 let error_message = if response.len() > 1 {
-                response[1..].join(" ")
-            } else {
-                "Error desconocido".to_string()
-            };
-        
-            let _ = sender.send(AppMsg::Error(format!(
-                "Hubo un problema: {}",
-                error_message
-            )));
+                    response[1..].join(" ")
+                } else {
+                    "Error desconocido".to_string()
+                };
+
+                let _ = sender.send(AppMsg::Error(format!(
+                    "Hubo un problema: {}",
+                    error_message
+                )));
             }
-            
         }
     }
     /// Maneja respuestas de tipo LLM-RESPONSE, actualizando el contenido del documento en la UI.
@@ -593,7 +589,6 @@ impl LocalClient {
             }
         }
     }
-
 
     /// Escucha y procesa respuestas del servidor Redis en un hilo dedicado.
     ///
@@ -678,19 +673,18 @@ impl LocalClient {
                 }
                 RedisClientResponseType::Error => Self::handle_error(response, cloned_ui_sender),
                 RedisClientResponseType::Ignore => {
-                    if let Some(ui_sender) = cloned_ui_sender.clone() {              
+                    if let Some(ui_sender) = cloned_ui_sender.clone() {
                         if let Ok(last_command) = cloned_last_command.lock() {
                             if last_command.to_uppercase().contains("SET") {
                                 let lines: Vec<&str> = last_command.split("\r\n").collect();
                                 if lines.len() >= 5 {
-                                    let file_name = lines[4];                                    
-                                    let _ = ui_sender.send(AppMsg::AddFile(file_name.to_string()));                                
+                                    let file_name = lines[4];
+                                    let _ = ui_sender.send(AppMsg::AddFile(file_name.to_string()));
                                 }
                             } else {
                                 let _ = ui_sender.send(AppMsg::ManageResponse(response[0].clone()));
-                            } 
-                        }          
-                        
+                            }
+                        }
                     }
                 }
                 RedisClientResponseType::Other => {
