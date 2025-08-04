@@ -93,13 +93,13 @@ pub enum LlmPromptMessage {
         prompt: String,
     },
     ChangeLine {
-        document: String,
-        line: String,
-        offset: String,
-        prompt: String,
-    },
+        document: String,        
+        line: String,     
+        offset: String,      
+        prompt: String  
+    },    
     Unknown(String),
-    Ignore,
+    Ignore
 }
 
 impl LlmPromptMessage {
@@ -116,24 +116,10 @@ impl LlmPromptMessage {
         }
 
         match parts[0].as_str() {
-            "request-file" => {
-                return LlmPromptMessage::RequestFile {
-                    document: parts[1].clone(),
-                    prompt: parts[2].clone(),
-                }
-            }
-            "change-line" => LlmPromptMessage::ChangeLine {
-                document: parts[1].clone(),
-                line: parts[2].clone(),
-                offset: parts[3].clone(),
-                prompt: parts[4].clone(),
-            },
-            "requested-file" => LlmPromptMessage::RequestedFile {
-                document: parts[1].clone(),
-                content: parts[2].clone(),
-                prompt: parts[3].clone(),
-            },
-            _ => LlmPromptMessage::Ignore,
+            "request-file" => return LlmPromptMessage::RequestFile { document: parts[1].clone(), prompt: parts[2].clone()},
+            "change-line" => LlmPromptMessage::ChangeLine { document: parts[1].clone(), line: parts[2].clone(), offset: parts[3].clone(), prompt: parts[4].clone()},
+            "requested-file" => LlmPromptMessage::RequestedFile { document: parts[1].clone(), content: parts[2].clone(), prompt: parts[3].clone()},
+            _ => LlmPromptMessage::Ignore
         }
     }
 }
