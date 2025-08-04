@@ -265,9 +265,10 @@ impl LocalClient {
         if cmd_upper.contains("CLIENT-LLM-RESPONSE") {
             let splited_command: Vec<&str> = command.split('|').collect();
             let mut final_command = vec![splited_command[0]];
+            let doc = splited_command[1];
             final_command.extend_from_slice(&splited_command[2..]);
             let client_command = format_resp_command(&final_command);
-            return format_resp_publish(&"llm_requests", &client_command);
+            return format_resp_publish(&doc, &client_command);
         }
 
         let key = parts.get(1).unwrap_or(&"");
