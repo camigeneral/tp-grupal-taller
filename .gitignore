@@ -24,3 +24,4 @@ redis_node_10921_16383_14002.rdb
 redis_node_10921_16383_14005.rdb
 redis_node_10921_16383_14008.rdb
 server.log
+microservice.log
