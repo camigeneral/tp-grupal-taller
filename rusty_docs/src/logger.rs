@@ -57,9 +57,9 @@ impl Logger {
         }
         // Valor por defecto
         match key {
-            "server_log_path=" => "server.log".to_string(),
-            "microservice_log_path=" => "microservice.log".to_string(),
-            _ => "server.log".to_string(),
+            "server_log_path=" => "/logs/server.log".to_string(),
+            "microservice_log_path=" => "/logs/microservice.log".to_string(),
+            _ => "/logs/server.log".to_string(),
         }
     }
 }
