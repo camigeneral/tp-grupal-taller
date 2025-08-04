@@ -742,17 +742,17 @@ impl Microservice {
     }
 
     /// Agrega un nuevo stream de nodo al mapa de conexiones activas
-    /// 
+    ///
     /// Esta función agrega un stream TCP de un nodo Redis al mapa de conexiones
     /// activas del microservicio. La dirección del nodo se usa como clave.
-    /// 
+    ///
     /// # Argumentos
-    /// 
+    ///
     /// * `address` - Dirección del nodo Redis (formato: "host:puerto")
     /// * `stream` - Stream TCP conectado al nodo
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// Result que indica éxito o error al agregar el stream
     fn add_node_stream(
         &self,
@@ -775,6 +775,19 @@ impl Microservice {
     }
 
     /// Intenta conectarse a un nodo con reintentos y espera entre intentos.
+    ///
+    /// Esta función intenta conectarse a la dirección especificada usando TCP.
+    /// Si la conexión falla, reintenta hasta un máximo de 15 veces, esperando
+    /// 10 segundos entre cada intento. Si no logra conectarse, retorna un error.
+    ///
+    /// # Argumentos
+    ///
+    /// * `address` - Dirección del nodo Redis (formato: "host:puerto")
+    /// * `logger` - Referencia al logger para registrar los eventos
+    ///
+    /// # Returns
+    ///
+    /// TcpStream conectado o un error si no se pudo conectar tras los reintentos
     fn connect_to_node_with_retry(address: &str, logger: &Logger) -> std::io::Result<TcpStream> {
         let mut attempts = 0;
         const MAX_ATTEMPTS: u32 = 15;
@@ -818,17 +831,17 @@ impl Microservice {
 }
 
 /// Convierte texto normal a formato codificado para el sistema
-/// 
+///
 /// Esta función toma texto normal y lo convierte al formato interno del sistema,
 /// reemplazando espacios con "<space>", saltos de línea con "<enter>", y
 /// strings vacíos con "<delete>".
-/// 
+///
 /// # Argumentos
-/// 
+///
 /// * `value` - String con el texto a codificar
-/// 
+///
 /// # Returns
-/// 
+///
 /// String con el texto codificado en formato interno
 pub fn parse_text(value: String)-> String {
     let val = value.clone();
@@ -842,17 +855,17 @@ pub fn parse_text(value: String)-> String {
 }
 
 /// Convierte texto codificado a formato normal
-/// 
+///
 /// Esta función toma un string codificado (con "<space>", "<enter>", "<delete>")
 /// y lo convierte a un string normal, reemplazando "<space>" con espacios,
 /// "<enter>" con saltos de línea, y "<delete>" con strings vacíos.
-/// 
+///
 /// # Argumentos
-/// 
+///
 /// * `value` - String con el texto codificado
-/// 
+///
 /// # Returns
-/// 
+///
 /// String con el texto decodificado en formato normal
 pub fn decode_text(value: String)-> String {
     let  value_clone = value.clone();
@@ -863,17 +876,17 @@ pub fn decode_text(value: String)-> String {
 }
 
 /// Obtiene las direcciones de los nodos Redis desde la variable de entorno
-/// 
+///
 /// Lee la variable de entorno `REDIS_NODE_HOSTS` que debe contener las direcciones
 /// de los nodos Redis separadas por comas. Si no está en modo Docker, retorna
 /// una lista predefinida de direcciones locales.
-/// 
+///
 /// # Returns
-/// 
+///
 /// Vector de strings con las direcciones de los nodos Redis
-/// 
+///
 /// # Ejemplo
-/// 
+///
 /// Si `REDIS_NODE_HOSTS=localhost:6379,localhost:6380`, retorna:
 /// `["localhost:6379", "localhost:6380"]`
 fn get_nodes_addresses() -> Vec<String> {
@@ -888,16 +901,15 @@ fn get_nodes_addresses() -> Vec<String> {
     } else {
         return vec!["127.0.0.1:4008".to_string(), "127.0.0.1:4007".to_string(), "127.0.0.1:4006".to_string(), "127.0.0.1:4005".to_string(), "127.0.0.1:4004".to_string(), "127.0.0.1:4003".to_string(), "127.0.0.1:4002".to_string(), "127.0.0.1:4001".to_string()];
     }
-
 }
 
 /// Función principal que inicia el microservicio
-/// 
+///
 /// Crea una instancia del microservicio con la configuración especificada
 /// y lo ejecuta. El archivo de configuración debe estar en "microservice.conf".
-/// 
+///
 /// # Returns
-/// 
+///
 /// Result que indica éxito o error en la ejecución del programa
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config_path = "microservice.conf";
