@@ -5,7 +5,6 @@ use crate::components::structs::document_value_info::DocumentValueInfo;
 use rusty_docs::resp_parser;
 use rusty_docs::resp_parser::{format_resp_command, format_resp_publish};
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::io::{BufReader, BufWriter, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::{channel, Receiver, Sender as MpscSender};
@@ -74,7 +73,6 @@ pub struct LocalClient {
     /// Registro de canales de escritura para los nodos conectados.
     writer_registry: WriterRegistry,
     //Regsitro de respuestas ya procesadas
-    processed_responses: Arc<Mutex<HashSet<String>>>,
 }
 
 /// Contexto de conexión para un nodo Redis.
@@ -93,7 +91,6 @@ struct NodeConnectionContext {
     ui_sender: Option<UiSender<AppMsg>>,
     /// Registro de canales de escritura para los nodos.
     writer_registry: WriterRegistry,
-    processed_responses: Arc<Mutex<HashSet<String>>>,
 }
 
 impl LocalClient {
@@ -128,7 +125,6 @@ impl LocalClient {
             redis_sender: None,
             rx_ui,
             writer_registry: WriterRegistry::new(),
-            processed_responses: Arc::new(Mutex::new(HashSet::new())),
         })
     }
 
@@ -598,6 +594,7 @@ impl LocalClient {
         }
     }
 
+
     /// Escucha y procesa respuestas del servidor Redis en un hilo dedicado.
     ///
     /// # Argumentos
@@ -619,12 +616,7 @@ impl LocalClient {
                 return Err(std::io::Error::other("Socket clone failed"));
             }
         };
-        let non_idempotent_commands = vec![
-            "ASK".to_string(),
-            "SUBSCRIBE".to_string(),
-            "STATUS".to_string(),
-            "-ERR".to_string(),
-        ];
+
         let mut reader: BufReader<TcpStream> = BufReader::new(client_socket);
         let cloned_last_command: Arc<Mutex<String>> = Arc::clone(&params.last_command_sent.clone());
 
@@ -642,25 +634,6 @@ impl LocalClient {
             if response.is_empty() {
                 break;
             }
-            
-            let response_id = format!(
-                "{}-{:?}",
-                response.join("|"),
-                client_socket_cloned.local_addr()
-            );
-
-            if let Ok(mut processed) = params.processed_responses.lock() {
-                if !non_idempotent_commands.contains(&response[0].to_uppercase()) {
-                    if processed.contains(&response_id) {
-                        continue;
-                    }
-                    processed.insert(response_id);
-                }
-
-                if processed.len() > 1000 {
-                    processed.clear();
-                }
-            }
 
             let local_addr = match client_socket_cloned.local_addr() {
                 Ok(addr) => addr,
@@ -671,7 +644,7 @@ impl LocalClient {
             };
             let cloned_ui_sender = params.ui_sender.clone();
 
-            let response_type = RedisClientResponseType::from(response[0].as_str());
+            let response_type = RedisClientResponseType::from_parts(response.clone());
             let cloned_connect_node_sender = connect_node_sender.clone();
 
             match response_type {
@@ -704,6 +677,22 @@ impl LocalClient {
                     Self::handle_client_llm(response, cloned_ui_sender, local_addr.to_string())
                 }
                 RedisClientResponseType::Error => Self::handle_error(response, cloned_ui_sender),
+                RedisClientResponseType::Ignore => {
+                    if let Some(ui_sender) = cloned_ui_sender.clone() {              
+                        if let Ok(last_command) = cloned_last_command.lock() {
+                            if last_command.to_uppercase().contains("SET") {
+                                let lines: Vec<&str> = last_command.split("\r\n").collect();
+                                if lines.len() >= 5 {
+                                    let file_name = lines[4];                                    
+                                    let _ = ui_sender.send(AppMsg::AddFile(file_name.to_string()));                                
+                                }
+                            } else {
+                                let _ = ui_sender.send(AppMsg::ManageResponse(response[0].clone()));
+                            } 
+                        }          
+                        
+                    }
+                }
                 RedisClientResponseType::Other => {
                     Self::handle_unknown(response, cloned_ui_sender, cloned_last_command.clone())
                 }
@@ -819,7 +808,6 @@ impl From<&LocalClient> for NodeConnectionContext {
             last_command_sent: Arc::clone(&client.last_command_sent),
             ui_sender: client.ui_sender.clone(),
             writer_registry: client.writer_registry.clone(),
-            processed_responses: Arc::clone(&client.processed_responses),
         }
     }
 }
