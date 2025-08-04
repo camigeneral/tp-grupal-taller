@@ -180,17 +180,13 @@ impl SimpleComponent for TextEditorModel {
                         // Usar la posición del cursor que ya tienes guardada
                         if let Some((line_number, cursor_offset)) = *cursor_position.borrow() {
                             println!("line number {line_number}, cursor_offset {cursor_offset}");
-                            // Obtener el inicio y final de la línea actual
                             if let Some(line_start) = buffer.iter_at_line(line_number) {
                                 let mut line_end = line_start;
                                 line_end.forward_to_line_end();
 
-                                // Obtener el contenido completo de la línea actual
                                 let full_line_content: String =
                                     buffer.text(&line_start, &line_end, false).to_string();
-                                // Dividir la línea en antes y después del cursor
                                 let len = full_line_content.chars().count() as i32;
-                                // Construir el resultado final
                                 let final_string = if cursor_offset == len {
                                     full_line_content
                                 } else {
@@ -203,7 +199,6 @@ impl SimpleComponent for TextEditorModel {
                                     format!("{}\n{}", before_cursor, after_cursor)
                                 };
 
-                                println!("final_string {final_string}");
                                 let doc_info: DocumentValueInfo =
                                     DocumentValueInfo::new(final_string, line_number);
 
