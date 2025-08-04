@@ -415,7 +415,6 @@ impl SimpleComponent for AppModel {
                 sender.input(AppMsg::ExecuteCommand);
             }
             AppMsg::AddContent(doc_info) => {
-                println!("Doc info: {:#?}", doc_info);
                 self.command = format!(
                     "WRITE|{}|{}|{}|{}",
                     doc_info.index, doc_info.value, doc_info.timestamp, doc_info.file
