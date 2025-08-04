@@ -35,6 +35,24 @@ pub struct LlmMicroservice {
     logger: logger::Logger,
 }
 
+/// Contexto de una solicitud LLM para procesamiento en el pool de hilos.
+///
+/// Esta estructura agrupa toda la información necesaria para procesar una solicitud
+/// de lenguaje natural, incluyendo referencias a los streams de nodos, el documento,
+/// el modo de selección, la línea y offset a modificar, el prompt, el pool de hilos
+/// y el logger.
+///
+/// Se utiliza para pasar datos de manera segura y eficiente entre hilos.
+///
+/// # Campos
+/// - `node_streams`: Referencia compartida a los streams de nodos Redis.
+/// - `document`: Nombre del documento a procesar.
+/// - `selection_mode`: Modo de selección (por ejemplo, "cursor" o "whole-file").
+/// - `line`: Línea relevante para la operación.
+/// - `offset`: Offset relevante para la operación.
+/// - `prompt`: Instrucción o texto a procesar.
+/// - `thread_pool`: Referencia al pool de hilos.
+/// - `logger`: Logger para registrar eventos.
 #[derive(Clone)]
 pub struct RequestContext {
     pub node_streams: NodeStreams,
@@ -47,7 +65,16 @@ pub struct RequestContext {
     pub logger: Logger,
 }
 
-/// Mensajes que procesa el microservicio
+/// Enum que representa los distintos tipos de mensajes que puede procesar el microservicio LLM.
+///
+/// Cada variante corresponde a una acción o solicitud específica que puede ser recibida
+/// desde los nodos Redis o desde otros componentes del sistema.
+///
+/// - `RequestedFile`: Respuesta con el contenido de un documento y un prompt asociado.
+/// - `RequestFile`: Solicitud de un documento específico con un prompt.
+/// - `ChangeLine`: Solicitud de modificación de una línea específica en un documento.
+/// - `Unknown`: Mensaje desconocido o no reconocido.
+/// - `Ignore`: Mensaje que debe ser ignorado.
 #[derive(Debug)]
 pub enum LlmPromptMessage {
     RequestedFile {
@@ -70,6 +97,13 @@ pub enum LlmPromptMessage {
 }
 
 impl LlmPromptMessage {
+    /// Construye un mensaje LlmPromptMessage a partir de una lista de partes (strings).
+    ///
+    /// # Argumentos
+    /// * `parts` - Vector de strings que representan los campos del mensaje.
+    ///
+    /// # Returns
+    /// Un valor de tipo `LlmPromptMessage` correspondiente al mensaje recibido.
     pub fn from_parts(parts: &[String]) -> Self {
         if parts.is_empty() {
             return LlmPromptMessage::Unknown("Empty message".to_string());
@@ -109,6 +143,17 @@ impl LlmMicroservice {
         }
     }
 
+    /// Envía datos a un nodo específico de Redis.
+    ///
+    /// Esta función busca el stream correspondiente al nodo, obtiene el lock y
+    /// escribe los datos. Si ocurre un error de conexión (broken pipe o host unreachable),
+    /// elimina el nodo del mapa de conexiones activas.
+    ///
+    /// # Argumentos
+    /// * `node_streams` - Referencia al mapa compartido de streams de nodos.
+    /// * `node_id` - Identificador del nodo destino.
+    /// * `data` - Datos a enviar.
+    /// * `logger` - Logger para registrar eventos y errores.
     fn send_to_node(
         node_streams: &NodeStreams,
         node_id: &str,
@@ -179,6 +224,15 @@ impl LlmMicroservice {
     }
     
 
+    /// Envía datos a todos los nodos Redis conectados.
+    ///
+    /// Itera sobre todos los nodos en el mapa de streams y utiliza `send_to_node`
+    /// para enviar los datos a cada uno.
+    ///
+    /// # Argumentos
+    /// * `node_streams` - Referencia al mapa compartido de streams de nodos.
+    /// * `data` - Datos a enviar.
+    /// * `logger` - Logger para registrar eventos y errores.
     fn send_to_all_nodes(
         node_streams: &NodeStreams,
         data: &[u8], 
@@ -200,6 +254,15 @@ impl LlmMicroservice {
         }
     }
 
+    /// Elimina un nodo del mapa de conexiones activas.
+    ///
+    /// Si el nodo está presente en el mapa, lo elimina y registra el evento.
+    /// Si no está, registra que no se encontró el nodo.
+    ///
+    /// # Argumentos
+    /// * `node_streams` - Referencia al mapa compartido de streams de nodos.
+    /// * `node_id` - Identificador del nodo a eliminar.
+    /// * `logger` - Logger para registrar eventos y errores.
     fn remove_failed_node(node_streams: &NodeStreams, node_id: &str, logger: Logger) {
         match node_streams.lock() {
             Ok(mut streams_guard) => {
@@ -286,6 +349,43 @@ impl LlmMicroservice {
         Ok(res.bytes()?.to_vec())
     }
 
+    /// Procesa una solicitud LLM ejecutando la tarea en un hilo del pool.
+    ///
+    /// # Descripción
+    /// Esta función recibe un contexto de solicitud (`RequestContext`) y delega el procesamiento
+    /// de la misma a un hilo del pool de hilos (`ThreadPool`). Esto permite que múltiples
+    /// solicitudes sean procesadas en paralelo, sin bloquear el hilo principal.
+    ///
+    /// # Funcionamiento
+    /// - Si el prompt está vacío, la función retorna inmediatamente.
+    /// - Clona los datos necesarios del contexto para moverlos al closure.
+    /// - Llama a `thread_pool.execute`, que envía el closure al canal del pool.
+    /// - Un worker del pool toma la tarea y ejecuta:
+    ///     - Llama a la API de Gemini con el prompt.
+    ///     - Procesa la respuesta y la formatea.
+    ///     - Publica la respuesta a los nodos Redis usando `send_to_all_nodes`.
+    ///
+    /// # Diagrama de flujo simplificado
+    /// ```text
+    /// handle_requests(ctx)
+    ///        |
+    ///        v
+    /// thread_pool.execute(|| {
+    ///     // Código de procesamiento de la solicitud
+    /// })
+    ///        |
+    ///        v
+    /// [Worker disponible del pool]
+    ///        |
+    ///        v
+    /// Ejecuta la tarea: llama a Gemini, procesa respuesta, publica resultado
+    /// ```
+    ///
+    /// # Ejemplo de uso
+    /// ```text
+    /// let ctx = RequestContext { ... };
+    /// LlmMicroservice::handle_requests(ctx);
+    /// ```
     fn handle_requests(ctx: RequestContext) {
         if ctx.prompt.is_empty() {
             return;
@@ -386,11 +486,25 @@ impl LlmMicroservice {
         Ok(())
     }
 
+    /// Envía el comando inicial de identificación a todos los nodos Redis.
+    ///
+    /// Utiliza el formato RESP para enviar el mensaje "llm_microservice" a todos los nodos.
     fn send_initial_command(&self) {
         let resp_command = resp_parser::format_resp_command(&["llm_microservice"]);
         Self::send_to_all_nodes(&self.node_streams, resp_command.as_bytes(), self.logger.clone());
     }
 
+    /// Intenta conectarse a un nodo Redis con reintentos.
+    ///
+    /// Realiza hasta 15 intentos de conexión, esperando 10 segundos entre cada uno.
+    /// Si no logra conectarse, retorna un error.
+    ///
+    /// # Argumentos
+    /// * `address` - Dirección del nodo Redis.
+    ///
+    /// # Returns
+    /// * `Ok(TcpStream)` si la conexión fue exitosa.
+    /// * `Err(std::io::Error)` si falla tras los reintentos.
     fn connect_to_node_with_retry(&self, address: &str) -> std::io::Result<TcpStream> {
         let mut attempts = 0;
         const MAX_ATTEMPTS: u32 = 15;
@@ -433,7 +547,21 @@ impl LlmMicroservice {
         }
     }
 
-     pub fn listen_node_responses(
+    /// Escucha y procesa las respuestas recibidas de un nodo Redis.
+    ///
+    /// Lee mensajes RESP del nodo, los interpreta y delega el procesamiento
+    /// a la función correspondiente según el tipo de mensaje recibido.
+    ///
+    /// # Argumentos
+    /// * `node_socket` - Stream TCP conectado al nodo.
+    /// * `thread_pool` - Referencia al pool de hilos.
+    /// * `node_streams` - Referencia al mapa compartido de streams de nodos.
+    /// * `logger` - Logger para registrar eventos y errores.
+    ///
+    /// # Returns
+    /// * `Ok(())` si la escucha y el procesamiento fueron exitosos.
+    /// * `Err(std::io::Error)` si ocurre un error de IO.
+    pub fn listen_node_responses(
         node_socket: TcpStream,
         thread_pool: Arc<ThreadPool>,
         node_streams: NodeStreams,
@@ -543,6 +671,20 @@ impl LlmMicroservice {
         Ok(())
     }
 
+    /// Maneja las conexiones entrantes de nodos en un hilo separado.
+    ///
+    /// Por cada nueva conexión recibida en el canal, lanza un hilo que
+    /// ejecuta `listen_node_responses` para procesar los mensajes de ese nodo.
+    ///
+    /// # Argumentos
+    /// * `receiver` - Canal para recibir streams TCP de nuevos nodos.
+    /// * `thread_pool` - Referencia al pool de hilos.
+    /// * `node_streams` - Referencia al mapa compartido de streams de nodos.
+    /// * `logger` - Logger para registrar eventos y errores.
+    ///
+    /// # Returns
+    /// * `Ok(())` si todas las conexiones se procesaron correctamente.
+    /// * `Err(std::io::Error)` si ocurre un error en algún hilo.
     fn handle_node_connections(
         receiver: Receiver<TcpStream>,
         thread_pool: Arc<ThreadPool>,
@@ -568,6 +710,13 @@ impl LlmMicroservice {
         Ok(())
     }
 
+    /// Inicia el manejador de conexiones de nodos en un hilo separado.
+    ///
+    /// Crea un hilo que se encarga de procesar las conexiones entrantes de los nodos Redis,
+    /// delegando el procesamiento a `handle_node_connections`.
+    ///
+    /// # Argumentos
+    /// * `receiver` - Canal para recibir streams TCP de nuevos nodos.
     fn start_node_connection_handler(&self, receiver: Receiver<TcpStream>) {
         let thread_pool_clone = Arc::clone(&self.thread_pool);
         let cloned_node_streams = Arc::clone(&self.node_streams);
@@ -579,6 +728,17 @@ impl LlmMicroservice {
         });
     }
 
+    /// Envía los streams de los nodos ya conectados al handler de conexiones.
+    ///
+    /// Clona los streams TCP de los nodos y los envía por el canal al manejador
+    /// de conexiones, para que puedan ser procesados en paralelo.
+    ///
+    /// # Argumentos
+    /// * `connect_node_sender` - Canal para enviar streams TCP al handler.
+    ///
+    /// # Returns
+    /// * `Ok(())` si todos los streams se enviaron correctamente.
+    /// * `Err(std::io::Error)` si ocurre un error al enviar algún stream.
     fn send_connected_nodes_to_handler(
         &self,
         connect_node_sender: &Sender<TcpStream>,
