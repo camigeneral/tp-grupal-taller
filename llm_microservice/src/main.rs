@@ -668,33 +668,13 @@ impl LlmMicroservice {
         logger: Logger,
         active_queries: Arc<Mutex<HashSet<String>>>, // <--- AGREGADO
     ) -> std::io::Result<()> {
-        let peer_addr = match node_socket.peer_addr() {
-            Ok(addr) => addr,
-            Err(e) => {
-                eprintln!("Error obteniendo peer_addr: {}", e);
-                return Err(e);
-            }
-        };
-        let mut correct_port = String::new();
-        if let Some((_, port)) = peer_addr.to_string().split_once(':') {
-            if let Some(last_char) = port.chars().last() {
-                correct_port = format!("node{}:{}", last_char, port);
-            } else {
-                eprintln!(
-                    "[ERROR] No se pudo obtener el último carácter del puerto: {}",
-                    port
-                );
-            }
-        } else {
-            eprintln!("[ERROR] Dirección inválida (no tiene ':'): {}", peer_addr);
-        }
-
+        
         let mut reader = BufReader::new(node_socket.try_clone()?);
 
         loop {
             let thread_pool_clone = Arc::clone(&thread_pool);
             let logger_clone = logger.clone();
-            let active_queries_clone = Arc::clone(&active_queries); // <--- AGREGADO
+            let active_queries_clone = Arc::clone(&active_queries);
             let (parts, _) = resp_parser::parse_resp_command(&mut reader)?;
             if parts.is_empty() {
                 break;
