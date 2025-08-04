@@ -13,7 +13,7 @@ use std::{
 };
 mod threadpool;
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
-use rusty_docs::{logger, resp_parser};
+use rusty_docs::{logger::{self, Logger}, resp_parser};
 use threadpool::ThreadPool;
 
 type SharedStream = Arc<Mutex<TcpStream>>;
@@ -31,6 +31,20 @@ pub struct LlmMicroservice {
     thread_pool: Arc<ThreadPool>,
     /// Streams de conexión a los nodos Redis, indexados por dirección
     node_streams: NodeStreams,
+    /// Ruta al archivo de log donde se registran los eventos del microservicio.
+    logger: logger::Logger,
+}
+
+#[derive(Clone)]
+pub struct RequestContext {
+    pub node_streams: NodeStreams,
+    pub document: String,
+    pub selection_mode: String,
+    pub line: String,
+    pub offset: String,
+    pub prompt: String,
+    pub thread_pool: Arc<ThreadPool>,
+    pub logger: Logger,
 }
 
 /// Mensajes que procesa el microservicio
@@ -84,10 +98,14 @@ impl LlmMicroservice {
     /// ```
     pub fn new(n_threads: usize) -> Self {
         let thread_pool = Arc::new(ThreadPool::new(n_threads));        
-
+        let logger = logger::Logger::init(
+            logger::Logger::get_log_path_from_config("llm_microservice.conf", "llm_microservice_log_path="),
+            4030,
+        );
         LlmMicroservice {
             thread_pool,        
             node_streams: Arc::new(Mutex::new(HashMap::new())),
+            logger
         }
     }
 
@@ -95,6 +113,7 @@ impl LlmMicroservice {
         node_streams: &NodeStreams,
         node_id: &str,
         data: &[u8],
+        logger: Logger
     ) {
         println!("[DEBUG] Intentando enviar datos al nodo: {}", node_id);
     
@@ -126,6 +145,7 @@ impl LlmMicroservice {
     
                     match stream.write_all(&data_clone) {
                         Ok(_) => {
+                            
                             match stream.flush() {
                                 Ok(_) => {
                                     println!("[DEBUG] Flush exitoso para el nodo {}", node_id_clone);
@@ -139,7 +159,7 @@ impl LlmMicroservice {
                             if let Some(os_err) = e.raw_os_error() {
                                 if os_err == 32 || os_err == 113 {
                                     eprintln!("[ERROR] Error de conexión con nodo {}: {} (os error {:?})", node_id_clone, e, os_err);
-                                    Self::remove_failed_node(&node_streams_clone, &node_id_clone);
+                                    Self::remove_failed_node(&node_streams_clone, &node_id_clone, logger);
                                 } else {
                                     eprintln!("[ERROR] Error al escribir al nodo {}: {} (os error {:?})", node_id_clone, e, os_err);
                                 }
@@ -162,6 +182,8 @@ impl LlmMicroservice {
     fn send_to_all_nodes(
         node_streams: &NodeStreams,
         data: &[u8], 
+        logger: Logger
+
     ) {
         let node_ids: Vec<String> = {
             if let Ok(streams_guard) = node_streams.lock() {
@@ -173,20 +195,24 @@ impl LlmMicroservice {
         }; 
         
         for node_id in node_ids {
-            Self::send_to_node(node_streams, &node_id, data);
+            let logger_clone = logger.clone();
+            Self::send_to_node(node_streams, &node_id, data, logger_clone);
         }
     }
 
-    fn remove_failed_node(node_streams: &NodeStreams, node_id: &str) {
+    fn remove_failed_node(node_streams: &NodeStreams, node_id: &str, logger: Logger) {
         match node_streams.lock() {
             Ok(mut streams_guard) => {
                 if streams_guard.remove(node_id).is_some() {
+                    logger.log(format!("Nodo {} eliminado exitosamente de node_streams", node_id).as_str());
                     println!("Nodo {} eliminado exitosamente de node_streams", node_id);
                 } else {
+                    logger.log(format!("Nodo {} no encontrado en node_streams", node_id).as_str());
                     println!("Nodo {} no encontrado en node_streams", node_id);
                 }
             }
             Err(_) => {
+                logger.log(format!("Error obteniendo lock de node_streams para eliminar nodo {}", node_id).as_str());
                 eprintln!("Error obteniendo lock de node_streams para eliminar nodo {}", node_id);
             }
         }
@@ -260,25 +286,27 @@ impl LlmMicroservice {
         Ok(res.bytes()?.to_vec())
     }
 
-    fn handle_requests(
-        node_streams: NodeStreams,
-        document: String,
-        selection_mode: String,
-        line: String,
-        offset: String,
-        prompt: String,
-        thread_pool: Arc<ThreadPool>,
-    ) {
-        let prompt_clone = prompt.clone();
-        if prompt_clone.is_empty() {
+    fn handle_requests(ctx: RequestContext) {
+        if ctx.prompt.is_empty() {
             return;
         }
+    
+        let prompt_clone = ctx.prompt.clone();
+        let thread_pool = Arc::clone(&ctx.thread_pool);
+        let logger = ctx.logger.clone();
+        let node_streams = Arc::clone(&ctx.node_streams);
+        let document = ctx.document.clone();
+        let selection_mode = ctx.selection_mode.clone();
+        let line = ctx.line.clone();
+        let offset = ctx.offset.clone();
+    
         thread_pool.execute(move || {
             let gemini_resp = Self::get_gemini_respond(&prompt_clone);
     
             let response_str = match gemini_resp {
                 Ok(resp) => String::from_utf8_lossy(&resp).into_owned(),
                 Err(e) => {
+                    logger.log(format!("Error en get_gemini_respond: {}", e).as_str());
                     eprintln!("Error en get_gemini_respond: {}", e);
                     return;
                 }
@@ -292,21 +320,23 @@ impl LlmMicroservice {
                         .and_then(|p| p["text"].as_str())
                     {
                         let resp = text.trim().trim_end_matches("\n");
-                        let resp_parts = resp.replace(" ", "");  
+                        let resp_parts = resp.replace(" ", "");
                         let message_parts = &[
-                            "llm-response", 
-                            &resp_parts.clone(),
-                            &document.clone(),
-                            &selection_mode.clone(),
-                            &line.clone(),
-                            &offset.clone(),                
+                            "llm-response",
+                            &resp_parts,
+                            &document,
+                            &selection_mode,
+                            &line,
+                            &offset,
                         ];
-                            
+    
                         let message_resp = resp_parser::format_resp_command(message_parts);
                         let command_resp = resp_parser::format_resp_publish(&document, &message_resp);
-                        println!("GEMINI RESPONSE: {command_resp}");
-                        
-                        Self::send_to_all_nodes(&node_streams, command_resp.as_bytes());
+    
+                        println!("Respuesta gemini: {command_resp}");
+                        logger.log(format!("Respuesta gemini: {command_resp}").as_str());
+    
+                        Self::send_to_all_nodes(&node_streams, command_resp.as_bytes(), logger);
                     } else {
                         println!("Error: no se pudo extraer texto de Gemini");
                     }
@@ -317,12 +347,14 @@ impl LlmMicroservice {
             }
         });
     }
+    
 
     /// Conecta a todos los nodos Redis configurados en la variable de entorno
     fn connect_to_redis_nodes(&mut self) -> std::io::Result<()> {
         let node_addresses = get_nodes_addresses();
 
         if node_addresses.is_empty() {
+            self.logger.log(format!("REDIS_NODE_HOSTS").as_str());
             return Err(Error::new(
                 ErrorKind::InvalidInput,
                 "No hay nodos configurados en REDIS_NODE_HOSTS",
@@ -330,6 +362,7 @@ impl LlmMicroservice {
         }
 
         println!("Intentando conectar a {} nodos", node_addresses.len());
+        self.logger.log(format!("Intentando conectar a {} nodos", node_addresses.len()).as_str());
 
         let mut new_streams = HashMap::new();
 
@@ -355,9 +388,8 @@ impl LlmMicroservice {
 
     fn send_initial_command(&self) {
         let resp_command = resp_parser::format_resp_command(&["llm_microservice"]);
-        Self::send_to_all_nodes(&self.node_streams, resp_command.as_bytes());
+        Self::send_to_all_nodes(&self.node_streams, resp_command.as_bytes(), self.logger.clone());
     }
-
 
     fn connect_to_node_with_retry(&self, address: &str) -> std::io::Result<TcpStream> {
         let mut attempts = 0;
@@ -366,10 +398,12 @@ impl LlmMicroservice {
 
         loop {
             attempts += 1;
+            self.logger.log(format!("Intento {} de conectar a {}", attempts, address).as_str());
             println!("Intento {} de conectar a {}", attempts, address);
 
             match TcpStream::connect(address) {
                 Ok(socket) => {
+                    self.logger.log(format!("Conexión exitosa a {}", address).as_str());
                     println!("Conexión exitosa a {}", address);
                     return Ok(socket);
                 }
@@ -378,6 +412,8 @@ impl LlmMicroservice {
                         "Error conectando a {} (intento {}): {}",
                         address, attempts, e
                     );
+                    self.logger.log(format!( "Error conectando a {} (intento {}): {}",
+                    address, attempts, e).as_str());
 
                     if attempts >= MAX_ATTEMPTS {
                         return Err(Error::new(
@@ -390,6 +426,7 @@ impl LlmMicroservice {
                     }
 
                     println!("Reintentando en {} segundos...", RETRY_DELAY_SECONDS);
+                    self.logger.log(format!( "Reintentando en {} segundos...", RETRY_DELAY_SECONDS).as_str());
                     thread::sleep(Duration::from_secs(RETRY_DELAY_SECONDS));
                 }
             }
@@ -400,6 +437,7 @@ impl LlmMicroservice {
         node_socket: TcpStream,
         thread_pool: Arc<ThreadPool>,
         node_streams: NodeStreams,
+        logger: Logger
     ) -> std::io::Result<()> {
 
         let peer_addr = match node_socket.peer_addr() {
@@ -425,7 +463,7 @@ impl LlmMicroservice {
         
         loop {
             let thread_pool_clone = Arc::clone(&thread_pool);
-            
+            let logger_clone = logger.clone();
             let (parts, _) = resp_parser::parse_resp_command(&mut reader)?;
             if parts.is_empty() {
                 break;
@@ -434,34 +472,73 @@ impl LlmMicroservice {
             let llm_message = LlmPromptMessage::from_parts(&parts);
             match llm_message {
                 LlmPromptMessage::ChangeLine { document, line, offset, prompt } => {
+                    logger_clone.log(format!(
+                        "Se solicito cambio de linea por la IA en el documento: {}, linea: {line}, offset: {offset}, prompt:{prompt}", 
+                        document
+                    ).as_str());
+            
                     println!("change line {document}, {line}, {offset}, {prompt}");
-                    let node_streams_clone = Arc::clone(&node_streams);
-
-                    let final_prompt = format!("{prompt}");
-                    Self::handle_requests(node_streams_clone, document, "cursor".to_string(), line, offset, final_prompt, thread_pool_clone);
+            
+                    let ctx = RequestContext {
+                        node_streams: Arc::clone(&node_streams),
+                        document,
+                        selection_mode: "cursor".to_string(),
+                        line,
+                        offset,
+                        prompt,
+                        thread_pool: Arc::clone(&thread_pool_clone),
+                        logger: logger_clone.clone(),
+                    };
+            
+                    Self::handle_requests(ctx);
                 },
+            
                 LlmPromptMessage::RequestFile { document, prompt } => {
+                    logger_clone.log(format!("La IA solicito el documento: {document}, prompt:{prompt}").as_str());
+            
                     let message_parts = &[
                         "microservice-request-file",
-                        &document.clone(),
-                        &prompt.clone(),                        
+                        &document,
+                        &prompt,
                     ];
+            
                     let message_resp = resp_parser::format_resp_command(message_parts);
                     let command_resp = resp_parser::format_resp_publish(&"llm_requests", &message_resp);
+            
                     println!("Enviando publish: {}", command_resp.replace("\r\n", "\\r\\n"));
-                    
-                    
-                    Self::send_to_node(&node_streams, &correct_addr_clone.clone().to_string(), command_resp.as_bytes());
-                }
+                    logger_clone.log(format!("Enviando publish: {}", command_resp.replace("\r\n", "\\r\\n")).as_str());
+            
+                    Self::send_to_node(
+                        &node_streams, 
+                        &correct_addr_clone.to_string(), 
+                        command_resp.as_bytes(), 
+                        logger_clone
+                    );
+                },
+            
                 LlmPromptMessage::RequestedFile { document, content, prompt } => {
-                    println!("Documento: {document}, content: {content}, prompt {prompt}");                    
-                    let node_streams_clone = Arc::clone(&node_streams);
-
+                    logger_clone.log(format!("Documento solicitado: {document} content{content}").as_str());
+                    println!("Documento: {document}, content: {content}, prompt {prompt}");
+            
                     let final_prompt = format!("content-to-change:{content}, user-prompt:{prompt}");
-                    Self::handle_requests(node_streams_clone, document, "whole-file".to_string(), "0".to_string(), "0".to_string(), final_prompt, thread_pool_clone);
+            
+                    let ctx = RequestContext {
+                        node_streams: Arc::clone(&node_streams),
+                        document,
+                        selection_mode: "whole-file".to_string(),
+                        line: "0".to_string(),
+                        offset: "0".to_string(),
+                        prompt: final_prompt,
+                        thread_pool: Arc::clone(&thread_pool_clone),
+                        logger: logger_clone.clone(),
+                    };
+            
+                    Self::handle_requests(ctx);
                 }
+            
                 _ => {}
             }
+            
         }
         Ok(())
     }
@@ -470,16 +547,19 @@ impl LlmMicroservice {
         receiver: Receiver<TcpStream>,
         thread_pool: Arc<ThreadPool>,
         node_streams: NodeStreams,
+        logger: Logger
     ) -> std::io::Result<()> {        
         for stream in receiver {
             let thread_pool_clone = Arc::clone(&thread_pool);
             let cloned_node_streams = Arc::clone(&node_streams);
-            
+            let logger_clone = logger.clone();
+
             thread::spawn(move || {
                 if let Err(e) = Self::listen_node_responses(
                     stream,
                     thread_pool_clone,
-                    cloned_node_streams
+                    cloned_node_streams,
+                    logger_clone
                 ) {
                     println!("Error en la conexión con el nodo: {}", e);
                 }
@@ -491,9 +571,9 @@ impl LlmMicroservice {
     fn start_node_connection_handler(&self, receiver: Receiver<TcpStream>) {
         let thread_pool_clone = Arc::clone(&self.thread_pool);
         let cloned_node_streams = Arc::clone(&self.node_streams);
-
+        let logger_clone = self.logger.clone();
         thread::spawn(move || {
-            if let Err(e) = Self::handle_node_connections(receiver, thread_pool_clone, cloned_node_streams) {
+            if let Err(e) = Self::handle_node_connections(receiver, thread_pool_clone, cloned_node_streams, logger_clone) {
                 println!("Error en la conexión con el nodo: {}", e);
             }
         });
