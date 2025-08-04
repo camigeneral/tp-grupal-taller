@@ -171,50 +171,52 @@ impl SimpleComponent for TextEditorModel {
         let widgets = view_output!();
 
         let key_controller = gtk4::EventControllerKey::new();
-key_controller.connect_key_pressed(move |controller, key, _keycode, _state| {
-    if key == gtk4::gdk::Key::Return || key == gtk4::gdk::Key::KP_Enter {
-        if let Some(widget) = controller.widget() {
-            if let Ok(text_view) = widget.downcast::<gtk4::TextView>() {
-                let buffer = text_view.buffer();
-                
-                // Usar la posición del cursor que ya tienes guardada
-                if let Some((line_number, cursor_offset)) = *cursor_position.borrow() {
-                    println!("line number {line_number}, cursor_offset {cursor_offset}");
-                    // Obtener el inicio y final de la línea actual
-                    if let Some(line_start) = buffer.iter_at_line(line_number) {
-                        let mut line_end = line_start;
-                        line_end.forward_to_line_end();
-                        
-                        // Obtener el contenido completo de la línea actual
-                        let full_line_content: String = buffer.text(&line_start, &line_end, false).to_string();                    
-                        // Dividir la línea en antes y después del cursor
-                        let len = full_line_content.chars().count()  as i32;
-                        // Construir el resultado final
-                        let final_string = if cursor_offset == len {                            
-                            full_line_content
-                        } else {
-                            let cursor_pos = cursor_offset as usize;
-                            let before_cursor: String = full_line_content.chars().take(cursor_pos).collect();
-                            let after_cursor: String = full_line_content.chars().skip(cursor_pos).collect();
-                            
-                            format!("{}\n{}", before_cursor, after_cursor)
-                        };
-                        
-                        
+        key_controller.connect_key_pressed(move |controller, key, _keycode, _state| {
+            if key == gtk4::gdk::Key::Return || key == gtk4::gdk::Key::KP_Enter {
+                if let Some(widget) = controller.widget() {
+                    if let Ok(text_view) = widget.downcast::<gtk4::TextView>() {
+                        let buffer = text_view.buffer();
 
-                        println!("final_string {final_string}");
-                        let doc_info: DocumentValueInfo = DocumentValueInfo::new(final_string, line_number);
-                        
-                        sender_insert.input(TextEditorMessage::ContentAdded(doc_info));
+                        // Usar la posición del cursor que ya tienes guardada
+                        if let Some((line_number, cursor_offset)) = *cursor_position.borrow() {
+                            println!("line number {line_number}, cursor_offset {cursor_offset}");
+                            // Obtener el inicio y final de la línea actual
+                            if let Some(line_start) = buffer.iter_at_line(line_number) {
+                                let mut line_end = line_start;
+                                line_end.forward_to_line_end();
+
+                                // Obtener el contenido completo de la línea actual
+                                let full_line_content: String =
+                                    buffer.text(&line_start, &line_end, false).to_string();
+                                // Dividir la línea en antes y después del cursor
+                                let len = full_line_content.chars().count() as i32;
+                                // Construir el resultado final
+                                let final_string = if cursor_offset == len {
+                                    full_line_content
+                                } else {
+                                    let cursor_pos = cursor_offset as usize;
+                                    let before_cursor: String =
+                                        full_line_content.chars().take(cursor_pos).collect();
+                                    let after_cursor: String =
+                                        full_line_content.chars().skip(cursor_pos).collect();
+
+                                    format!("{}\n{}", before_cursor, after_cursor)
+                                };
+
+                                println!("final_string {final_string}");
+                                let doc_info: DocumentValueInfo =
+                                    DocumentValueInfo::new(final_string, line_number);
+
+                                sender_insert.input(TextEditorMessage::ContentAdded(doc_info));
+                            }
+                        }
                     }
                 }
+                gtk4::glib::Propagation::Proceed
+            } else {
+                gtk4::glib::Propagation::Proceed
             }
-        }
-        gtk4::glib::Propagation::Proceed
-    } else {
-        gtk4::glib::Propagation::Proceed
-    }
-});
+        });
 
         widgets.textview.add_controller(key_controller);
 
@@ -260,7 +262,7 @@ key_controller.connect_key_pressed(move |controller, key, _keycode, _state| {
                 self.file_name = file_name;
                 self.num_contributors = contributors;
                 println!("content {}", content);
-                self.content = content;                
+                self.content = content;
                 self.buffer.set_text(&format!("{}", self.content));
 
                 self.content_changed_manually = true;
