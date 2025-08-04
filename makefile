@@ -1,7 +1,7 @@
 # Variables con valores por defecto
 port ?= 4000
 service ?=
-cmd ?=/bin/bash
+cmd ?=/bin/sh
 
 .PHONY: client build up stop down logs restart ps exec rm prune rebuild clean
 
