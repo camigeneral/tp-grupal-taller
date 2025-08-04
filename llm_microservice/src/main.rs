@@ -325,6 +325,7 @@ impl LlmMicroservice {
         - Usá <enter> para representar saltos de línea.
         - NO uses \n. NO uses espacios literales. NO uses dobles <space>. NO agregues texto fuera del bloque de salida.
         - El bloque NO debe empezar ni terminar con <enter>. Los tags <space> y <enter> deben estar en inglés.
+        - Si te piden algo extenso con parrafos, o devolves parrafos, NO uses \n, usa <enter>
         
         CRITERIO DE RESPUESTA:
         - Siempre asumí que el input es una instrucción implícita, incluso si no hay verbos. Por ejemplo:
