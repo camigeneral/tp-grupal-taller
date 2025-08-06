@@ -28,6 +28,7 @@ pub struct TextEditorModel {
     programmatic_update: Rc<RefCell<bool>>, // Shared reference
     cursor_position: Rc<RefCell<Option<(i32, i32)>>>, // línea y offset
     selection_mode: SelectionMode,
+    prompt_widget: Option<gtk::Entry>,
 }
 
 /// Enum que define los posibles mensajes que el editor de archivos puede recibir.
@@ -84,6 +85,7 @@ impl SimpleComponent for TextEditorModel {
                 set_spacing: 5,
                 #[name = "prompt"]
                 gtk::Entry {
+                    set_text: &model.prompt,
                     connect_changed[sender] => move |entry| {
                         sender.input(TextEditorMessage::SetPrompt(entry.text().to_string()));
                     }
@@ -153,6 +155,7 @@ impl SimpleComponent for TextEditorModel {
             cursor_position: cursor_position.clone(),
             buffer: gtk::TextBuffer::new(None),
             selection_mode: SelectionMode::WholeFile,
+            prompt_widget: None,
         };
 
         model.buffer = gtk::TextBuffer::builder().text(&model.content).build();
@@ -169,6 +172,7 @@ impl SimpleComponent for TextEditorModel {
 
         let sender_insert = sender.clone();
         let widgets = view_output!();
+        model.prompt_widget = Some(widgets.prompt.clone());
 
         let key_controller = gtk4::EventControllerKey::new();
         key_controller.connect_key_pressed(move |controller, key, _keycode, _state| {
@@ -221,10 +225,10 @@ impl SimpleComponent for TextEditorModel {
     fn update(&mut self, message: TextEditorMessage, sender: ComponentSender<Self>) {
         match message {
             TextEditorMessage::SendPrompt => {
+                println!("{}", self.prompt);
                 if self.prompt.len() == 0 {
                     return;
                 }
-
                 if let Some((line, offset)) = self.cursor_position.borrow().clone() {
                     let mut document = DocumentValueInfo::new(self.content.clone(), line);
                     document.offset = offset;
@@ -232,6 +236,9 @@ impl SimpleComponent for TextEditorModel {
                     document.file = self.file_name.clone();
                     document.selection_mode = self.selection_mode.to_string();
                     self.prompt = "".to_string();
+                    if let Some(widget) = &self.prompt_widget {
+                        widget.set_text("");
+                    }                    
                     let _ = sender.output(TextEditorOutputMessage::SendPrompt(document));
                 }
             }
@@ -239,7 +246,7 @@ impl SimpleComponent for TextEditorModel {
                 self.selection_mode = mode;
             }
             TextEditorMessage::SetPrompt(prompt) => {
-                self.prompt = prompt;
+                self.prompt = prompt;                
             }
             TextEditorMessage::ContentAdded(mut doc_info) => {
                 if !self.content_changed_manually {
@@ -255,8 +262,7 @@ impl SimpleComponent for TextEditorModel {
                 self.content_changed_manually = false;
 
                 self.file_name = file_name;
-                self.num_contributors = contributors;
-                println!("content {}", content);
+                self.num_contributors = contributors;                
                 self.content = content;
                 self.buffer.set_text(&format!("{}", self.content));
 
