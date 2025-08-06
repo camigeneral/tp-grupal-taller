@@ -31,6 +31,7 @@ pub enum MicroserviceMessage {
     RequestFile {
         document: String,
         prompt: String,
+        id_client: String
     },
     ClientLlmResponse {
         document: String,
@@ -86,6 +87,7 @@ impl MicroserviceMessage {
             "MICROSERVICE-REQUEST-FILE" => MicroserviceMessage::RequestFile {
                 document: parts[1].clone(),
                 prompt: parts[2].clone(),
+                id_client: parts[3].clone(),
             },
             cmd if cmd.starts_with("-ERR") => MicroserviceMessage::Error(cmd.to_string()),
             other => MicroserviceMessage::Unknown(other.to_string()),

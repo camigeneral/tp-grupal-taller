@@ -72,6 +72,7 @@ pub struct RequestContext {
     pub thread_pool: Arc<ThreadPool>,
     pub logger: Logger,
     pub active_queries: Arc<Mutex<HashSet<String>>>,
+    pub id_client: String,
 }
 
 /// Enum que representa los distintos tipos de mensajes que puede procesar el microservicio LLM.
@@ -90,16 +91,19 @@ pub enum LlmPromptMessage {
         document: String,
         content: String,
         prompt: String,
+        id_client: String
     },
     RequestFile {
         document: String,
         prompt: String,
+        id_client: String
     },
     ChangeLine {
         document: String,
         line: String,
         offset: String,
         prompt: String,
+        id_client: String
     },
     Unknown(String),
     Ignore,
@@ -123,6 +127,7 @@ impl LlmPromptMessage {
                 return LlmPromptMessage::RequestFile {
                     document: parts[1].clone(),
                     prompt: parts[2].clone(),
+                    id_client: parts[3].clone()
                 }
             }
             "change-line" => LlmPromptMessage::ChangeLine {
@@ -130,11 +135,13 @@ impl LlmPromptMessage {
                 line: parts[2].clone(),
                 offset: parts[3].clone(),
                 prompt: parts[4].clone(),
+                id_client: parts[5].clone()
             },
             "requested-file" => LlmPromptMessage::RequestedFile {
                 document: parts[1].clone(),
                 content: parts[2].clone(),
                 prompt: parts[3].clone(),
+                id_client: parts[4].clone(),
             },
             _ => LlmPromptMessage::Ignore,
         }
@@ -355,8 +362,8 @@ impl LlmMicroservice {
     /// Envía una solicitud al modelo Gemini y obtiene la respuesta
     fn get_gemini_respond(prompt: &str) -> Result<Vec<u8>, reqwest::Error> {
         let api_key = env::var("GEMINI_API_KEY").unwrap_or_else(|_| {
-            eprintln!("GEMINI_API_KEY no está configurada, usando API key por defecto");
-            "AIzaSyDSyVJnHxJnUXDRnM7SxphBTwEPGtOjMEI".to_string()
+            eprintln!("GEMINI_API_KEY no está configurada");
+            "".to_string()
         });
 
         let body = json!({
@@ -450,6 +457,7 @@ impl LlmMicroservice {
         let line = ctx.line.clone();
         let offset = ctx.offset.clone();
         let active_queries = Arc::clone(&ctx.active_queries);
+        let id_client = ctx.id_client.clone();
 
         thread_pool.execute(move || {
             let gemini_resp = Self::get_gemini_respond(&prompt_clone);
@@ -506,6 +514,7 @@ impl LlmMicroservice {
                             &selection_mode,
                             &line,
                             &offset,
+                            &id_client
                         ];
 
                         let message_resp = resp_parser::format_resp_command(message_parts);
@@ -666,7 +675,7 @@ impl LlmMicroservice {
         thread_pool: Arc<ThreadPool>,
         node_streams: NodeStreams,
         logger: Logger,
-        active_queries: Arc<Mutex<HashSet<String>>>, // <--- AGREGADO
+        active_queries: Arc<Mutex<HashSet<String>>>,
     ) -> std::io::Result<()> {
         
         let mut reader = BufReader::new(node_socket.try_clone()?);
@@ -686,6 +695,7 @@ impl LlmMicroservice {
                     line,
                     offset,
                     prompt,
+                    id_client
                 } => {
                     logger_clone.log(format!(
                         "Se solicito cambio de linea por la IA en el documento: {}, linea: {line}, offset: {offset}, prompt:{prompt}", 
@@ -704,18 +714,19 @@ impl LlmMicroservice {
                         thread_pool: Arc::clone(&thread_pool_clone),
                         logger: logger_clone.clone(),
                         active_queries: Arc::clone(&active_queries_clone), 
+                        id_client
                     };
 
                     Self::handle_requests(ctx);
                 }
 
-                LlmPromptMessage::RequestFile { document, prompt } => {
+                LlmPromptMessage::RequestFile { document, prompt, id_client } => {
                     logger_clone.log(
                         format!("La IA solicito el documento: {document}, prompt:{prompt}")
                             .as_str(),
                     );
 
-                    let message_parts = &["microservice-request-file", &document, &prompt];
+                    let message_parts = &["microservice-request-file", &document, &prompt, &id_client];
 
                     let message_resp = resp_parser::format_resp_command(message_parts);
                     let command_resp =
@@ -739,6 +750,7 @@ impl LlmMicroservice {
                     document,
                     content,
                     prompt,
+                    id_client
                 } => {
                     logger_clone
                         .log(format!("Documento solicitado: {document} content{content}").as_str());
@@ -756,6 +768,7 @@ impl LlmMicroservice {
                         thread_pool: Arc::clone(&thread_pool_clone),
                         logger: logger_clone.clone(),
                         active_queries: Arc::clone(&active_queries_clone), 
+                        id_client
                     };
 
                     Self::handle_requests(ctx);
