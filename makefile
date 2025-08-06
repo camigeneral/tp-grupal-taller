@@ -5,11 +5,9 @@ cmd ?=/bin/sh
 
 .PHONY: client build up stop down logs restart ps exec rm prune rebuild clean
 
-# Ejecutar el cliente en local
 client:
 	cargo run --bin client $(port)
 
-# Build de todos o un servicio
 build:
 	@if [ -z "$(service)" ]; then \
 		echo "Building all services..."; \
@@ -19,7 +17,6 @@ build:
 		sudo docker compose build $(service); \
 	fi
 
-# Levantar todos o un servicio (modo detached)
 up:
 	@if [ -z "$(service)" ]; then \
 		echo "Starting all services..."; \
@@ -29,29 +26,26 @@ up:
 		sudo docker compose up -d $(service); \
 	fi
 
-# Ver logs de un servicio
 logs:
-ifndef service
-	$(error Debes pasar service=nombre_del_servicio)
-endif
+	@if [ -z "$(service)" ]; then \
+		echo "Error: Debes pasar service=nombre_del_servicio"; \
+		exit 1; \
+	fi
 	@echo "Logs de $(service)..."
-	@sudo docker compose logs -f $(service)
+	sudo docker compose logs -f $(service)
 
-# Detener todos los servicios
 stop:
 	@if [ -z "$(service)" ]; then \
-		echo "Stop all services..."; \
+		echo "Stopping all services..."; \
 		sudo docker compose stop; \
 	else \
-		echo "Stop service: $(service)"; \
+		echo "Stopping service: $(service)"; \
 		sudo docker compose stop $(service); \
 	fi
 
-# Bajar y eliminar volúmenes
 down:
 	sudo docker compose down -v
 
-# Reiniciar todos o uno
 restart:
 	@if [ -z "$(service)" ]; then \
 		echo "Restarting all services..."; \
@@ -61,31 +55,33 @@ restart:
 		sudo docker compose restart $(service); \
 	fi
 
-# Ver servicios corriendo
+clean_build:
+	sudo docker compose down -v --rmi all --remove-orphans
+	sudo docker image prune -f
+	sudo docker compose build --no-cache
+
 ps:
 	sudo docker compose ps
 
-# Acceder al contenedor con shell o comando (por defecto /bin/bash)
 exec:
-ifndef service
-	$(error Debes pasar service=nombre_del_servicio)
-endif
+	@if [ -z "$(service)" ]; then \
+		echo "Error: Debes pasar service=nombre_del_servicio"; \
+		exit 1; \
+	fi
 	@echo "Ingresando a $(service)..."
-	@sudo docker compose exec $(service) $(cmd)
+	sudo docker compose exec $(service) $(cmd)
 
-# Eliminar contenedores parados
 rm:
 	sudo docker compose rm -f
 
-# Limpiar todo (containers, networks, volumes, images no usados)
 prune:
-	sudo docker system prune -af --volumes
+	@echo "Limpiando imágenes no usadas solo del proyecto..."
+	sudo docker image prune -f
+	sudo docker rmi llm_microservice:latest redis-node:latest microservice:latest || true
 
-# Rebuild forzado
 rebuild:
-	@echo " Rebuild completo (limpiando cache)..."
+	@echo "Rebuild completo (limpiando cache)..."
 	sudo docker compose build --no-cache
 
-# Cliente y servicios definidos como PHONY
 clean:
 	sudo docker compose down -v --remove-orphans

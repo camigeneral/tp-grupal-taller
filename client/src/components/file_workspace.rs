@@ -311,7 +311,6 @@ impl SimpleComponent for FileWorkspace {
                                     decode_text(doc_lines[line].to_string());
                                 let parsed_content = decode_text(content.to_string());
 
-                                // Convertís el offset (en chars) a offset en bytes
                                 let byte_offset = original_line_decoded
                                     .char_indices()
                                     .nth(offset)
@@ -323,8 +322,7 @@ impl SimpleComponent for FileWorkspace {
 
                                 let mut new_line = String::new();
                                 new_line.push_str(before);
-
-                                // Solo insertar si no está duplicado
+                                                                
                                 if !after.starts_with(&parsed_content) {
                                     if !before.ends_with(' ') {
                                         new_line.push(' ');
@@ -339,7 +337,6 @@ impl SimpleComponent for FileWorkspace {
                                 doc_lines[line] = parse_text(new_line);
                             }
                             new_content = doc_lines.join("\n");
-                            println!("new_content {new_content}");
                         }
                         _ => {}
                     };
@@ -402,8 +399,6 @@ impl SimpleComponent for FileWorkspace {
                                         lines.insert(parsed_index, val.clone());
                                     }
                                 }
-
-                                println!("lineas {:#?}, val: {val}", lines);
                                 val = lines.join("\n");
                             }
                         }

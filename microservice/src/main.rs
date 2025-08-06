@@ -779,9 +779,9 @@ impl Microservice {
                                                 docs.insert(document.clone(), new_document);
 
                                                 println!(
-        "Insertado en documento '{}' en línea {}, offset {}: {}",
-        document, parsed_line, parsed_offset, content
-    );
+                                                    "Insertado en documento '{}' en línea {}, offset {}: {}",
+                                                    document, parsed_line, parsed_offset, content
+                                                );
                                             } else {
                                                 let parsed_content =
                                                     &decode_text(content.to_string());
@@ -821,7 +821,7 @@ impl Microservice {
                         log_clone.log("Error obteniendo lock de documents para LLMResponse");
                     }
                 }
-                MicroserviceMessage::RequestFile { document, prompt } => {
+                MicroserviceMessage::RequestFile { document, prompt, id_client } => {
                     if let Ok(mut docs) = documents.lock() {
                         if let Some(documento) = docs.get_mut(&document) {
                             let content = match documento {
@@ -833,6 +833,7 @@ impl Microservice {
                                 &document.clone(),
                                 &content.clone(),
                                 &prompt.clone(),
+                                &id_client.clone()
                             ];
                             let message_resp = format_resp_command(message_parts);
                             let command_resp = format_resp_publish(&"llm_requests", &message_resp);
