@@ -13,6 +13,8 @@ Cargo.lock
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
 
+.env
+
 docs.txt
 redis_node_0_5460_14000.rdb
 redis_node_0_5460_14003.rdb
