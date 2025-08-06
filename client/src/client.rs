@@ -776,12 +776,16 @@ impl LocalClient {
 
             // Si hay documento en el último comando, vuelvo a hacer subscribe
             if let Some(doc_name) = Self::extract_document_name(&last_line_cloned) {
-                let subscribe_command = format!(
-                    "*2\r\n$9\r\nsubscribe\r\n${}\r\n{}\r\n",
-                    doc_name.len(),
-                    doc_name
-                );
-                writer_sender.send(subscribe_command)?;
+                if !last_line_cloned.to_string().contains("\nset") {                    
+                    let subscribe_command = format!(
+                        "*2\r\n$9\r\nsubscribe\r\n${}\r\n{}\r\n",
+                        doc_name.len(),
+                        doc_name
+                    );
+                    writer_sender.send(subscribe_command)?;
+                } else {
+                    writer_sender.send(last_line_cloned)?;
+                }                
             } else {
                 writer_sender.send(last_line_cloned)?;
             }
