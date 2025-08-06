@@ -19,7 +19,7 @@ services:
       - "4000:4000"
     volumes:
       - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+      - ./logs/node0.log:/app/logs/node0.log
     ulimits:
       nofile:
         soft: 65536
@@ -42,7 +42,7 @@ services:
       - "4001:4001"
     volumes:
       - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+      - ./logs/node1.log:/app/logs/node1.log
     ulimits:
       nofile:
         soft: 65536
@@ -65,7 +65,7 @@ services:
       - "4002:4002"
     volumes:
       - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+      - ./logs/node2.log:/app/logs/node2.log
     ulimits:
       nofile:
         soft: 65536
@@ -88,7 +88,7 @@ services:
       - "4003:4003"
     volumes:
       - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+      - ./logs/node3.log:/app/logs/node3.log
     ulimits:
       nofile:
         soft: 65536
@@ -111,7 +111,7 @@ services:
       - "4004:4004"
     volumes:
       - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+      - ./logs/node4.log:/app/logs/node4.log
     ulimits:
       nofile:
         soft: 65536
@@ -134,7 +134,7 @@ services:
       - "4005:4005"
     volumes:
       - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+      - ./logs/node5.log:/app/logs/node5.log
     ulimits:
       nofile:
         soft: 65536
@@ -157,7 +157,7 @@ services:
       - "4006:4006"
     volumes:
       - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+      - ./logs/node6.log:/app/logs/node6.log
     ulimits:
       nofile:
         soft: 65536
@@ -180,7 +180,7 @@ services:
       - "4007:4007"
     volumes:
       - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+      - ./logs/node7.log:/app/logs/node7.log
     ulimits:
       nofile:
         soft: 65536
@@ -203,7 +203,7 @@ services:
       - "4008:4008"
     volumes:
       - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+      - ./logs/node8.log:/app/logs/node8.log
     ulimits:
       nofile:
         soft: 65536
@@ -220,7 +220,7 @@ services:
     container_name: llm_microservice
     working_dir: /app    
     volumes:
-      - ./logs:/app/logs
+      - ./logs/llm_microservice.log:/app/logs/llm_microservice.log
     depends_on:
       - node0
       - node1
@@ -250,7 +250,7 @@ services:
     container_name: microservice    
     working_dir: /app
     volumes:
-      - ./logs:/app/logs
+      - ./logs/microservice.log:/app/logs/microservice.log
     depends_on:
       - node0
       - node1
