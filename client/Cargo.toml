@@ -10,3 +10,4 @@ gtk4 = { version = "0.9.6", package = "gtk4" }
 relm4 = "0.9.1"
 gdk4 = "0.9.6"
 chrono = "0.4.41"
+uuid = { version = "1", features = ["v4"] }

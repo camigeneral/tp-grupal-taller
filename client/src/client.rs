@@ -1,6 +1,7 @@
 extern crate relm4;
 use self::relm4::Sender as UiSender;
 use crate::app::AppMsg;
+extern crate uuid;
 use crate::components::structs::document_value_info::DocumentValueInfo;
 use rusty_docs::resp_parser;
 use rusty_docs::resp_parser::{format_resp_command, format_resp_publish};
@@ -11,6 +12,8 @@ use std::sync::mpsc::{channel, Receiver, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use types::RedisClientResponseType;
+use self::uuid::Uuid;
+
 
 /// Registro de canales de escritura asociados a nodos.
 ///
@@ -72,7 +75,8 @@ pub struct LocalClient {
     rx_ui: Option<Receiver<String>>,
     /// Registro de canales de escritura para los nodos conectados.
     writer_registry: WriterRegistry,
-    //Regsitro de respuestas ya procesadas
+    //Id del cliente    
+    id: String,
 }
 
 /// Contexto de conexión para un nodo Redis.
@@ -91,6 +95,7 @@ struct NodeConnectionContext {
     ui_sender: Option<UiSender<AppMsg>>,
     /// Registro de canales de escritura para los nodos.
     writer_registry: WriterRegistry,
+    id_client: String,
 }
 
 impl LocalClient {
@@ -118,6 +123,7 @@ impl LocalClient {
         };
 
         Ok(Self {
+            id: Uuid::new_v4().to_string(),
             address,
             ui_sender,
             last_command_sent: Arc::new(Mutex::new("".to_string())),
@@ -147,6 +153,13 @@ impl LocalClient {
         let (tx, rx) = channel::<String>();
 
         let node_id_for_thread = node_id.clone();
+        {
+            let mut writers = writer_registry.writers.lock().unwrap();
+            if let Some(old_tx) = writers.remove(&node_id) {
+                drop(old_tx);
+            }
+            writers.insert(node_id.clone(), tx.clone());
+        }
 
         thread::spawn(move || {
             let mut writer = BufWriter::new(stream);
@@ -257,7 +270,9 @@ impl LocalClient {
 
         if cmd_upper.contains("CHANGE-LINE") || cmd_upper.contains("REQUEST-FILE") {
             println!("command: {:#?}", command);
-            let splited_command: Vec<&str> = command.split('|').collect();
+            let mut splited_command: Vec<&str> = command.split('|').collect();
+            let id_client = self.id.clone();
+            splited_command.push(&id_client);
             let client_command = format_resp_command(&splited_command);
             return format_resp_publish("llm_requests", &client_command);
         }
@@ -466,11 +481,12 @@ impl LocalClient {
     fn handle_client_llm(
         response: Vec<String>,
         ui_sender: Option<UiSender<AppMsg>>,
-        local_addr: String,
+        id_client: String,
     ) {
-        let comming_addrs = response[6].trim();
-        let local_addr_trimmed = local_addr.trim();
-        if comming_addrs != local_addr_trimmed {
+        let comming_id_client = response[6].trim();
+        let loca_id_client = id_client.trim();
+
+        if comming_id_client != loca_id_client {
             if let Some(sender) = &ui_sender {
                 let selection_mode = response[3].clone();
                 let content = response[2].clone();
@@ -632,11 +648,12 @@ impl LocalClient {
                     return Err(e);
                 }
             };
+
             let cloned_ui_sender = params.ui_sender.clone();
 
             let response_type = RedisClientResponseType::from_parts(response.clone());
             let cloned_connect_node_sender = connect_node_sender.clone();
-
+            println!("Respuesta de redis: {}", response.join(" "));
             match response_type {
                 RedisClientResponseType::Ask => {
                     Self::handle_ask(response, cloned_connect_node_sender, params_clone)
@@ -646,25 +663,26 @@ impl LocalClient {
                 }
                 RedisClientResponseType::Write => Self::handle_write(response, cloned_ui_sender),
                 RedisClientResponseType::Llm => {
-                    println!("Respuesta de redis: {}", response.join(" "));
-
-                    let filename = response[2].clone();
-                    let command_parts = [
-                        filename,
-                        response[1].clone(),
-                        response[3].clone(),
-                        response[4].clone(),
-                        response[5].clone(),
-                        local_addr.to_string(),
-                    ];
-                    Self::handle_llm_response(response, cloned_ui_sender.clone());
-                    if let Some(ui_sender) = cloned_ui_sender.clone() {
-                        let _ = ui_sender.send(AppMsg::PublishLlmResponse(command_parts.to_vec()));
+                    let comming_id_client = response[6].clone();
+                    if comming_id_client == params.id_client.clone() {
+                        let filename = response[2].clone();
+                        let command_parts = [
+                            filename,
+                            response[1].clone(),
+                            response[3].clone(),
+                            response[4].clone(),
+                            response[5].clone(),
+                            params.id_client.clone()
+                        ];
+                        Self::handle_llm_response(response, cloned_ui_sender.clone());
+                        if let Some(ui_sender) = cloned_ui_sender.clone() {
+                            let _ = ui_sender.send(AppMsg::PublishLlmResponse(command_parts.to_vec()));
+                        }
                     }
+                    
                 }
                 RedisClientResponseType::ClientLlm => {
-                    println!("Respuesta de redis: {}", response.join(" "));
-                    Self::handle_client_llm(response, cloned_ui_sender, local_addr.to_string())
+                    Self::handle_client_llm(response, cloned_ui_sender, params.id_client.clone())
                 }
                 RedisClientResponseType::Error => Self::handle_error(response, cloned_ui_sender),
                 RedisClientResponseType::Ignore => {
@@ -763,16 +781,10 @@ impl LocalClient {
                     doc_name.len(),
                     doc_name
                 );
-                writer_sender.send(subscribe_command).map_err(|e| {
-                    eprintln!("Error sending subscribe command: {}", e);
-                    std::io::Error::new(std::io::ErrorKind::Other, "Send failed")
-                })?;
+                writer_sender.send(subscribe_command)?;
+            } else {
+                writer_sender.send(last_line_cloned)?;
             }
-
-            writer_sender.send(last_line_cloned).map_err(|e| {
-                eprintln!("Error resending last command: {}", e);
-                std::io::Error::new(std::io::ErrorKind::Other, "Send failed")
-            })?;
         }
 
         Ok(())
@@ -797,6 +809,7 @@ impl From<&LocalClient> for NodeConnectionContext {
             last_command_sent: Arc::clone(&client.last_command_sent),
             ui_sender: client.ui_sender.clone(),
             writer_registry: client.writer_registry.clone(),
+            id_client: client.id.clone()
         }
     }
 }
