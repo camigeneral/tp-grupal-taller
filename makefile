@@ -11,19 +11,19 @@ client:
 build:
 	@if [ -z "$(service)" ]; then \
 		echo "Building all services..."; \
-		docker compose build; \
+		sudo docker compose build; \
 	else \
 		echo "Building service: $(service)"; \
-		docker compose build $(service); \
+		sudo docker compose build $(service); \
 	fi
 
 up:
 	@if [ -z "$(service)" ]; then \
 		echo "Starting all services..."; \
-		docker compose up -d; \
+		sudo docker compose up -d; \
 	else \
 		echo "Starting service: $(service)"; \
-		docker compose up -d $(service); \
+		sudo docker compose up -d $(service); \
 	fi
 
 logs:
@@ -32,36 +32,36 @@ logs:
 		exit 1; \
 	fi
 	@echo "Logs de $(service)..."
-	docker compose logs -f $(service)
+	sudo docker compose logs -f $(service)
 
 stop:
 	@if [ -z "$(service)" ]; then \
 		echo "Stopping all services..."; \
-		docker compose stop; \
+		sudo docker compose stop; \
 	else \
 		echo "Stopping service: $(service)"; \
-		docker compose stop $(service); \
+		sudo docker compose stop $(service); \
 	fi
 
 down:
-	docker compose down -v
+	sudo docker compose down -v
 
 restart:
 	@if [ -z "$(service)" ]; then \
 		echo "Restarting all services..."; \
-		docker compose restart; \
+		sudo docker compose restart; \
 	else \
 		echo "Restarting service: $(service)"; \
-		docker compose restart $(service); \
+		sudo docker compose restart $(service); \
 	fi
 
 clean_build:
-	docker compose down -v --rmi all --remove-orphans
-	docker image prune -f
-	docker compose build --no-cache
+	sudo docker compose down -v --rmi all --remove-orphans
+	sudo docker image prune -f
+	sudo docker compose build --no-cache
 
 ps:
-	docker compose ps
+	sudo docker compose ps
 
 exec:
 	@if [ -z "$(service)" ]; then \
@@ -69,19 +69,19 @@ exec:
 		exit 1; \
 	fi
 	@echo "Ingresando a $(service)..."
-	docker compose exec $(service) $(cmd)
+	sudo docker compose exec $(service) $(cmd)
 
 rm:
-	docker compose rm -f
+	sudo docker compose rm -f
 
 prune:
 	@echo "Limpiando imágenes no usadas solo del proyecto..."
-	docker image prune -f
-	docker rmi llm_microservice:latest redis-node:latest microservice:latest || true
+	sudo docker image prune -f
+	sudo docker rmi llm_microservice:latest redis-node:latest microservice:latest || true
 
 rebuild:
 	@echo "Rebuild completo (limpiando cache)..."
-	docker compose build --no-cache
+	sudo docker compose build --no-cache
 
 clean:
-	docker compose down -v --remove-orphans
+	sudo docker compose down -v --remove-orphans
