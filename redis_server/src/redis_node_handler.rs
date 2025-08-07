@@ -691,7 +691,7 @@ pub fn broadcast_to_replicas(
 }
 
 fn handle_replica_sync(
-    replica_port: &String,
+    replica_port: &str,
     peer_nodes: &PeerNodeMap,
     shared_sets: &SetsMap,
     shared_documents: &RedisDocumentsMap,

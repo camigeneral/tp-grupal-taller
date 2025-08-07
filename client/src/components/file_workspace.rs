@@ -272,14 +272,11 @@ impl SimpleComponent for FileWorkspace {
 
                 let file_editor_sender = self.file_editor_ctrl.sender().clone();
                 if let Some(doc) = self.files.get_mut(&(file.clone(), file_type.clone())) {
-                    match doc {
-                        Document::Text(_lines) => {
-                            self.files.insert(
-                                (file.clone(), file_type.clone()),
-                                Document::Text(content.clone()),
-                            );
-                        }
-                        _ => {}
+                    if let Document::Text(_lines) = doc {
+                        self.files.insert(
+                            (file.clone(), file_type.clone()),
+                            Document::Text(content.clone()),
+                        );
                     }
                     let val = content.join("\n");
 
@@ -304,41 +301,38 @@ impl SimpleComponent for FileWorkspace {
                 let file_editor_sender = self.file_editor_ctrl.sender().clone();
                 if let Some(doc) = self.files.get_mut(&(document.clone(), file_type.clone())) {
                     let mut new_content = String::new();
-                    match doc {
-                        Document::Text(ref mut doc_lines) => {
-                            if line < doc_lines.len() {
-                                let original_line_decoded =
-                                    decode_text(doc_lines[line].to_string());
-                                let parsed_content = decode_text(content.to_string());
+                    if let Document::Text(ref mut doc_lines) = doc {
+                        if line < doc_lines.len() {
+                            let original_line_decoded =
+                                decode_text(doc_lines[line].to_string());
+                            let parsed_content = decode_text(content.to_string());
 
-                                let byte_offset = original_line_decoded
-                                    .char_indices()
-                                    .nth(offset)
-                                    .map(|(i, _)| i)
-                                    .unwrap_or(original_line_decoded.len());
+                            let byte_offset = original_line_decoded
+                                .char_indices()
+                                .nth(offset)
+                                .map(|(i, _)| i)
+                                .unwrap_or(original_line_decoded.len());
 
-                                let before = &original_line_decoded[..byte_offset];
-                                let after = &original_line_decoded[byte_offset..];
+                            let before = &original_line_decoded[..byte_offset];
+                            let after = &original_line_decoded[byte_offset..];
 
-                                let mut new_line = String::new();
-                                new_line.push_str(before);
-                                                                
-                                if !after.starts_with(&parsed_content) {
-                                    if !before.ends_with(' ') {
-                                        new_line.push(' ');
-                                    }
-                                    new_line.push_str(&parsed_content);
-                                    if !after.starts_with(' ') {
-                                        new_line.push(' ');
-                                    }
+                            let mut new_line = String::new();
+                            new_line.push_str(before);
+                                                            
+                            if !after.starts_with(&parsed_content) {
+                                if !before.ends_with(' ') {
+                                    new_line.push(' ');
                                 }
-
-                                new_line.push_str(after);
-                                doc_lines[line] = parse_text(new_line);
+                                new_line.push_str(&parsed_content);
+                                if !after.starts_with(' ') {
+                                    new_line.push(' ');
+                                }
                             }
-                            new_content = doc_lines.join("\n");
+
+                            new_line.push_str(after);
+                            doc_lines[line] = parse_text(new_line);
                         }
-                        _ => {}
+                        new_content = doc_lines.join("\n");
                     };
 
                     let mut document_info = DocumentValueInfo::new(new_content, line as i32);
@@ -389,15 +383,13 @@ impl SimpleComponent for FileWorkspace {
                                         parsed_index + 1,
                                         splited_val[1].to_string().clone(),
                                     );
+                                } else if parsed_index < lines.len() {
+                                    lines[parsed_index] = val.clone();
                                 } else {
-                                    if parsed_index < lines.len() {
-                                        lines[parsed_index] = val.clone();
-                                    } else {
-                                        while lines.len() < parsed_index {
-                                            lines.push(String::new());
-                                        }
-                                        lines.insert(parsed_index, val.clone());
+                                    while lines.len() < parsed_index {
+                                        lines.push(String::new());
                                     }
+                                    lines.insert(parsed_index, val.clone());
                                 }
                                 val = lines.join("\n");
                             }
@@ -447,7 +439,7 @@ pub fn parse_text(value: String) -> String {
         val.replace('\n', "<enter>")
     };
     value_clone = value_clone.replace(' ', "<space>");
-    return value_clone;
+    value_clone
 }
 
 pub fn decode_text(value: String) -> String {
