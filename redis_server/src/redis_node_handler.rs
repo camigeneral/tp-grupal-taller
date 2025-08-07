@@ -15,7 +15,6 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread::{self};
 use std::time::{Duration, Instant};
-use std::env;
 use utils::{get_node_address, get_resource_path, convert_key};
 
 const PRINT_PINGS: bool = false;
