@@ -301,54 +301,52 @@ impl SimpleComponent for FileWorkspace {
                 let file_editor_sender = self.file_editor_ctrl.sender().clone();
                 if let Some(doc) = self.files.get_mut(&(document.clone(), file_type.clone())) {
                     let mut new_content = String::new();
-                    match doc {
-                        Document::Text(ref mut doc_lines) => {
-                            let llm_parsed_content = content.replace("<enter>", "<space>");
-                            println!("Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}, cantidad de lieas {}", document, line, offset, llm_parsed_content,  doc_lines.len());
-                            if line < doc_lines.len() {
-                                let original_line_decoded =
-                                    decode_text(doc_lines[line].to_string());
-                                let parsed_content = decode_text(llm_parsed_content.to_string());
 
-                                let byte_offset = original_line_decoded
-                                    .char_indices()
-                                    .nth(offset)
-                                    .map(|(i, _)| i)
-                                    .unwrap_or(original_line_decoded.len());
+                    if let Document::Text(ref mut doc_lines) = doc {
+                        let llm_parsed_content = content.replace("<enter>", "<space>");
+                        println!("Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}, cantidad de lieas {}", document, line, offset, llm_parsed_content,  doc_lines.len());
+                        if line < doc_lines.len() {
+                            let original_line_decoded =
+                                decode_text(doc_lines[line].to_string());
+                            let parsed_content = decode_text(llm_parsed_content.to_string());
 
-                                let before = &original_line_decoded[..byte_offset];
-                                let after = &original_line_decoded[byte_offset..];
+                            let byte_offset = original_line_decoded
+                                .char_indices()
+                                .nth(offset)
+                                .map(|(i, _)| i)
+                                .unwrap_or(original_line_decoded.len());
 
-                                let mut new_line = String::new();
-                                new_line.push_str(before);
-                                                                
-                                if !after.starts_with(&parsed_content) {
-                                    if !before.ends_with(' ') {
-                                        new_line.push(' ');
-                                    }
-                                    new_line.push_str(&parsed_content);
-                                    if !after.starts_with(' ') {
-                                        new_line.push(' ');
-                                    }
+                            let before = &original_line_decoded[..byte_offset];
+                            let after = &original_line_decoded[byte_offset..];
+
+                            let mut new_line = String::new();
+                            new_line.push_str(before);
+                                                            
+                            if !after.starts_with(&parsed_content) {
+                                if !before.ends_with(' ') {
+                                    new_line.push(' ');
                                 }
-
-                                new_line.push_str(after);
-                                doc_lines[line] = parse_text(new_line);
-                            } else {
-                                let parsed_content =
-                                    &decode_text(llm_parsed_content.to_string());
-                                let mut new_line = String::new();
-
                                 new_line.push_str(&parsed_content);
-                                new_line.push_str(" ");
-                                new_line = parse_text(new_line);
-                                doc_lines.push(new_line);
-                                println!("Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}", document, line, offset, llm_parsed_content);
-                            }                            
-                            new_content = doc_lines.join("\n");
-                        }
-                        _=> {}
-                    };
+                                if !after.starts_with(' ') {
+                                    new_line.push(' ');
+                                }
+                            }
+
+                            new_line.push_str(after);
+                            doc_lines[line] = parse_text(new_line);
+                        } else {
+                            let parsed_content =
+                                &decode_text(llm_parsed_content.to_string());
+                            let mut new_line = String::new();
+
+                            new_line.push_str(parsed_content);
+                            new_line.push(' ');
+                            new_line = parse_text(new_line);
+                            doc_lines.push(new_line);
+                            println!("Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}", document, line, offset, llm_parsed_content);
+                        }                            
+                        new_content = doc_lines.join("\n");
+                    }
 
                     let mut document_info = DocumentValueInfo::new(new_content, line as i32);
                     document_info.decode_text();

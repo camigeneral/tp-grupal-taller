@@ -749,20 +749,19 @@ impl Microservice {
                                                     if !after.starts_with(' ') {
                                                         new_line.push(' ');
                                                     }
-
                                                 }
-                                                new_line.push_str(&parsed_content);
-                                                if !after.starts_with(' ') {
-                                                    new_line.push(' ');
-                                                }
-                                            }
 
-                                            new_line.push_str(after);
-                                            new_line = parse_text(new_line);
-                                              println!(
-                                                  "Insertado en documento '{}' en línea {}, offset {}: {}",
-                                                  document, parsed_line, parsed_offset, llm_parsed_content
-                                              );
+                                                new_line.push_str(after);
+                                                new_line = parse_text(new_line);
+
+                                                new_lines[parsed_line] = new_line;
+                                                let new_document = Document::Text(new_lines);
+                                                docs.insert(document.clone(), new_document);
+
+                                                println!(
+                                                    "Insertado en documento '{}' en línea {}, offset {}: {}",
+                                                    document, parsed_line, parsed_offset, llm_parsed_content
+                                                );
                                             } else {
                                                 let parsed_content =
                                                     &decode_text(llm_parsed_content.to_string());
@@ -779,8 +778,8 @@ impl Microservice {
                                                     "Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, llm_parsed_content
                                                 ));
                                             }
-
                                         }
+                                        _ => {}
                                     };
                                 }
                                 _ => {

@@ -3,7 +3,7 @@ extern crate relm4;
 
 use self::gtk4::prelude::{
     BoxExt, ButtonExt, Cast, EditableExt, EventControllerExt, OrientableExt, TextBufferExt,
-    TextViewExt, WidgetExt, TextBufferExtManual, ObjectExt
+    TextViewExt, WidgetExt
 };
 use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
 use crate::components::structs::document_value_info::DocumentValueInfo;
@@ -199,7 +199,7 @@ impl SimpleComponent for TextEditorModel {
                                 if let Some(c) = full_line_content.chars().nth(0) {
                                     if c != '\n' {
                                         final_string = if cursor_offset == len {
-                                            format!("{}<enter>{}", full_line_content.clone(), "".to_string())
+                                            format!("{}<enter>{}", full_line_content.clone(), "")
                                         } else {
                                             let cursor_pos = cursor_offset as usize;
                                             let before_cursor: String =
