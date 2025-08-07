@@ -91,19 +91,19 @@ pub enum LlmPromptMessage {
         document: String,
         content: String,
         prompt: String,
-        id_client: String
+        id_client: String,
     },
     RequestFile {
         document: String,
         prompt: String,
-        id_client: String
+        id_client: String,
     },
     ChangeLine {
         document: String,
         line: String,
         offset: String,
         prompt: String,
-        id_client: String
+        id_client: String,
     },
     Unknown(String),
     Ignore,
@@ -123,19 +123,17 @@ impl LlmPromptMessage {
         }
 
         match parts[0].as_str() {
-            "request-file" => {
-                LlmPromptMessage::RequestFile {
-                    document: parts[1].clone(),
-                    prompt: parts[2].clone(),
-                    id_client: parts[3].clone()
-                }
-            }
+            "request-file" => LlmPromptMessage::RequestFile {
+                document: parts[1].clone(),
+                prompt: parts[2].clone(),
+                id_client: parts[3].clone(),
+            },
             "change-line" => LlmPromptMessage::ChangeLine {
                 document: parts[1].clone(),
                 line: parts[2].clone(),
                 offset: parts[3].clone(),
                 prompt: parts[4].clone(),
-                id_client: parts[5].clone()
+                id_client: parts[5].clone(),
             },
             "requested-file" => LlmPromptMessage::RequestedFile {
                 document: parts[1].clone(),
@@ -514,7 +512,7 @@ impl LlmMicroservice {
                             &selection_mode,
                             &line,
                             &offset,
-                            &id_client
+                            &id_client,
                         ];
 
                         let message_resp = resp_parser::format_resp_command(message_parts);
@@ -677,7 +675,6 @@ impl LlmMicroservice {
         logger: Logger,
         active_queries: Arc<Mutex<HashSet<String>>>,
     ) -> std::io::Result<()> {
-        
         let mut reader = BufReader::new(node_socket.try_clone()?);
 
         loop {
@@ -695,7 +692,7 @@ impl LlmMicroservice {
                     line,
                     offset,
                     prompt,
-                    id_client
+                    id_client,
                 } => {
                     logger_clone.log(format!(
                         "Se solicito cambio de linea por la IA en el documento: {}, linea: {line}, offset: {offset}, prompt:{prompt}", 
@@ -713,20 +710,25 @@ impl LlmMicroservice {
                         prompt,
                         thread_pool: Arc::clone(&thread_pool_clone),
                         logger: logger_clone.clone(),
-                        active_queries: Arc::clone(&active_queries_clone), 
-                        id_client
+                        active_queries: Arc::clone(&active_queries_clone),
+                        id_client,
                     };
 
                     Self::handle_requests(ctx);
                 }
 
-                LlmPromptMessage::RequestFile { document, prompt, id_client } => {
+                LlmPromptMessage::RequestFile {
+                    document,
+                    prompt,
+                    id_client,
+                } => {
                     logger_clone.log(
                         format!("La IA solicito el documento: {document}, prompt:{prompt}")
                             .as_str(),
                     );
 
-                    let message_parts = &["microservice-request-file", &document, &prompt, &id_client];
+                    let message_parts =
+                        &["microservice-request-file", &document, &prompt, &id_client];
 
                     let message_resp = resp_parser::format_resp_command(message_parts);
                     let command_resp =
@@ -750,7 +752,7 @@ impl LlmMicroservice {
                     document,
                     content,
                     prompt,
-                    id_client
+                    id_client,
                 } => {
                     logger_clone
                         .log(format!("Documento solicitado: {document} content{content}").as_str());
@@ -767,8 +769,8 @@ impl LlmMicroservice {
                         prompt: final_prompt,
                         thread_pool: Arc::clone(&thread_pool_clone),
                         logger: logger_clone.clone(),
-                        active_queries: Arc::clone(&active_queries_clone), 
-                        id_client
+                        active_queries: Arc::clone(&active_queries_clone),
+                        id_client,
                     };
 
                     Self::handle_requests(ctx);
@@ -785,13 +787,13 @@ impl LlmMicroservice {
         thread_pool: Arc<ThreadPool>,
         node_streams: NodeStreams,
         logger: Logger,
-        active_queries: Arc<Mutex<HashSet<String>>>, 
+        active_queries: Arc<Mutex<HashSet<String>>>,
     ) -> std::io::Result<()> {
         for stream in receiver {
             let thread_pool_clone = Arc::clone(&thread_pool);
             let cloned_node_streams = Arc::clone(&node_streams);
             let logger_clone = logger.clone();
-            let active_queries_clone = Arc::clone(&active_queries); 
+            let active_queries_clone = Arc::clone(&active_queries);
 
             thread::spawn(move || {
                 if let Err(e) = Self::listen_node_responses(
@@ -799,7 +801,7 @@ impl LlmMicroservice {
                     thread_pool_clone,
                     cloned_node_streams,
                     logger_clone,
-                    active_queries_clone, 
+                    active_queries_clone,
                 ) {
                     println!("Error en la conexión con el nodo: {}", e);
                 }
@@ -812,14 +814,14 @@ impl LlmMicroservice {
         let thread_pool_clone = Arc::clone(&self.thread_pool);
         let cloned_node_streams = Arc::clone(&self.node_streams);
         let logger_clone = self.logger.clone();
-        let active_queries_clone = Arc::clone(&self.active_queries); 
+        let active_queries_clone = Arc::clone(&self.active_queries);
         thread::spawn(move || {
             if let Err(e) = Self::handle_node_connections(
                 receiver,
                 thread_pool_clone,
                 cloned_node_streams,
                 logger_clone,
-                active_queries_clone, 
+                active_queries_clone,
             ) {
                 println!("Error en la conexión con el nodo: {}", e);
             }

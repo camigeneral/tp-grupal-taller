@@ -717,69 +717,67 @@ impl Microservice {
                                         }
                                     };
 
-                                    match documento {
-                                        Document::Text(doc_lines) => {
-                                            let llm_parsed_content = content.replace("<enter>", "<space>");
+                                    if let Document::Text(doc_lines) = documento {
+                                        let llm_parsed_content =
+                                            content.replace("<enter>", "<space>");
 
-                                            let mut new_lines = doc_lines.clone();
-                                            if parsed_line < new_lines.len() {
-                                                let original_line_decoded =
-                                                    decode_text(new_lines[parsed_line].to_string());
-                                                let parsed_content =
-                                                    decode_text(llm_parsed_content.to_string());
+                                        let mut new_lines = doc_lines.clone();
+                                        if parsed_line < new_lines.len() {
+                                            let original_line_decoded =
+                                                decode_text(new_lines[parsed_line].to_string());
+                                            let parsed_content =
+                                                decode_text(llm_parsed_content.to_string());
 
-                                                // Convertimos offset en caracteres a offset en bytes
-                                                let byte_offset = original_line_decoded
-                                                    .char_indices()
-                                                    .nth(parsed_offset)
-                                                    .map(|(i, _)| i)
-                                                    .unwrap_or(original_line_decoded.len());
+                                            // Convertimos offset en caracteres a offset en bytes
+                                            let byte_offset = original_line_decoded
+                                                .char_indices()
+                                                .nth(parsed_offset)
+                                                .map(|(i, _)| i)
+                                                .unwrap_or(original_line_decoded.len());
 
-                                                let before = &original_line_decoded[..byte_offset];
-                                                let after = &original_line_decoded[byte_offset..];
+                                            let before = &original_line_decoded[..byte_offset];
+                                            let after = &original_line_decoded[byte_offset..];
 
-                                                let mut new_line = String::new();
-                                                new_line.push_str(before);
+                                            let mut new_line = String::new();
+                                            new_line.push_str(before);
 
-                                                if !after.starts_with(&parsed_content) {
-                                                    if !before.ends_with(' ') {
-                                                        new_line.push(' ');
-                                                    }
-                                                    new_line.push_str(&parsed_content);
-                                                    if !after.starts_with(' ') {
-                                                        new_line.push(' ');
-                                                    }
+                                            if !after.starts_with(&parsed_content) {
+                                                if !before.ends_with(' ') {
+                                                    new_line.push(' ');
                                                 }
-
-                                                new_line.push_str(after);
-                                                new_line = parse_text(new_line);
-
-                                                new_lines[parsed_line] = new_line;
-                                                let new_document = Document::Text(new_lines);
-                                                docs.insert(document.clone(), new_document);
-
-                                                println!(
-                                                    "Insertado en documento '{}' en línea {}, offset {}: {}",
-                                                    document, parsed_line, parsed_offset, llm_parsed_content
-                                                );
-                                            } else {
-                                                let parsed_content =
-                                                    &decode_text(llm_parsed_content.to_string());
-                                                let mut new_line = String::new();
-
                                                 new_line.push_str(&parsed_content);
-                                                new_line.push_str(" ");
-                                                new_line = parse_text(new_line);
-                                                new_lines.push(new_line);
-                                                let new_document = Document::Text(new_lines);
-                                                docs.insert(document.clone(), new_document);
-                                                println!("Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, llm_parsed_content);
-                                                log_clone.log(&format!(
-                                                    "Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, llm_parsed_content
-                                                ));
+                                                if !after.starts_with(' ') {
+                                                    new_line.push(' ');
+                                                }
                                             }
+
+                                            new_line.push_str(after);
+                                            new_line = parse_text(new_line);
+
+                                            new_lines[parsed_line] = new_line;
+                                            let new_document = Document::Text(new_lines);
+                                            docs.insert(document.clone(), new_document);
+
+                                            println!(
+                                                "Insertado en documento '{}' en línea {}, offset {}: {}",
+                                                document, parsed_line, parsed_offset, llm_parsed_content
+                                            );
+                                        } else {
+                                            let parsed_content =
+                                                &decode_text(llm_parsed_content.to_string());
+                                            let mut new_line = String::new();
+
+                                            new_line.push_str(parsed_content);
+                                            new_line.push(' ');
+                                            new_line = parse_text(new_line);
+                                            new_lines.push(new_line);
+                                            let new_document = Document::Text(new_lines);
+                                            docs.insert(document.clone(), new_document);
+                                            println!("Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, llm_parsed_content);
+                                            log_clone.log(&format!(
+                                                "Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, llm_parsed_content
+                                            ));
                                         }
-                                        _ => {}
                                     };
                                 }
                                 _ => {
@@ -801,7 +799,11 @@ impl Microservice {
                         log_clone.log("Error obteniendo lock de documents para LLMResponse");
                     }
                 }
-                MicroserviceMessage::RequestFile { document, prompt, id_client } => {
+                MicroserviceMessage::RequestFile {
+                    document,
+                    prompt,
+                    id_client,
+                } => {
                     if let Ok(mut docs) = documents.lock() {
                         if let Some(documento) = docs.get_mut(&document) {
                             let content = match documento {
@@ -813,7 +815,7 @@ impl Microservice {
                                 &document.clone(),
                                 &content.clone(),
                                 &prompt.clone(),
-                                &id_client.clone()
+                                &id_client.clone(),
                             ];
                             let message_resp = format_resp_command(message_parts);
                             let command_resp = format_resp_publish("llm_requests", &message_resp);

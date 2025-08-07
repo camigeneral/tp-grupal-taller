@@ -3,13 +3,13 @@ extern crate relm4;
 
 use self::gtk4::prelude::{
     BoxExt, ButtonExt, Cast, EditableExt, EventControllerExt, OrientableExt, TextBufferExt,
-    TextViewExt, WidgetExt
+    TextViewExt, WidgetExt,
 };
 use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
 use crate::components::structs::document_value_info::DocumentValueInfo;
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::fmt;
+use std::rc::Rc;
 
 /// Estructura que representa el modelo del editor de archivos. Contiene información sobre el archivo
 /// que se está editando, el contenido del archivo y el estado de cambios manuales en el contenido.
@@ -202,16 +202,20 @@ impl SimpleComponent for TextEditorModel {
                                             format!("{}<enter>{}", full_line_content.clone(), "")
                                         } else {
                                             let cursor_pos = cursor_offset as usize;
-                                            let before_cursor: String =
-                                                full_line_content.chars().take(cursor_pos).collect();
-                                            let after_cursor: String =
-                                                full_line_content.chars().skip(cursor_pos).collect();
-        
+                                            let before_cursor: String = full_line_content
+                                                .chars()
+                                                .take(cursor_pos)
+                                                .collect();
+                                            let after_cursor: String = full_line_content
+                                                .chars()
+                                                .skip(cursor_pos)
+                                                .collect();
+
                                             format!("{}<enter>{}", before_cursor, after_cursor)
                                         };
-                                    } 
-                                } 
-                                
+                                    }
+                                }
+
                                 println!("final_string {final_string}");
                                 let doc_info: DocumentValueInfo =
                                     DocumentValueInfo::new(final_string, line_number);
@@ -248,7 +252,7 @@ impl SimpleComponent for TextEditorModel {
                     self.prompt = "".to_string();
                     if let Some(widget) = &self.prompt_widget {
                         widget.set_text("");
-                    }                    
+                    }
                     let _ = sender.output(TextEditorOutputMessage::SendPrompt(document));
                 }
             }
@@ -256,7 +260,7 @@ impl SimpleComponent for TextEditorModel {
                 self.selection_mode = mode;
             }
             TextEditorMessage::SetPrompt(prompt) => {
-                self.prompt = prompt;                
+                self.prompt = prompt;
             }
             TextEditorMessage::ContentAdded(mut doc_info) => {
                 if !self.content_changed_manually {
@@ -272,7 +276,7 @@ impl SimpleComponent for TextEditorModel {
                 self.content_changed_manually = false;
 
                 self.file_name = file_name;
-                self.num_contributors = contributors;                
+                self.num_contributors = contributors;
                 self.content = content;
                 self.buffer.set_text(&self.content.to_string());
 
@@ -290,7 +294,7 @@ impl SimpleComponent for TextEditorModel {
                 self.prompt = "".to_string();
                 if let Some(widget) = &self.prompt_widget {
                     widget.set_text("");
-                }  
+                }
                 *self.programmatic_update.borrow_mut() = false;
             }
         }

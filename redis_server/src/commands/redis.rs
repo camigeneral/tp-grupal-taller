@@ -4,15 +4,12 @@ use super::redis_response::RedisResponse;
 use super::resp_parser::{CommandRequest, CommandResponse, ValueType};
 use super::set;
 use super::string;
-use ExecuteCommandParams;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use types::*;
+use ExecuteCommandParams;
 
-pub fn execute_command(
-    execute_command_params: ExecuteCommandParams
-) -> RedisResponse {
-
+pub fn execute_command(execute_command_params: ExecuteCommandParams) -> RedisResponse {
     let docs = execute_command_params.docs;
     let request = execute_command_params.request;
     let document_subscribers = execute_command_params.document_subscribers;

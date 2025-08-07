@@ -2,6 +2,7 @@ extern crate relm4;
 use self::relm4::Sender as UiSender;
 use crate::app::AppMsg;
 extern crate uuid;
+use self::uuid::Uuid;
 use crate::components::structs::document_value_info::DocumentValueInfo;
 use rusty_docs::resp_parser;
 use rusty_docs::resp_parser::{format_resp_command, format_resp_publish};
@@ -12,8 +13,6 @@ use std::sync::mpsc::{channel, Receiver, Sender as MpscSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use types::RedisClientResponseType;
-use self::uuid::Uuid;
-
 
 /// Registro de canales de escritura asociados a nodos.
 ///
@@ -75,7 +74,7 @@ pub struct LocalClient {
     rx_ui: Option<Receiver<String>>,
     /// Registro de canales de escritura para los nodos conectados.
     writer_registry: WriterRegistry,
-    //Id del cliente    
+    //Id del cliente
     id: String,
 }
 
@@ -448,7 +447,6 @@ impl LocalClient {
     /// * `response` - Respuesta recibida.
     /// * `ui_sender` - Canal para enviar mensajes a la UI.
     fn handle_write(response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) {
-
         if let Some(sender) = &ui_sender {
             let index = match response[1].parse::<i32>() {
                 Ok(i) => i,
@@ -664,9 +662,7 @@ impl LocalClient {
                 RedisClientResponseType::Status => {
                     Self::handle_status(response, local_addr.to_string(), cloned_ui_sender)
                 }
-                RedisClientResponseType::Write => {
-                    Self::handle_write(response, cloned_ui_sender)
-                },
+                RedisClientResponseType::Write => Self::handle_write(response, cloned_ui_sender),
                 RedisClientResponseType::Llm => {
                     let comming_id_client = response[6].clone();
                     if comming_id_client == params.id_client.clone() {
@@ -677,14 +673,14 @@ impl LocalClient {
                             response[3].clone(),
                             response[4].clone(),
                             response[5].clone(),
-                            params.id_client.clone()
+                            params.id_client.clone(),
                         ];
                         Self::handle_llm_response(response, cloned_ui_sender.clone());
                         if let Some(ui_sender) = cloned_ui_sender.clone() {
-                            let _ = ui_sender.send(AppMsg::PublishLlmResponse(command_parts.to_vec()));
+                            let _ =
+                                ui_sender.send(AppMsg::PublishLlmResponse(command_parts.to_vec()));
                         }
                     }
-                    
                 }
                 RedisClientResponseType::ClientLlm => {
                     Self::handle_client_llm(response, cloned_ui_sender, params.id_client.clone())
@@ -781,7 +777,7 @@ impl LocalClient {
 
             // Si hay documento en el último comando, vuelvo a hacer subscribe
             if let Some(doc_name) = Self::extract_document_name(&last_line_cloned) {
-                if !last_line_cloned.to_string().contains("\nset") {                    
+                if !last_line_cloned.to_string().contains("\nset") {
                     let subscribe_command = format!(
                         "*2\r\n$9\r\nsubscribe\r\n${}\r\n{}\r\n",
                         doc_name.len(),
@@ -790,7 +786,7 @@ impl LocalClient {
                     writer_sender.send(subscribe_command)?;
                 } else {
                     writer_sender.send(last_line_cloned)?;
-                }                
+                }
             } else {
                 writer_sender.send(last_line_cloned)?;
             }
@@ -818,7 +814,7 @@ impl From<&LocalClient> for NodeConnectionContext {
             last_command_sent: Arc::clone(&client.last_command_sent),
             ui_sender: client.ui_sender.clone(),
             writer_registry: client.writer_registry.clone(),
-            id_client: client.id.clone()
+            id_client: client.id.clone(),
         }
     }
 }
