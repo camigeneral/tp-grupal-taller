@@ -124,7 +124,7 @@ impl LlmPromptMessage {
 
         match parts[0].as_str() {
             "request-file" => {
-                return LlmPromptMessage::RequestFile {
+                LlmPromptMessage::RequestFile {
                     document: parts[1].clone(),
                     prompt: parts[2].clone(),
                     id_client: parts[3].clone()
@@ -326,7 +326,7 @@ impl LlmMicroservice {
 
     /// Obtiene las instrucciones del sistema para el modelo LLM
     fn get_llm_instruction() -> String {
-        return r#"INSTRUCCIONES
+        r#"INSTRUCCIONES
         Respondé únicamente con la respuesta solicitada. No agregues introducciones, explicaciones, comentarios, aclaraciones ni conclusiones. No uses frases como 'Claro', 'Aquí está', 'Como modelo de lenguaje', etc. Respondé únicamente con el texto generado.
         
         FORMATO DE RESPUESTA:
@@ -356,7 +356,7 @@ impl LlmMicroservice {
         → Salida: Bonjour<enter>comme
         - Entrada: 'content-to-change:{lorem ipsum}, user-prompt:{Generá un ensayo sobre Marte}'  
         → Salida: Marte<space>es<space>el<space>cuarto<space>planeta<space>del<space>sistema<space>solar.<enter>Es<space>conocido<space>por<space>su<space>color<space>rojo...
-        "#.to_string();
+        "#.to_string()
     }
 
     /// Envía una solicitud al modelo Gemini y obtiene la respuesta
@@ -546,7 +546,7 @@ impl LlmMicroservice {
         let node_addresses = get_nodes_addresses();
 
         if node_addresses.is_empty() {
-            self.logger.log(format!("REDIS_NODE_HOSTS").as_str());
+            self.logger.log("REDIS_NODE_HOSTS".to_string().as_str());
             return Err(Error::new(
                 ErrorKind::InvalidInput,
                 "No hay nodos configurados en REDIS_NODE_HOSTS",
@@ -730,7 +730,7 @@ impl LlmMicroservice {
 
                     let message_resp = resp_parser::format_resp_command(message_parts);
                     let command_resp =
-                        resp_parser::format_resp_publish(&"notifications", &message_resp);
+                        resp_parser::format_resp_publish("notifications", &message_resp);
 
                     println!(
                         "Enviando publish: {}",

@@ -54,3 +54,16 @@ pub fn get_node_address(port: usize) -> String {
         format!("127.0.0.1:{}", port)
     }
 }
+
+pub fn convert_key() -> [u8; 16] {
+    let encryption_key = env::var("ENCRYPTION_KEY").unwrap_or_else(|_| {
+        eprintln!("ENCRYPTION_KEY is not configured");
+        "".to_string()
+    });
+    
+    let mut key_result = [0u8; 16];
+    let bytes = encryption_key.as_bytes();
+    let len = bytes.len().min(16);
+    key_result[..len].copy_from_slice(&bytes[..len]);
+    key_result
+}

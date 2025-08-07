@@ -299,7 +299,7 @@ impl SimpleComponent for AppModel {
         image.set_margin_top(20);
 
         // Agregar la imagen manualmente al logo_box
-        if let Some(logo_box) = widgets.logo_box.clone().dynamic_cast::<gtk::Box>().ok() {
+        if let Ok(logo_box) = widgets.logo_box.clone().dynamic_cast::<gtk::Box>() {
             logo_box.append(&image);
         }
         thread::spawn(
@@ -589,7 +589,7 @@ impl SimpleComponent for AppModel {
                             if let Ok(file) = fs::File::open(&path) {
                                 use std::io::{BufRead, BufReader};
                                 let reader = BufReader::new(file);
-                                for line in reader.lines().flatten() {
+                                for line in reader.lines().map_while(Result::ok) {
                                     if let Some((doc_name, _)) = line.split_once("/++/") {
                                         if !doc_name.trim().is_empty() {
                                             doc_names.insert(doc_name.trim().to_string());

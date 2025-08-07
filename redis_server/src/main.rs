@@ -107,11 +107,7 @@ fn start_server(
             "./redis_server/rdb_files/redis_node_{}_{}_{}.rdb",
             locked_node.hash_range.0, locked_node.hash_range.1, locked_node.port
         );
-        let node_role = match locked_node.role {
-            local_node::NodeRole::Master => local_node::NodeRole::Master,
-            local_node::NodeRole::Replica => local_node::NodeRole::Replica,
-            local_node::NodeRole::Unknown => local_node::NodeRole::Unknown,
-        };
+        let node_role = locked_node.role.clone();
         (file_name, node_role)
     };
 
@@ -784,11 +780,7 @@ pub fn resolve_key_location(
             Ok(lock) => lock,
             Err(poisoned) => poisoned.into_inner(),
         };
-        let node_role = match locked_node.role {
-            NodeRole::Master => NodeRole::Master,
-            NodeRole::Replica => NodeRole::Replica,
-            NodeRole::Unknown => NodeRole::Unknown,
-        };
+        let node_role = locked_node.role.clone();
 
         (
             locked_node.hash_range.0,

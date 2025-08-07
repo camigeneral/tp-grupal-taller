@@ -1,4 +1,5 @@
 use resp_parser::format_resp_command;
+use std::fmt;
 
 /// Enum que representa los distintos tipos de mensajes que puede procesar el microservicio.
 ///
@@ -95,10 +96,10 @@ impl MicroserviceMessage {
     }
 }
 
-impl ToString for MicroserviceMessage {
+impl fmt::Display for MicroserviceMessage {
     /// Convierte el mensaje en un string en formato RESP para enviar por la red.
-    fn to_string(&self) -> String {
-        match self {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let resp = match self {
             MicroserviceMessage::ClientSubscribed {
                 document,
                 client_id,
@@ -109,6 +110,7 @@ impl ToString for MicroserviceMessage {
                 stream_id,
             } => format_resp_command(&["DOC", document, content, stream_id]),
             _ => "".to_string(),
-        }
+        };
+        write!(f, "{}", resp)
     }
 }
