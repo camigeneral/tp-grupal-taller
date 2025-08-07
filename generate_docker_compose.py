@@ -31,7 +31,8 @@ for node in node_config:
         "container_name": node_name,
         "working_dir": "/app/",
         "environment": {
-            "LOG_FILE": f"/app/logs/{node_name}.log"
+            "LOG_FILE": f"/app/logs/{node_name}.log",
+            "ENCRYPTION_KEY": "${ENCRYPTION_KEY}",
         },
         "ports": [
             f"{14000 + (port - 4000)}:{14000 + (port - 4000)}",

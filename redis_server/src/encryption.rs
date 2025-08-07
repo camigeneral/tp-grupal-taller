@@ -4,7 +4,6 @@ use self::aes::cipher::{generic_array::GenericArray, BlockEncrypt};
 use self::aes::Aes128;
 use self::base64::{engine::general_purpose, Engine as _};
 
-pub const KEY: [u8; 16] = *b"clavesecreta1234";
 pub const ENCRYPTION: bool = true;
 
 /// Encripta un mensaje utilizando AES-128, codificando

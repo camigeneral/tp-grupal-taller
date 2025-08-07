@@ -1,7 +1,7 @@
 extern crate rusty_docs;
 use crate::persist_documents;
 use commands::redis;
-use encryption::{encrypt_message, ENCRYPTION, KEY};
+use encryption::{encrypt_message, ENCRYPTION};
 use local_node::{LocalNode, NodeRole, NodeState};
 use peer_node;
 use rusty_docs::resp_parser::{parse_replica_command, write_response, CommandResponse};
@@ -15,7 +15,8 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread::{self};
 use std::time::{Duration, Instant};
-use utils::{get_node_address, get_resource_path};
+use std::env;
+use utils::{get_node_address, get_resource_path, convert_key};
 
 const PRINT_PINGS: bool = false;
 
@@ -72,7 +73,8 @@ pub fn start_node_connection(
     shared_documents: &RedisDocumentsMap,
     shared_sets: &SetsMap,
 ) -> Result<(), std::io::Error> {
-    let key = GenericArray::from_slice(&KEY);
+    let encryption_key = convert_key();
+    let key = GenericArray::from_slice(&encryption_key);
     let cipher = Aes128::new(key);
 
     let cloned_nodes = Arc::clone(peer_nodes);
@@ -256,7 +258,8 @@ fn handle_node(
     shared_documents: RedisDocumentsMap,
     shared_sets: SetsMap,
 ) -> std::io::Result<()> {
-    let key = GenericArray::from_slice(&KEY);
+    let encryption_key = convert_key();
+    let key = GenericArray::from_slice(&encryption_key);
     let cipher = Aes128::new(key);
 
     let reader = match stream.try_clone() {
@@ -630,7 +633,8 @@ pub fn broadcast_to_replicas(
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
     unparsed_command: String,
 ) -> std::io::Result<()> {
-    let key = GenericArray::from_slice(&KEY);
+    let encryption_key = convert_key();
+    let key = GenericArray::from_slice(&encryption_key);
     let cipher = Aes128::new(key);
 
     let locked_local_node = match local_node.lock() {
@@ -774,7 +778,8 @@ fn serialize_vec_hashmap(
     map: &HashMap<String, String>,
     mut stream: TcpStream,
 ) -> std::io::Result<()> {
-    let key = GenericArray::from_slice(&KEY);
+    let encryption_key = convert_key();
+    let key = GenericArray::from_slice(&encryption_key);
     let cipher = Aes128::new(key);
 
     for (key, line) in map {
@@ -794,7 +799,8 @@ fn serialize_hashset_hashmap(
     map: &HashMap<String, HashSet<String>>,
     mut stream: TcpStream,
 ) -> std::io::Result<()> {
-    let key = GenericArray::from_slice(&KEY);
+    let encryption_key = convert_key();
+    let key = GenericArray::from_slice(&encryption_key);
     let cipher = Aes128::new(key);
 
     for (key, set) in map {
@@ -850,7 +856,8 @@ fn ping_to_node(
     local_node: Arc<Mutex<LocalNode>>,
     peer_nodes: Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
 ) -> std::io::Result<()> {
-    let key = GenericArray::from_slice(&KEY);
+    let encryption_key = convert_key();
+    let key = GenericArray::from_slice(&encryption_key);
     let cipher = Aes128::new(key);
     let ping_interval = Duration::from_secs(5);
     let error_interval = Duration::from_secs(5);
@@ -937,7 +944,8 @@ fn detect_failed_node(
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
     inactive_port: usize,
 ) -> bool {
-    let key = GenericArray::from_slice(&KEY);
+    let encryption_key = convert_key();
+    let key = GenericArray::from_slice(&encryption_key);
     let cipher = Aes128::new(key);
     let mut locked_peer_nodes = match peer_nodes.lock() {
         Ok(guard) => guard,
@@ -1014,7 +1022,8 @@ fn set_failed_node(
     inactive_port: usize,
     inactive_state: NodeState,
 ) -> bool {
-    let key = GenericArray::from_slice(&KEY);
+    let encryption_key = convert_key();
+    let key = GenericArray::from_slice(&encryption_key);
     let cipher = Aes128::new(key);
     let mut locked_peer_nodes = match peer_nodes.lock() {
         Ok(guard) => guard,
@@ -1116,7 +1125,8 @@ fn initialize_replica_promotion(
     local_node: &Arc<Mutex<LocalNode>>,
     peer_nodes: &Arc<Mutex<HashMap<String, peer_node::PeerNode>>>,
 ) {
-    let key = GenericArray::from_slice(&KEY);
+    let encryption_key = convert_key();
+    let key = GenericArray::from_slice(&encryption_key);
     let cipher = Aes128::new(key);
     let (mut locked_local_node, locked_peer_nodes) = match (local_node.lock(), peer_nodes.lock()) {
         (Ok(local), Ok(peers)) => (local, peers),
@@ -1158,3 +1168,6 @@ fn initialize_replica_promotion(
         }
     }
 }
+
+
+
