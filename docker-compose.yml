@@ -18,8 +18,8 @@ services:
       - "14000:14000"
       - "4000:4000"
     volumes:
-      - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+      - ./redis_server/rdb_files/redis_node_0_5460_14000.rdb:/app/redis_server/rdb_files/node0.rdb
+      - ./logs/node0:/app/logs/node0.log
     ulimits:
       nofile:
         soft: 65536
@@ -41,8 +41,8 @@ services:
       - "14001:14001"
       - "4001:4001"
     volumes:
-      - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+      - ./redis_server/rdb_files/redis_node_5460_10921_14001.rdb:/app/redis_server/rdb_files/node1.rdb
+      - ./logs/node1:/app/logs/node1.log
     ulimits:
       nofile:
         soft: 65536
@@ -64,8 +64,8 @@ services:
       - "14002:14002"
       - "4002:4002"
     volumes:
-      - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+      - ./redis_server/rdb_files/redis_node_10921_16383_14002.rdb:/app/redis_server/rdb_files/node2.rdb
+      - ./logs/node2:/app/logs/node2.log
     ulimits:
       nofile:
         soft: 65536
@@ -87,8 +87,8 @@ services:
       - "14003:14003"
       - "4003:4003"
     volumes:
-      - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+      - ./redis_server/rdb_files/redis_node_0_5460_14003.rdb:/app/redis_server/rdb_files/node3.rdb
+      - ./logs/node3:/app/logs/node3.log
     ulimits:
       nofile:
         soft: 65536
@@ -110,8 +110,8 @@ services:
       - "14004:14004"
       - "4004:4004"
     volumes:
-      - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+      - ./redis_server/rdb_files/redis_node_0_5460_14004.rdb:/app/redis_server/rdb_files/node4.rdb
+      - ./logs/node4:/app/logs/node4.log
     ulimits:
       nofile:
         soft: 65536
@@ -133,8 +133,8 @@ services:
       - "14005:14005"
       - "4005:4005"
     volumes:
-      - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+      - ./redis_server/rdb_files/redis_node_5460_10921_14005.rdb:/app/redis_server/rdb_files/node5.rdb
+      - ./logs/node5:/app/logs/node5.log
     ulimits:
       nofile:
         soft: 65536
@@ -156,8 +156,8 @@ services:
       - "14006:14006"
       - "4006:4006"
     volumes:
-      - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+      - ./redis_server/rdb_files/redis_node_5460_10921_14006.rdb:/app/redis_server/rdb_files/node6.rdb
+      - ./logs/node6:/app/logs/node6.log
     ulimits:
       nofile:
         soft: 65536
@@ -179,8 +179,8 @@ services:
       - "14007:14007"
       - "4007:4007"
     volumes:
-      - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+      - ./redis_server/rdb_files/redis_node_10921_16383_14007.rdb:/app/redis_server/rdb_files/node7.rdb
+      - ./logs/node7:/app/logs/node7.log
     ulimits:
       nofile:
         soft: 65536
@@ -202,8 +202,8 @@ services:
       - "14008:14008"
       - "4008:4008"
     volumes:
-      - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+      - ./redis_server/rdb_files/redis_node_10921_16383_14008.rdb:/app/redis_server/rdb_files/node8.rdb
+      - ./logs/node8:/app/logs/node8.log
     ulimits:
       nofile:
         soft: 65536
