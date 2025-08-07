@@ -262,7 +262,9 @@ impl LocalClient {
         let cmd_upper = cmd.to_ascii_uppercase();
 
         if cmd_upper.contains("WRITE") {
-            let splited_command: Vec<&str> = command.split('|').collect();
+            let mut splited_command: Vec<&str> = command.split('|').collect();
+            let id_client = self.id.clone();
+            splited_command.push(&id_client);
             let client_command = format_resp_command(&splited_command);
             let key = splited_command.get(4).unwrap_or(&"");
             return format_resp_publish(key, &client_command);
@@ -446,6 +448,7 @@ impl LocalClient {
     /// * `response` - Respuesta recibida.
     /// * `ui_sender` - Canal para enviar mensajes a la UI.
     fn handle_write(response: Vec<String>, ui_sender: Option<UiSender<AppMsg>>) {
+
         if let Some(sender) = &ui_sender {
             let index = match response[1].parse::<i32>() {
                 Ok(i) => i,
@@ -462,12 +465,12 @@ impl LocalClient {
             if split_text.len() == 2 {
                 let mut doc_info = DocumentValueInfo::new(text.to_string(), index);
                 doc_info.file = file.clone();
-                doc_info.decode_text();
+                doc_info.parse_text();
                 let _ = sender.send(AppMsg::RefreshData(doc_info));
             } else {
                 let mut doc_info = DocumentValueInfo::new(text, index);
                 doc_info.file = file.clone();
-                doc_info.decode_text();
+                doc_info.parse_text();
                 let _ = sender.send(AppMsg::RefreshData(doc_info));
             }
         }
@@ -661,7 +664,9 @@ impl LocalClient {
                 RedisClientResponseType::Status => {
                     Self::handle_status(response, local_addr.to_string(), cloned_ui_sender)
                 }
-                RedisClientResponseType::Write => Self::handle_write(response, cloned_ui_sender),
+                RedisClientResponseType::Write => {
+                    Self::handle_write(response, cloned_ui_sender)
+                },
                 RedisClientResponseType::Llm => {
                     let comming_id_client = response[6].clone();
                     if comming_id_client == params.id_client.clone() {
