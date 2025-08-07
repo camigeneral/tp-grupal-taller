@@ -156,7 +156,7 @@ impl Microservice {
     /// * `Ok(())` - El microservicio se inició correctamente.
     /// * `Err(Box<dyn std::error::Error>)` - Error si no se puede conectar al nodo Redis o establecer las conexiones.
     pub fn start(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let main_address = format!("node0:4000");
+        let main_address = "node0:4000".to_string();
 
         println!("Conectándome al server de redis en {:?}", main_address);
         let mut socket: TcpStream = Self::connect_to_node_with_retry(&main_address, &self.logger)?;
@@ -272,7 +272,7 @@ impl Microservice {
     fn get_document_data(documento: &Document) -> String {
         match documento {
             Document::Text(lines) => {
-                let mut data: String = format!("");
+                let mut data: String = String::new();
                 for linea in lines {
                     data.push_str(linea.trim().trim_end_matches('\n').trim_start_matches('\n'));
                     data.push_str("/--/");
@@ -280,7 +280,7 @@ impl Microservice {
                 data
             }
             Document::Spreadsheet(lines) => {
-                let mut data: String = format!("");
+                let mut data: String = String::new();
                 for linea in lines {
                     data.push_str(linea.trim().trim_end_matches('\n').trim_start_matches('\n'));
                     data.push_str("/--/");
@@ -749,19 +749,20 @@ impl Microservice {
                                                     if !after.starts_with(' ') {
                                                         new_line.push(' ');
                                                     }
+
                                                 }
+                                                new_line.push_str(&parsed_content);
+                                                if !after.starts_with(' ') {
+                                                    new_line.push(' ');
+                                                }
+                                            }
 
-                                                new_line.push_str(after);
-                                                new_line = parse_text(new_line);
-
-                                                new_lines[parsed_line] = new_line;
-                                                let new_document = Document::Text(new_lines);
-                                                docs.insert(document.clone(), new_document);
-
-                                                println!(
-                                                    "Insertado en documento '{}' en línea {}, offset {}: {}",
-                                                    document, parsed_line, parsed_offset, llm_parsed_content
-                                                );
+                                            new_line.push_str(after);
+                                            new_line = parse_text(new_line);
+                                              println!(
+                                                  "Insertado en documento '{}' en línea {}, offset {}: {}",
+                                                  document, parsed_line, parsed_offset, llm_parsed_content
+                                              );
                                             } else {
                                                 let parsed_content =
                                                     &decode_text(llm_parsed_content.to_string());
@@ -778,8 +779,8 @@ impl Microservice {
                                                     "Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, llm_parsed_content
                                                 ));
                                             }
+
                                         }
-                                        _ => {}
                                     };
                                 }
                                 _ => {
@@ -816,7 +817,7 @@ impl Microservice {
                                 &id_client.clone()
                             ];
                             let message_resp = format_resp_command(message_parts);
-                            let command_resp = format_resp_publish(&"llm_requests", &message_resp);
+                            let command_resp = format_resp_publish("llm_requests", &message_resp);
                             log_clone.log(&format!(
                                 "Documento encontrado para LLMResponse: {}",
                                 document
@@ -963,7 +964,7 @@ pub fn parse_text(value: String) -> String {
         val.replace('\n', "<enter>")
     };
     value_clone = value_clone.replace(' ', "<space>");
-    return value_clone;
+    value_clone
 }
 
 /// Convierte texto codificado a formato normal
@@ -1011,7 +1012,7 @@ fn get_nodes_addresses() -> Vec<String> {
             }
         }
     } else {
-        return vec![
+        vec![
             "127.0.0.1:4008".to_string(),
             "127.0.0.1:4007".to_string(),
             "127.0.0.1:4006".to_string(),
@@ -1020,7 +1021,7 @@ fn get_nodes_addresses() -> Vec<String> {
             "127.0.0.1:4003".to_string(),
             "127.0.0.1:4002".to_string(),
             "127.0.0.1:4001".to_string(),
-        ];
+        ]
     }
 }
 

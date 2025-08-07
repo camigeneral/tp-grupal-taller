@@ -9,6 +9,7 @@ use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleCom
 use crate::components::structs::document_value_info::DocumentValueInfo;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::fmt;
 
 /// Estructura que representa el modelo del editor de archivos. Contiene información sobre el archivo
 /// que se está editando, el contenido del archivo y el estado de cambios manuales en el contenido.
@@ -48,12 +49,13 @@ pub enum SelectionMode {
     WholeFile,
 }
 
-impl ToString for SelectionMode {
-    fn to_string(&self) -> String {
-        match self {
-            SelectionMode::Cursor => "cursor".to_string(),
-            SelectionMode::WholeFile => "whole-file".to_string(),
-        }
+impl fmt::Display for SelectionMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            SelectionMode::Cursor => "cursor",
+            SelectionMode::WholeFile => "whole-file",
+        };
+        write!(f, "{}", s)
     }
 }
 
@@ -234,10 +236,10 @@ impl SimpleComponent for TextEditorModel {
         match message {
             TextEditorMessage::SendPrompt => {
                 println!("{}", self.prompt);
-                if self.prompt.len() == 0 {
+                if self.prompt.is_empty() {
                     return;
                 }
-                if let Some((line, offset)) = self.cursor_position.borrow().clone() {
+                if let Some((line, offset)) = *self.cursor_position.borrow() {
                     let mut document = DocumentValueInfo::new(self.content.clone(), line);
                     document.offset = offset;
                     document.prompt = self.prompt.clone();
@@ -272,7 +274,7 @@ impl SimpleComponent for TextEditorModel {
                 self.file_name = file_name;
                 self.num_contributors = contributors;                
                 self.content = content;
-                self.buffer.set_text(&format!("{}", self.content));
+                self.buffer.set_text(&self.content.to_string());
 
                 self.content_changed_manually = true;
                 *self.programmatic_update.borrow_mut() = false;

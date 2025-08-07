@@ -166,7 +166,6 @@ pub fn format_resp_publish(channel: &str, message: &str) -> String {
 ///
 /// # Errores
 /// Retorna `std::io::Error` si el formato RESP no es válido o si ocurre un error de lectura.
-
 pub fn parse_resp_command(
     reader: &mut BufReader<TcpStream>,
 ) -> std::io::Result<(Vec<String>, String)> {

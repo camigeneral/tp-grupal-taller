@@ -132,7 +132,7 @@ impl SimpleComponent for LoginForm {
         let widgets = view_output!();
         // Agregar la imagen manualmente al primer Box
         if let Some(box_) = widgets.login_form.first_child() {
-            if let Some(inner_box) = box_.dynamic_cast::<gtk::Box>().ok() {
+            if let Ok(inner_box) = box_.dynamic_cast::<gtk::Box>() {
                 inner_box.append(&image);
             }
         }

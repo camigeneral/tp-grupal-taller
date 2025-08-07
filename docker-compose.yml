@@ -1,269 +1,287 @@
 networks:
   redinternanodos:
     driver: bridge
-
 services:
   node0:
     networks:
-      - redinternanodos
+    - redinternanodos
     build:
       context: .
       dockerfile: redis_server/Dockerfile
     image: redis-node
     container_name: node0
     working_dir: /app/
-    environment:      
-      LOG_FILE: "/app/logs/node0.log"
+    environment:
+      LOG_FILE: /app/logs/node0.log
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     ports:
-      - "14000:14000"
-      - "4000:4000"
+    - 14000:14000
+    - 4000:4000
     volumes:
-      - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+    - ./redis_server/rdb_files/redis_node_0_5460_14000.rdb:/app/redis_server/rdb_files/redis_node_0_5460_14000.rdb
+    - ./logs/node0.log:/app/logs/node0.log
     ulimits:
       nofile:
         soft: 65536
         hard: 65536
-    command: ["/app/redis_server_bin", "4000"]
-
+    command:
+    - /app/redis_server_bin
+    - '4000'
   node1:
     networks:
-      - redinternanodos
+    - redinternanodos
     build:
       context: .
       dockerfile: redis_server/Dockerfile
     image: redis-node
     container_name: node1
-    working_dir: /app
-    environment:      
-      LOG_FILE: "/app/logs/node1.log"
+    working_dir: /app/
+    environment:
+      LOG_FILE: /app/logs/node1.log
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     ports:
-      - "14001:14001"
-      - "4001:4001"
+    - 14001:14001
+    - 4001:4001
     volumes:
-      - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+    - ./redis_server/rdb_files/redis_node_5460_10921_14001.rdb:/app/redis_server/rdb_files/redis_node_5460_10921_14001.rdb
+    - ./logs/node1.log:/app/logs/node1.log
     ulimits:
       nofile:
         soft: 65536
         hard: 65536
-    command: ["/app/redis_server_bin", "4001"]
-
+    command:
+    - /app/redis_server_bin
+    - '4001'
   node2:
     networks:
-      - redinternanodos
+    - redinternanodos
     build:
       context: .
       dockerfile: redis_server/Dockerfile
     image: redis-node
     container_name: node2
-    working_dir: /app
-    environment:      
-      LOG_FILE: "/app/logs/node2.log"
+    working_dir: /app/
+    environment:
+      LOG_FILE: /app/logs/node2.log
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     ports:
-      - "14002:14002"
-      - "4002:4002"
+    - 14002:14002
+    - 4002:4002
     volumes:
-      - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+    - ./redis_server/rdb_files/redis_node_10921_16383_14002.rdb:/app/redis_server/rdb_files/redis_node_10921_16383_14002.rdb
+    - ./logs/node2.log:/app/logs/node2.log
     ulimits:
       nofile:
         soft: 65536
         hard: 65536
-    command: ["/app/redis_server_bin", "4002"]
-
+    command:
+    - /app/redis_server_bin
+    - '4002'
   node3:
     networks:
-      - redinternanodos
+    - redinternanodos
     build:
       context: .
       dockerfile: redis_server/Dockerfile
     image: redis-node
     container_name: node3
-    working_dir: /app
-    environment:      
-      LOG_FILE: "/app/logs/node3.log"
+    working_dir: /app/
+    environment:
+      LOG_FILE: /app/logs/node3.log
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     ports:
-      - "14003:14003"
-      - "4003:4003"
+    - 14003:14003
+    - 4003:4003
     volumes:
-      - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+    - ./redis_server/rdb_files/redis_node_0_5460_14003.rdb:/app/redis_server/rdb_files/redis_node_0_5460_14003.rdb
+    - ./logs/node3.log:/app/logs/node3.log
     ulimits:
       nofile:
         soft: 65536
         hard: 65536
-    command: ["/app/redis_server_bin", "4003"]
-
+    command:
+    - /app/redis_server_bin
+    - '4003'
   node4:
     networks:
-      - redinternanodos
+    - redinternanodos
     build:
       context: .
       dockerfile: redis_server/Dockerfile
     image: redis-node
     container_name: node4
-    working_dir: /app
-    environment:      
-      LOG_FILE: "/app/logs/node4.log"
+    working_dir: /app/
+    environment:
+      LOG_FILE: /app/logs/node4.log
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     ports:
-      - "14004:14004"
-      - "4004:4004"
+    - 14004:14004
+    - 4004:4004
     volumes:
-      - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+    - ./redis_server/rdb_files/redis_node_0_5460_14004.rdb:/app/redis_server/rdb_files/redis_node_0_5460_14004.rdb
+    - ./logs/node4.log:/app/logs/node4.log
     ulimits:
       nofile:
         soft: 65536
         hard: 65536
-    command: ["/app/redis_server_bin", "4004"]
-
+    command:
+    - /app/redis_server_bin
+    - '4004'
   node5:
     networks:
-      - redinternanodos
+    - redinternanodos
     build:
       context: .
       dockerfile: redis_server/Dockerfile
     image: redis-node
     container_name: node5
-    working_dir: /app
-    environment:      
-      LOG_FILE: "/app/logs/node5.log"
+    working_dir: /app/
+    environment:
+      LOG_FILE: /app/logs/node5.log
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     ports:
-      - "14005:14005"
-      - "4005:4005"
+    - 14005:14005
+    - 4005:4005
     volumes:
-      - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+    - ./redis_server/rdb_files/redis_node_5460_10921_14005.rdb:/app/redis_server/rdb_files/redis_node_5460_10921_14005.rdb
+    - ./logs/node5.log:/app/logs/node5.log
     ulimits:
       nofile:
         soft: 65536
         hard: 65536
-    command: ["/app/redis_server_bin", "4005"]
-
+    command:
+    - /app/redis_server_bin
+    - '4005'
   node6:
     networks:
-      - redinternanodos
+    - redinternanodos
     build:
       context: .
       dockerfile: redis_server/Dockerfile
     image: redis-node
     container_name: node6
     working_dir: /app/
-    environment:      
-      LOG_FILE: "/app/logs/node6.log"
+    environment:
+      LOG_FILE: /app/logs/node6.log
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     ports:
-      - "14006:14006"
-      - "4006:4006"
+    - 14006:14006
+    - 4006:4006
     volumes:
-      - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+    - ./redis_server/rdb_files/redis_node_5460_10921_14006.rdb:/app/redis_server/rdb_files/redis_node_5460_10921_14006.rdb
+    - ./logs/node6.log:/app/logs/node6.log
     ulimits:
       nofile:
         soft: 65536
         hard: 65536
-    command: ["/app/redis_server_bin", "4006"]
-
+    command:
+    - /app/redis_server_bin
+    - '4006'
   node7:
     networks:
-      - redinternanodos
+    - redinternanodos
     build:
       context: .
       dockerfile: redis_server/Dockerfile
     image: redis-node
     container_name: node7
     working_dir: /app/
-    environment:      
-      LOG_FILE: "/app/logs/node7.log"
+    environment:
+      LOG_FILE: /app/logs/node7.log
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     ports:
-      - "14007:14007"
-      - "4007:4007"
+    - 14007:14007
+    - 4007:4007
     volumes:
-      - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+    - ./redis_server/rdb_files/redis_node_10921_16383_14007.rdb:/app/redis_server/rdb_files/redis_node_10921_16383_14007.rdb
+    - ./logs/node7.log:/app/logs/node7.log
     ulimits:
       nofile:
         soft: 65536
         hard: 65536
-    command: ["/app/redis_server_bin", "4007"]
-
+    command:
+    - /app/redis_server_bin
+    - '4007'
   node8:
     networks:
-      - redinternanodos
+    - redinternanodos
     build:
       context: .
       dockerfile: redis_server/Dockerfile
     image: redis-node
     container_name: node8
-    working_dir: /app
-    environment:      
-      LOG_FILE: "/app/logs/node8.log"
+    working_dir: /app/
+    environment:
+      LOG_FILE: /app/logs/node8.log
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     ports:
-      - "14008:14008"
-      - "4008:4008"
+    - 14008:14008
+    - 4008:4008
     volumes:
-      - ./redis_server/rdb_files:/app/redis_server/rdb_files
-      - ./logs:/app/logs
+    - ./redis_server/rdb_files/redis_node_10921_16383_14008.rdb:/app/redis_server/rdb_files/redis_node_10921_16383_14008.rdb
+    - ./logs/node8.log:/app/logs/node8.log
     ulimits:
       nofile:
         soft: 65536
         hard: 65536
-    command: ["/app/redis_server_bin", "4008"]
-
+    command:
+    - /app/redis_server_bin
+    - '4008'
   llm_microservice:
     networks:
-      - redinternanodos
+    - redinternanodos
     build:
       dockerfile: llm_microservice/Dockerfile
     restart: on-failure
     image: llm_microservice
     container_name: llm_microservice
-    working_dir: /app    
+    working_dir: /app
     volumes:
-      - ./logs:/app/logs
+    - ./logs/llm_microservice.log:/app/logs/llm_microservice.log
     depends_on:
-      - node0
-      - node1
-      - node2
-      - node3
-      - node4
-      - node5
-      - node6
-      - node7
-      - node8
+    - node0
+    - node1
+    - node2
+    - node3
+    - node4
+    - node5
+    - node6
+    - node7
+    - node8
     environment:
       REDIS_NODE_HOSTS: node8:4008,node7:4007,node6:4006,node5:4005,node4:4004,node3:4003,node2:4002,node1:4001,node0:4000
       GEMINI_API_KEY: ${GEMINI_API_KEY}
-      LOG_FILE: "/app/logs/llm_microservice.log"
+      LOG_FILE: /app/logs/llm_microservice.log
     ports:
-      - "4030:4030"
-    command: ["/app/llm_microservice_bin"]
-
+    - 4030:4030
+    command:
+    - /app/llm_microservice_bin
   microservice:
     networks:
-      - redinternanodos
+    - redinternanodos
     build:
       context: .
       dockerfile: microservice/Dockerfile
     restart: on-failure
     image: microservice
-    container_name: microservice    
+    container_name: microservice
     working_dir: /app
     volumes:
-      - ./logs:/app/logs
+    - ./logs/microservice.log:/app/logs/microservice.log
     depends_on:
-      - node0
-      - node1
-      - node2
-      - node3
-      - node4
-      - node5
-      - node6
-      - node7
-      - node8
+    - node0
+    - node1
+    - node2
+    - node3
+    - node4
+    - node5
+    - node6
+    - node7
+    - node8
     environment:
-      REDIS_NODE_HOSTS: node8:4008,node7:4007,node6:4006,node5:4005,node4:4004,node3:4003,node2:4002,node1:4001
-      LOG_FILE: "/app/logs/microservice.log"
+      REDIS_NODE_HOSTS: node8:4008,node7:4007,node6:4006,node5:4005,node4:4004,node3:4003,node2:4002,node1:4001,node0:4000
+      LOG_FILE: /app/logs/microservice.log
     ports:
-      - "5000:5000"
-    command: ["/app/microservice_bin"]
+    - 5000:5000
+    command:
+    - /app/microservice_bin

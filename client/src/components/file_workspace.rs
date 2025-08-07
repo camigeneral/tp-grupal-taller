@@ -272,14 +272,11 @@ impl SimpleComponent for FileWorkspace {
 
                 let file_editor_sender = self.file_editor_ctrl.sender().clone();
                 if let Some(doc) = self.files.get_mut(&(file.clone(), file_type.clone())) {
-                    match doc {
-                        Document::Text(_lines) => {
-                            self.files.insert(
-                                (file.clone(), file_type.clone()),
-                                Document::Text(content.clone()),
-                            );
-                        }
-                        _ => {}
+                    if let Document::Text(_lines) = doc {
+                        self.files.insert(
+                            (file.clone(), file_type.clone()),
+                            Document::Text(content.clone()),
+                        );
                     }
                     let val = content.join("\n");
 
@@ -306,7 +303,6 @@ impl SimpleComponent for FileWorkspace {
                     let mut new_content = String::new();
                     match doc {
                         Document::Text(ref mut doc_lines) => {
-
                             let llm_parsed_content = content.replace("<enter>", "<space>");
                             println!("Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}, cantidad de lieas {}", document, line, offset, llm_parsed_content,  doc_lines.len());
                             if line < doc_lines.len() {
@@ -349,9 +345,11 @@ impl SimpleComponent for FileWorkspace {
                                 doc_lines.push(new_line);
                                 println!("Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}", document, line, offset, llm_parsed_content);
                             }
-                            new_content = doc_lines.join("\n");
+
+                            new_line.push_str(after);
+                            doc_lines[line] = parse_text(new_line);
                         }
-                        _ => {}
+                        new_content = doc_lines.join("\n");
                     };
 
                     let mut document_info = DocumentValueInfo::new(new_content, line as i32);
@@ -463,7 +461,7 @@ pub fn parse_text(value: String) -> String {
         val.replace('\n', "<enter>")
     };
     value_clone = value_clone.replace(' ', "<space>");
-    return value_clone;
+    value_clone
 }
 
 pub fn decode_text(value: String) -> String {
