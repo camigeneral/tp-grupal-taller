@@ -39,10 +39,6 @@ pub struct Microservice {
     /// Mapa de conexiones TCP activas con los nodos Redis.
     node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
 
-    /// El último comando enviado a los nodos Redis.
-    /// Se mantiene para referencia y debugging.
-    last_command_sent: Arc<Mutex<String>>,
-
     /// Documents almacenados en memoria recibidos de los nodos Redis.
     documents: Arc<Mutex<HashMap<String, Document>>>,
 
@@ -73,7 +69,6 @@ impl Microservice {
         );
         Ok(Microservice {
             node_streams: Arc::new(Mutex::new(HashMap::new())),
-            last_command_sent: Arc::new(Mutex::new("".to_string())),
             documents: Arc::new(Mutex::new(HashMap::new())),
             logger,
             processed_responses: Arc::new(Mutex::new(HashSet::new())),
@@ -301,7 +296,6 @@ impl Microservice {
     /// verificaciones periódicas de las conexiones de nodos y persistencia de documentos.       
     fn start_automatic_commands(&self) {
         let node_streams_clone = Arc::clone(&self.node_streams);
-        let last_command_sent_clone = Arc::clone(&self.last_command_sent);
         let documents_clone = Arc::clone(&self.documents);
         let logger_clone = self.logger.clone();
 
@@ -347,10 +341,6 @@ impl Microservice {
                                 ));
                                 continue;
                             }
-
-                            if let Ok(mut last_command) = last_command_sent_clone.lock() {
-                                *last_command = set_command;
-                            }
                         }
                     }
                 } else {
@@ -376,7 +366,6 @@ impl Microservice {
     ///
     /// * `connect_nodes_receiver` - Receiver para recibir streams TCP de nuevos nodos
     fn start_node_connection_handler(&self, connect_nodes_receiver: Receiver<TcpStream>) {
-        let cloned_last_command = Arc::clone(&self.last_command_sent);
         let cloned_documents: Arc<Mutex<HashMap<String, Document>>> = Arc::clone(&self.documents);
         let logger = self.logger.clone();
         let proccesed_commands: Arc<Mutex<HashSet<String>>> = Arc::clone(&self.processed_responses);
@@ -385,7 +374,6 @@ impl Microservice {
         thread::spawn(move || {
             if let Err(e) = Self::connect_to_nodes(
                 connect_nodes_receiver,
-                cloned_last_command,
                 cloned_documents,
                 logger,
                 proccesed_commands,
@@ -417,7 +405,6 @@ impl Microservice {
     /// * `Err(std::io::Error)` si ocurre un error en algún hilo.
     fn connect_to_nodes(
         reciever: Receiver<TcpStream>,
-        last_command_sent: Arc<Mutex<String>>,
         documents: Arc<Mutex<HashMap<String, Document>>>,
         logger: Logger,
         processed_responses: Arc<Mutex<HashSet<String>>>,
@@ -425,7 +412,6 @@ impl Microservice {
     ) -> std::io::Result<()> {
         for stream in reciever {
             let cloned_documents = Arc::clone(&documents);
-            let cloned_last_command = Arc::clone(&last_command_sent);
             let log_clone = logger.clone();
             let proccesed_commands_clone: Arc<Mutex<HashSet<String>>> =
                 Arc::clone(&processed_responses);
@@ -436,7 +422,6 @@ impl Microservice {
                 if let Err(e) = Self::listen_to_redis_response(
                     stream,
                     cloned_documents,
-                    cloned_last_command,
                     log_clone,
                     proccesed_commands_clone,
                     node_streams_clone,
@@ -470,7 +455,6 @@ impl Microservice {
     fn listen_to_redis_response(
         mut microservice_socket: TcpStream,
         documents: Arc<Mutex<HashMap<String, Document>>>,
-        last_command_sent: Arc<Mutex<String>>,
         log_clone: Logger,
         processed_responses: Arc<Mutex<HashSet<String>>>,
         node_streams: Arc<Mutex<HashMap<String, TcpStream>>>,
@@ -655,12 +639,6 @@ impl Microservice {
                         } else {
                             log_clone.log(&format!("Document no encontrado: {}", file));
                         }
-                        {
-                            let write_parts = vec!["write", &index, &content, "to", &file];
-                            let resp_command = format_resp_command(&write_parts);
-                            let mut last_command = last_command_sent.lock().unwrap();
-                            *last_command = resp_command.clone();
-                        }
                     } else {
                         log_clone.log("Error obteniendo lock de documents para write");
                     }
@@ -739,64 +717,69 @@ impl Microservice {
                                         }
                                     };
 
-                                    if let Document::Text(doc_lines) = documento {
-                                        let mut new_lines = doc_lines.clone();
-                                        if parsed_line < new_lines.len() {
-                                            let original_line_decoded =
-                                                decode_text(new_lines[parsed_line].to_string());
-                                            let parsed_content =
-                                                decode_text(content.to_string());
+                                    match documento {
+                                        Document::Text(doc_lines) => {
+                                            let llm_parsed_content = content.replace("<enter>", "<space>");
 
-                                            // Convertimos offset en caracteres a offset en bytes
-                                            let byte_offset = original_line_decoded
-                                                .char_indices()
-                                                .nth(parsed_offset)
-                                                .map(|(i, _)| i)
-                                                .unwrap_or(original_line_decoded.len());
+                                            let mut new_lines = doc_lines.clone();
+                                            if parsed_line < new_lines.len() {
+                                                let original_line_decoded =
+                                                    decode_text(new_lines[parsed_line].to_string());
+                                                let parsed_content =
+                                                    decode_text(llm_parsed_content.to_string());
 
-                                            let before = &original_line_decoded[..byte_offset];
-                                            let after = &original_line_decoded[byte_offset..];
+                                                // Convertimos offset en caracteres a offset en bytes
+                                                let byte_offset = original_line_decoded
+                                                    .char_indices()
+                                                    .nth(parsed_offset)
+                                                    .map(|(i, _)| i)
+                                                    .unwrap_or(original_line_decoded.len());
 
-                                            let mut new_line = String::new();
-                                            new_line.push_str(before);
+                                                let before = &original_line_decoded[..byte_offset];
+                                                let after = &original_line_decoded[byte_offset..];
 
-                                            if !after.starts_with(&parsed_content) {
-                                                if !before.ends_with(' ') {
-                                                    new_line.push(' ');
+                                                let mut new_line = String::new();
+                                                new_line.push_str(before);
+
+                                                if !after.starts_with(&parsed_content) {
+                                                    if !before.ends_with(' ') {
+                                                        new_line.push(' ');
+                                                    }
+                                                    new_line.push_str(&parsed_content);
+                                                    if !after.starts_with(' ') {
+                                                        new_line.push(' ');
+                                                    }
                                                 }
+
+                                                new_line.push_str(after);
+                                                new_line = parse_text(new_line);
+
+                                                new_lines[parsed_line] = new_line;
+                                                let new_document = Document::Text(new_lines);
+                                                docs.insert(document.clone(), new_document);
+
+                                                println!(
+                                                    "Insertado en documento '{}' en línea {}, offset {}: {}",
+                                                    document, parsed_line, parsed_offset, llm_parsed_content
+                                                );
+                                            } else {
+                                                let parsed_content =
+                                                    &decode_text(llm_parsed_content.to_string());
+                                                let mut new_line = String::new();
+
                                                 new_line.push_str(&parsed_content);
-                                                if !after.starts_with(' ') {
-                                                    new_line.push(' ');
-                                                }
+                                                new_line.push_str(" ");
+                                                new_line = parse_text(new_line);
+                                                new_lines.push(new_line);
+                                                let new_document = Document::Text(new_lines);
+                                                docs.insert(document.clone(), new_document);
+                                                println!("Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, llm_parsed_content);
+                                                log_clone.log(&format!(
+                                                    "Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, llm_parsed_content
+                                                ));
                                             }
-
-                                            new_line.push_str(after);
-                                            new_line = parse_text(new_line);
-
-                                            new_lines[parsed_line] = new_line;
-                                            let new_document = Document::Text(new_lines);
-                                            docs.insert(document.clone(), new_document);
-
-                                            println!(
-                                                "Insertado en documento '{}' en línea {}, offset {}: {}",
-                                                document, parsed_line, parsed_offset, content
-                                            );
-                                        } else {
-                                            let parsed_content =
-                                                &decode_text(content.to_string());
-                                            let mut new_line = String::new();
-
-                                            new_line.push_str(parsed_content);
-                                            new_line.push(' ');
-                                            new_line = parse_text(new_line);
-                                            new_lines.push(new_line);
-                                            let new_document = Document::Text(new_lines);
-                                            docs.insert(document.clone(), new_document);
-                                            println!("Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, content);
-                                            log_clone.log(&format!(
-                                                "Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}", document, parsed_line, parsed_offset, content
-                                            ));
                                         }
+                                        _ => {}
                                     };
                                 }
                                 _ => {
