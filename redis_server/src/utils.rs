@@ -60,7 +60,7 @@ pub fn convert_key() -> [u8; 16] {
         eprintln!("ENCRYPTION_KEY is not configured");
         "".to_string()
     });
-    
+
     let mut key_result = [0u8; 16];
     let bytes = encryption_key.as_bytes();
     let len = bytes.len().min(16);

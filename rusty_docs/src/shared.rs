@@ -32,7 +32,7 @@ pub enum MicroserviceMessage {
     RequestFile {
         document: String,
         prompt: String,
-        id_client: String
+        id_client: String,
     },
     ClientLlmResponse {
         document: String,

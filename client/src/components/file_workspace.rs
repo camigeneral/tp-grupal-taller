@@ -306,8 +306,7 @@ impl SimpleComponent for FileWorkspace {
                         let llm_parsed_content = content.replace("<enter>", "<space>");
                         println!("Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}, cantidad de lieas {}", document, line, offset, llm_parsed_content,  doc_lines.len());
                         if line < doc_lines.len() {
-                            let original_line_decoded =
-                                decode_text(doc_lines[line].to_string());
+                            let original_line_decoded = decode_text(doc_lines[line].to_string());
                             let parsed_content = decode_text(llm_parsed_content.to_string());
 
                             let byte_offset = original_line_decoded
@@ -321,7 +320,7 @@ impl SimpleComponent for FileWorkspace {
 
                             let mut new_line = String::new();
                             new_line.push_str(before);
-                                                            
+
                             if !after.starts_with(&parsed_content) {
                                 if !before.ends_with(' ') {
                                     new_line.push(' ');
@@ -335,8 +334,7 @@ impl SimpleComponent for FileWorkspace {
                             new_line.push_str(after);
                             doc_lines[line] = parse_text(new_line);
                         } else {
-                            let parsed_content =
-                                &decode_text(llm_parsed_content.to_string());
+                            let parsed_content = &decode_text(llm_parsed_content.to_string());
                             let mut new_line = String::new();
 
                             new_line.push_str(parsed_content);
@@ -344,7 +342,7 @@ impl SimpleComponent for FileWorkspace {
                             new_line = parse_text(new_line);
                             doc_lines.push(new_line);
                             println!("Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}", document, line, offset, llm_parsed_content);
-                        }                            
+                        }
                         new_content = doc_lines.join("\n");
                     }
 
@@ -389,27 +387,28 @@ impl SimpleComponent for FileWorkspace {
                                 }
                             }
                             Document::Text(lines) => {
-                                let  val_clone = val.clone();                                
+                                let val_clone = val.clone();
                                 let splited_val = val_clone.split("<enter>").collect::<Vec<_>>();
-                                lines[parsed_index] = decode_text(splited_val[0].to_string().clone());
+                                lines[parsed_index] =
+                                    decode_text(splited_val[0].to_string().clone());
 
                                 let second_value = if splited_val[1].to_string().is_empty() {
                                     "<enter>".to_string()
                                 } else {
                                     splited_val[1].to_string()
                                 };
-                                lines.insert(
-                                    parsed_index + 1,
-                                    decode_text(second_value.clone()),
+                                lines.insert(parsed_index + 1, decode_text(second_value.clone()));
+
+                                val = lines.iter().enumerate().fold(
+                                    String::new(),
+                                    |mut acc, (i, line)| {
+                                        if i > 0 && line != "\n" {
+                                            acc.push('\n');
+                                        }
+                                        acc.push_str(&decode_text(line.clone()));
+                                        acc
+                                    },
                                 );
-                                
-                                val = lines.iter().enumerate().fold(String::new(), |mut acc, (i, line)| {
-                                    if i > 0 && line != "\n" {
-                                        acc.push('\n');
-                                    }
-                                    acc.push_str(&decode_text(line.clone()));
-                                    acc
-                                });                                                                                        
                             }
                         }
 

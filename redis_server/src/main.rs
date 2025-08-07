@@ -20,15 +20,15 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 mod commands;
 mod encryption;
+mod execute_command_params;
 mod hashing;
 mod local_node;
 mod peer_node;
 mod redis_node_handler;
 mod server_context;
-mod execute_command_params;
 mod utils;
-use crate::server_context::ServerContext;
 use crate::execute_command_params::ExecuteCommandParams;
+use crate::server_context::ServerContext;
 use client_info::ClientType;
 mod types;
 use self::logger::*;
@@ -588,7 +588,7 @@ fn execute_command_internal(
         Ok(()) => {
             let unparsed_command = command_request.unparsed_command.clone();
             // println!("\nunparsed command: {}", unparsed_command);
-            let execute_command_params = ExecuteCommandParams{
+            let execute_command_params = ExecuteCommandParams {
                 request: command_request.clone(),
                 docs: &ctx.shared_documents,
                 document_subscribers: &ctx.document_subscribers,
@@ -599,9 +599,7 @@ fn execute_command_internal(
                 suscription_channel: &ctx.internal_subscription_channel,
                 llm_channel: &ctx.llm_channel,
             };
-            let redis_response = redis::execute_command(
-                execute_command_params
-            );
+            let redis_response = redis::execute_command(execute_command_params);
 
             if redis_response.publish {
                 if let Err(e) = publish_update(
@@ -706,7 +704,7 @@ pub fn notify_microservice(
         arguments: vec![ValueType::String(message.to_string())],
         unparsed_command: format!("publish subscriptions {}", message),
     };
-    let execute_command_params = ExecuteCommandParams{
+    let execute_command_params = ExecuteCommandParams {
         request: command_request.clone(),
         docs: &ctx.shared_documents,
         document_subscribers: &ctx.document_subscribers,
@@ -717,9 +715,7 @@ pub fn notify_microservice(
         suscription_channel: &ctx.internal_subscription_channel,
         llm_channel: &ctx.llm_channel,
     };
-    let _ = redis::execute_command(
-        execute_command_params
-    );
+    let _ = redis::execute_command(execute_command_params);
 }
 
 /// Verifica si un cliente está autorizado (logueado) en el sistema.

@@ -1,4 +1,3 @@
-
 use rusty_docs::resp_parser::CommandRequest;
 use types::*;
 

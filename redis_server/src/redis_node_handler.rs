@@ -15,7 +15,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread::{self};
 use std::time::{Duration, Instant};
-use utils::{get_node_address, get_resource_path, convert_key};
+use utils::{convert_key, get_node_address, get_resource_path};
 
 const PRINT_PINGS: bool = false;
 
@@ -1167,6 +1167,3 @@ fn initialize_replica_promotion(
         }
     }
 }
-
-
-
