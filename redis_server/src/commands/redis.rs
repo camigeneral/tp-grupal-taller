@@ -4,21 +4,25 @@ use super::redis_response::RedisResponse;
 use super::resp_parser::{CommandRequest, CommandResponse, ValueType};
 use super::set;
 use super::string;
+use ExecuteCommandParams;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use types::*;
 
 pub fn execute_command(
-    request: CommandRequest,
-    docs: &RedisDocumentsMap,
-    document_subscribers: &SubscribersMap,
-    shared_sets: &SetsMap,
-    client_addr: String,
-    active_clients: &ClientsMap,
-    logged_clients: &LoggedClientsMap,
-    suscription_channel: &ClientsMap,
-    llm_channel: &LlmNodesMap,
+    execute_command_params: ExecuteCommandParams
 ) -> RedisResponse {
+
+    let docs = execute_command_params.docs;
+    let request = execute_command_params.request;
+    let document_subscribers = execute_command_params.document_subscribers;
+    let active_clients = execute_command_params.active_clients;
+    let client_addr = execute_command_params.client_addr;
+    let shared_sets = execute_command_params.shared_sets;
+    let subscription_channel = execute_command_params.suscription_channel;
+    let llm_channel = execute_command_params.llm_channel;
+    let logged_clients = execute_command_params.logged_clients;
+
     match request.command.as_str() {
         "get" => string::handle_get(&request, docs),
         "set" => string::handle_set(&request, docs, document_subscribers, active_clients),
@@ -32,7 +36,7 @@ pub fn execute_command(
             &request,
             document_subscribers,
             active_clients,
-            suscription_channel,
+            subscription_channel,
             llm_channel,
         ),
         "scard" => set::handle_scard(&request, shared_sets),

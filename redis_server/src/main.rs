@@ -25,8 +25,10 @@ mod local_node;
 mod peer_node;
 mod redis_node_handler;
 mod server_context;
+mod execute_command_params;
 mod utils;
 use crate::server_context::ServerContext;
+use crate::execute_command_params::ExecuteCommandParams;
 use client_info::ClientType;
 mod types;
 use self::logger::*;
@@ -586,17 +588,19 @@ fn execute_command_internal(
         Ok(()) => {
             let unparsed_command = command_request.unparsed_command.clone();
             // println!("\nunparsed command: {}", unparsed_command);
-
+            let execute_command_params = ExecuteCommandParams{
+                request: command_request.clone(),
+                docs: &ctx.shared_documents,
+                document_subscribers: &ctx.document_subscribers,
+                shared_sets: &ctx.shared_sets,
+                client_addr: client_id.clone(),
+                active_clients: &ctx.active_clients,
+                logged_clients: &ctx.logged_clients,
+                suscription_channel: &ctx.internal_subscription_channel,
+                llm_channel: &ctx.llm_channel,
+            };
             let redis_response = redis::execute_command(
-                command_request.clone(),
-                &ctx.shared_documents,
-                &ctx.document_subscribers,
-                &ctx.shared_sets,
-                client_id.clone(),
-                &ctx.active_clients,
-                &ctx.logged_clients,
-                &ctx.internal_subscription_channel,
-                &ctx.llm_channel,
+                execute_command_params
             );
 
             if redis_response.publish {
@@ -702,17 +706,19 @@ pub fn notify_microservice(
         arguments: vec![ValueType::String(message.to_string())],
         unparsed_command: format!("publish subscriptions {}", message),
     };
-
+    let execute_command_params = ExecuteCommandParams{
+        request: command_request.clone(),
+        docs: &ctx.shared_documents,
+        document_subscribers: &ctx.document_subscribers,
+        shared_sets: &ctx.shared_sets,
+        client_addr: microservice_addr.clone(),
+        active_clients: &ctx.active_clients,
+        logged_clients: &ctx.logged_clients,
+        suscription_channel: &ctx.internal_subscription_channel,
+        llm_channel: &ctx.llm_channel,
+    };
     let _ = redis::execute_command(
-        command_request,
-        &ctx.shared_documents,
-        &ctx.document_subscribers,
-        &ctx.shared_sets,
-        microservice_addr.clone(),
-        &ctx.active_clients,
-        &ctx.logged_clients,
-        &ctx.internal_subscription_channel,
-        &ctx.llm_channel,
+        execute_command_params
     );
 }
 
