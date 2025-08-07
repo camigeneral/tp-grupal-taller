@@ -3,7 +3,7 @@ extern crate relm4;
 
 use self::gtk4::prelude::{
     BoxExt, ButtonExt, Cast, EditableExt, EventControllerExt, OrientableExt, TextBufferExt,
-    TextViewExt, WidgetExt,
+    TextViewExt, WidgetExt, TextBufferExtManual, ObjectExt
 };
 use self::relm4::{gtk, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
 use crate::components::structs::document_value_info::DocumentValueInfo;
@@ -175,6 +175,7 @@ impl SimpleComponent for TextEditorModel {
         model.prompt_widget = Some(widgets.prompt.clone());
 
         let key_controller = gtk4::EventControllerKey::new();
+
         key_controller.connect_key_pressed(move |controller, key, _keycode, _state| {
             if key == gtk4::gdk::Key::Return || key == gtk4::gdk::Key::KP_Enter {
                 if let Some(widget) = controller.widget() {
@@ -191,18 +192,25 @@ impl SimpleComponent for TextEditorModel {
                                 let full_line_content: String =
                                     buffer.text(&line_start, &line_end, false).to_string();
                                 let len = full_line_content.chars().count() as i32;
-                                let final_string = if cursor_offset == len {
-                                    full_line_content
-                                } else {
-                                    let cursor_pos = cursor_offset as usize;
-                                    let before_cursor: String =
-                                        full_line_content.chars().take(cursor_pos).collect();
-                                    let after_cursor: String =
-                                        full_line_content.chars().skip(cursor_pos).collect();
 
-                                    format!("{}\n{}", before_cursor, after_cursor)
-                                };
-
+                                let mut final_string = String::new();
+                                if let Some(c) = full_line_content.chars().nth(0) {
+                                    if c != '\n' {
+                                        final_string = if cursor_offset == len {
+                                            format!("{}<enter>{}", full_line_content.clone(), "".to_string())
+                                        } else {
+                                            let cursor_pos = cursor_offset as usize;
+                                            let before_cursor: String =
+                                                full_line_content.chars().take(cursor_pos).collect();
+                                            let after_cursor: String =
+                                                full_line_content.chars().skip(cursor_pos).collect();
+        
+                                            format!("{}<enter>{}", before_cursor, after_cursor)
+                                        };
+                                    } 
+                                } 
+                                
+                                println!("final_string {final_string}");
                                 let doc_info: DocumentValueInfo =
                                     DocumentValueInfo::new(final_string, line_number);
 
@@ -277,7 +285,10 @@ impl SimpleComponent for TextEditorModel {
                 self.content.clear();
                 self.file_name.clear();
                 self.num_contributors = 0;
-
+                self.prompt = "".to_string();
+                if let Some(widget) = &self.prompt_widget {
+                    widget.set_text("");
+                }  
                 *self.programmatic_update.borrow_mut() = false;
             }
         }
