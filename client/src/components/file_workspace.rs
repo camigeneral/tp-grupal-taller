@@ -344,12 +344,10 @@ impl SimpleComponent for FileWorkspace {
                                 new_line = parse_text(new_line);
                                 doc_lines.push(new_line);
                                 println!("Insertado al final o al principio en documento '{}' en línea {}, offset {}: {}", document, line, offset, llm_parsed_content);
-                            }
-
-                            new_line.push_str(after);
-                            doc_lines[line] = parse_text(new_line);
+                            }                            
+                            new_content = doc_lines.join("\n");
                         }
-                        new_content = doc_lines.join("\n");
+                        _=> {}
                     };
 
                     let mut document_info = DocumentValueInfo::new(new_content, line as i32);
