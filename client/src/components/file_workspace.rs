@@ -392,7 +392,7 @@ impl SimpleComponent for FileWorkspace {
                                 lines[parsed_index] =
                                     decode_text(splited_val[0].to_string().clone());
 
-                                let second_value = if splited_val[1].to_string().is_empty() {
+                                let second_value = if (splited_val.len() <= 1) || splited_val[1].to_string().is_empty() {
                                     "<enter>".to_string()
                                 } else {
                                     splited_val[1].to_string()
