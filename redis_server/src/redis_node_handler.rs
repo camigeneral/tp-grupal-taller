@@ -554,8 +554,7 @@ fn handle_node(
                     "pfail" => NodeState::PFail,
                     _ => NodeState::Active,
                 };
-                let promote_replica =
-                    set_failed_node(local_node, &nodes, inactive_port, inactive_state);
+                let promote_replica = set_failed_node(local_node, &nodes, inactive_port, inactive_state);
                 if promote_replica {
                     initialize_replica_promotion(local_node, &nodes);
                 }
@@ -660,27 +659,28 @@ pub fn broadcast_to_replicas(
     println!("initial command {}", unparsed_command);
 
     for replica in replicas {
-        // let key = format!("127.0.0.1:{}", replica);
         let key = get_node_address(*replica);
         if let Some(peer_node) = locked_peer_nodes.get_mut(&key) {
-            let stream = &mut peer_node.stream;
+            if peer_node.state == NodeState::Active {
+                let stream = &mut peer_node.stream;
 
-            let start_cmd = encrypt_message(&cipher, "start_replica_command\n");
-            if stream.write_all(start_cmd.as_bytes()).is_err() {
-                eprintln!("Error escribiendo start_replica_command a {}", key);
-                continue;
-            }
+                let start_cmd = encrypt_message(&cipher, "start_replica_command\n");
+                if stream.write_all(start_cmd.as_bytes()).is_err() {
+                    eprintln!("Error escribiendo start_replica_command a {}", key);
+                    continue;
+                }
 
-            let encrypted_cmd = encrypt_message(&cipher, &unparsed_command);
-            if stream.write_all(encrypted_cmd.as_bytes()).is_err() {
-                eprintln!("Error enviando comando a {}", key);
-                continue;
-            }
+                let encrypted_cmd = encrypt_message(&cipher, &unparsed_command);
+                if stream.write_all(encrypted_cmd.as_bytes()).is_err() {
+                    eprintln!("Error enviando comando a {}", key);
+                    continue;
+                }
 
-            let end_cmd = encrypt_message(&cipher, "end_replica_command\n");
-            if stream.write_all(end_cmd.as_bytes()).is_err() {
-                eprintln!("Error escribiendo end_replica_command a {}", key);
-                continue;
+                let end_cmd = encrypt_message(&cipher, "end_replica_command\n");
+                if stream.write_all(end_cmd.as_bytes()).is_err() {
+                    eprintln!("Error escribiendo end_replica_command a {}", key);
+                    continue;
+                }
             }
         } else {
             eprintln!("No se encontró nodo réplica para {}", key);
@@ -1104,11 +1104,19 @@ fn set_failed_node(
                     // yo detecte que hizo fail -> le aviso al resto
                     for (_, peer) in locked_peer_nodes.iter_mut() {
                         if peer.port != inactive_port {
-                            let message =
-                                format!("node_status {} {:?}\n", inactive_port, NodeState::Fail);
+                            let message = format!("node_status {} {:?}\n", inactive_port, NodeState::Fail);
                             let encrypted_b64 = encrypt_message(&cipher, &message);
-                            let _ = peer.stream.write_all(encrypted_b64.as_bytes());
-                            // to do: log error
+                            let mut write_result = peer.stream.write_all(encrypted_b64.as_bytes());
+                            
+                            if let Err(_) = write_result {
+                                eprintln!("failed to write, retrying");
+                                write_result = peer.stream.write_all(encrypted_b64.as_bytes());
+
+                                if let Err(_) = write_result {
+                                    eprintln!("failed to write");
+                                    // to do: log error
+                                }
+                            }
                         }
                     }
                 }

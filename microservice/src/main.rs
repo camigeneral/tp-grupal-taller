@@ -379,7 +379,7 @@ impl Microservice {
                 proccesed_commands,
                 node_streams_clone,
             ) {
-                println!("Error en la conexión con el nodo: {}", e);
+                println!("Error en la conexión con el nodo (1): {}", e);
             }
         });
     }
@@ -427,7 +427,7 @@ impl Microservice {
                     node_streams_clone,
                 ) {
                     logger_clone.log(&format!("Error en la conexión con el nodo: {}", e));
-                    println!("Error en la conexión con el nodo: {}", e);
+                    println!("Error en la conexión con el nodo (2): {}", e);
                 }
             });
         }
