@@ -1108,11 +1108,11 @@ fn set_failed_node(
                             let encrypted_b64 = encrypt_message(&cipher, &message);
                             let mut write_result = peer.stream.write_all(encrypted_b64.as_bytes());
                             
-                            if let Err(_) = write_result {
+                            if write_result.is_err() {
                                 eprintln!("failed to write, retrying");
                                 write_result = peer.stream.write_all(encrypted_b64.as_bytes());
 
-                                if let Err(_) = write_result {
+                                if write_result.is_err() {
                                     eprintln!("failed to write");
                                     // to do: log error
                                 }
