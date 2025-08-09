@@ -175,7 +175,7 @@ pub fn start_node_connection(
                         NodeRole::Unknown,
                         (0, 16383),
                         NodeState::Active,
-                        0,
+                        100,
                         0,
                     ),
                 );
@@ -424,6 +424,7 @@ fn handle_node(
                 } else if let Some(peer_node_to_update) = lock_nodes.get_mut(&node_address) {
                     peer_node_to_update.role = node_role.clone();
                     peer_node_to_update.hash_range = (hash_range_start, hash_range_end);
+                    peer_node_to_update.priority = priority;
 
                     if peer_node_to_update.hash_range == local_node_locked.hash_range {
                         if node_role != local_node_locked.role {
@@ -443,6 +444,8 @@ fn handle_node(
                         }
                     }
                 }
+                
+                println!("\n\n node: {}, priority: {} \n\n", parsed_port, priority);
             }
             "sync_request" => {
                 if input.len() > 1 {
@@ -1062,10 +1065,11 @@ fn set_failed_node(
                             && replica_node.role != NodeRole::Master
                         {
                             // si hay otra replica mas actualizada o si tenemos el mismo epoch pero la otra tiene una prioridad menor, no me vuelvo master
-                            if (replica_node.epoch > locked_local_node.epoch)
-                                || (replica_node.epoch == locked_local_node.epoch
-                                    && replica_node.priority < locked_local_node.priority)
-                            {
+                            if replica_node.epoch > locked_local_node.epoch {
+                                println!("not promoting due to epoch, mine: {}, other replica: {}", locked_local_node.epoch, replica_node.epoch);
+                                promote_replica = false;
+                            } else if replica_node.priority < locked_local_node.priority {
+                                println!("not promoting due to priority, mine: {}, {}, other node: {}, {}", locked_local_node.port, locked_local_node.priority, replica_node.port, replica_node.priority);
                                 promote_replica = false;
                             }
                         }
@@ -1115,8 +1119,8 @@ fn set_failed_node(
                                 if write_result.is_err() {
                                     eprintln!("failed to write");
                                     // to do: log error
-                                }
-                            }
+                                } 
+                            } 
                         }
                     }
                 }
@@ -1164,9 +1168,12 @@ fn initialize_replica_promotion(
             println!("sending promotion info to: {}", peer.port);
             match peer.stream.try_clone() {
                 Ok(mut peer_stream) => {
-                    if let Err(e) = peer_stream.write_all(encrypted_b64.as_bytes()) {
-                        eprintln!("Error writing node_info_message: {}", e);
-                    }
+                    if let Err(_) = peer_stream.write_all(encrypted_b64.as_bytes()) {
+                        eprintln!("Error writing node_info_message, retrying");
+                        if let Err(e) = peer_stream.write_all(encrypted_b64.as_bytes()) {
+                            eprintln!("Error writing node_info_message: {}", e);
+                        }
+                    } 
                 }
                 Err(_) => {
                     eprintln!("Error cloning stream");
