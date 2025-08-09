@@ -17,7 +17,11 @@ build:
 		sudo docker compose build $(service); \
 	fi
 
-up:
+build_images:
+	sudo docker compose --profile build-only build redis-base
+	sudo docker compose build llm_microservice microservice
+
+up: build_images
 	@if [ -z "$(service)" ]; then \
 		echo "Starting all services..."; \
 		sudo docker compose up -d; \
@@ -77,7 +81,7 @@ rm:
 prune:
 	@echo "Limpiando imágenes no usadas solo del proyecto..."
 	sudo docker image prune -f
-	sudo docker rmi llm_microservice:latest redis-node:latest microservice:latest || true
+	sudo docker rmi llm_microservice:latest redis-base:latest microservice:latest || true
 
 rebuild:
 	@echo "Rebuild completo (limpiando cache)..."
