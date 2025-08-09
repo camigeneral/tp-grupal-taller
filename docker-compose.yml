@@ -2,13 +2,17 @@ networks:
   redinternanodos:
     driver: bridge
 services:
+  redis-base:
+    build:
+      context: .
+      dockerfile: ./redis_server/Dockerfile
+    image: redis-base:latest
+    profiles:
+      - build-only
   node0:
     networks:
     - redinternanodos
-    build:
-      context: .
-      dockerfile: redis_server/Dockerfile
-    image: redis-node
+    image: redis-base:latest
     container_name: node0
     working_dir: /app/
     environment:
@@ -30,10 +34,7 @@ services:
   node1:
     networks:
     - redinternanodos
-    build:
-      context: .
-      dockerfile: redis_server/Dockerfile
-    image: redis-node
+    image: redis-base:latest
     container_name: node1
     working_dir: /app/
     environment:
@@ -55,10 +56,7 @@ services:
   node2:
     networks:
     - redinternanodos
-    build:
-      context: .
-      dockerfile: redis_server/Dockerfile
-    image: redis-node
+    image: redis-base:latest
     container_name: node2
     working_dir: /app/
     environment:
@@ -80,10 +78,7 @@ services:
   node3:
     networks:
     - redinternanodos
-    build:
-      context: .
-      dockerfile: redis_server/Dockerfile
-    image: redis-node
+    image: redis-base:latest
     container_name: node3
     working_dir: /app/
     environment:
@@ -105,10 +100,7 @@ services:
   node4:
     networks:
     - redinternanodos
-    build:
-      context: .
-      dockerfile: redis_server/Dockerfile
-    image: redis-node
+    image: redis-base:latest
     container_name: node4
     working_dir: /app/
     environment:
@@ -130,10 +122,7 @@ services:
   node5:
     networks:
     - redinternanodos
-    build:
-      context: .
-      dockerfile: redis_server/Dockerfile
-    image: redis-node
+    image: redis-base:latest
     container_name: node5
     working_dir: /app/
     environment:
@@ -155,10 +144,7 @@ services:
   node6:
     networks:
     - redinternanodos
-    build:
-      context: .
-      dockerfile: redis_server/Dockerfile
-    image: redis-node
+    image: redis-base:latest
     container_name: node6
     working_dir: /app/
     environment:
@@ -180,10 +166,7 @@ services:
   node7:
     networks:
     - redinternanodos
-    build:
-      context: .
-      dockerfile: redis_server/Dockerfile
-    image: redis-node
+    image: redis-base:latest
     container_name: node7
     working_dir: /app/
     environment:
@@ -205,10 +188,7 @@ services:
   node8:
     networks:
     - redinternanodos
-    build:
-      context: .
-      dockerfile: redis_server/Dockerfile
-    image: redis-node
+    image: redis-base:latest
     container_name: node8
     working_dir: /app/
     environment:

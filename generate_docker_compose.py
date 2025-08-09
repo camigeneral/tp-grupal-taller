@@ -15,6 +15,15 @@ node_config = [
 services = {}
 network_name = "redinternanodos"
 
+services['redis-base'] = {
+    "build": {
+        "context" : "./redis_server",
+        "dockerfile": "Dockerfile"
+    },
+    "image": "redis-base:latest",
+    "profiles": ["build-only"]
+}
+
 for node in node_config:
     node_name = node["name"]
     port = node["port"]
@@ -22,12 +31,8 @@ for node in node_config:
     rdb_file = f"./redis_server/rdb_files/{node['rdb']}"
 
     services[node_name] = {
-        "networks": [network_name],
-        "build": {
-            "context": ".",
-            "dockerfile": "redis_server/Dockerfile",
-        },
-        "image": "redis-node",
+        "networks": [network_name],        
+        "image": "redis-base:latest",
         "container_name": node_name,
         "working_dir": "/app/",
         "environment": {
