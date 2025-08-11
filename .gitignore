@@ -14,5 +14,5 @@ Cargo.lock
 *.pdb
 
 .env
-redis_server/rdb_files/*
 logs/*
+redis_server/rdb_files/*
