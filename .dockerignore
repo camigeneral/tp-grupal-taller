@@ -1,1 +1,6 @@
-target/
+# Ignorar control de versiones y metadatos
+.git/
+**/.DS_Store
+
+# Ignorar directorios de build de Rust
+**/target/

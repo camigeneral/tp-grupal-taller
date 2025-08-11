@@ -1,3 +1,4 @@
+import os
 import yaml
 
 node_config = [
@@ -12,8 +13,26 @@ node_config = [
     {"name": "node8", "rdb": "redis_node_10921_16383_14008.rdb", "port": 4008},
 ]
 
+# Crear carpeta logs si no existe
+os.makedirs("logs", exist_ok=True)
+
+# Crear archivos de log vacíos si no existen
+for node in node_config:
+    log_path = f"logs/{node['name']}.log"
+    if not os.path.exists(log_path):
+        open(log_path, "a").close()
+
 services = {}
 network_name = "redinternanodos"
+
+services['redis-base'] = {
+    "build": {
+        "context" : ".",
+        "dockerfile": "./redis_server/Dockerfile"
+    },
+    "image": "redis-base:latest",
+    "profiles": ["build-only"]
+}
 
 for node in node_config:
     node_name = node["name"]
@@ -22,12 +41,8 @@ for node in node_config:
     rdb_file = f"./redis_server/rdb_files/{node['rdb']}"
 
     services[node_name] = {
-        "networks": [network_name],
-        "build": {
-            "context": ".",
-            "dockerfile": "redis_server/Dockerfile",
-        },
-        "image": "redis-node",
+        "networks": [network_name],        
+        "image": "redis-base:latest",
         "container_name": node_name,
         "working_dir": "/app/",
         "environment": {
@@ -48,12 +63,13 @@ for node in node_config:
                 "hard": 65536
             }
         },
-        "command": ["/app/redis_server_bin", str(port)]
+        "command": [str(port)]
     }
 
 services["llm_microservice"] = {
     "networks": [network_name],
     "build": {
+        "context": ".",
         "dockerfile": "llm_microservice/Dockerfile"
     },
     "restart": "on-failure",
@@ -106,3 +122,5 @@ docker_compose = {
 
 with open("docker-compose.yml", "w") as f:
     yaml.dump(docker_compose, f, sort_keys=False)
+
+print("Archivo docker-compose.yml generado con archivos de logs vacíos creados.")
