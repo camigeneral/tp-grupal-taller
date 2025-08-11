@@ -19,9 +19,9 @@ build:
 
 build_images:
 	sudo docker compose --profile build-only build redis-base
-	sudo docker compose build llm_microservice microservice
+	sudo docker compose build --no-cache 
 
-up: build_images
+up:
 	@if [ -z "$(service)" ]; then \
 		echo "Starting all services..."; \
 		sudo docker compose up -d; \
