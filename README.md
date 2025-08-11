@@ -179,6 +179,18 @@ cd llm_microservice && cargo run
 make client port=4000
 ```
 
+## Ejecución
+
+### Forma segura recomendada para levantar el proyecto con Docker
+
+Ejecuta estos comandos en orden para evitar problemas con imágenes o contenedores viejos:
+
+```bash
+make prune          # Limpia imágenes no usadas y elimina imágenes del proyecto
+make build_images   # Construye la imagen base y las demás sin cache
+make up             # Levanta todos los servicios en segundo plano
+
+
 ## Configuración
 
 ### Variables de Entorno
