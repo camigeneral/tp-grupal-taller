@@ -8,7 +8,7 @@ services:
       dockerfile: ./redis_server/Dockerfile
     image: redis-base:latest
     profiles:
-      - build-only
+    - build-only
   node0:
     networks:
     - redinternanodos
@@ -22,14 +22,13 @@ services:
     - 14000:14000
     - 4000:4000
     volumes:
-    - ./redis_server/rdb_files/redis_node_0_5460_14000.rdb:/app/redis_server/rdb_files/redis_node_0_5460_14000.rdb
-    - ./logs/node0.log:/app/logs/node0.log
+      - ./redis_server/rdb_files/redis_node_0_5460_14000.rdb:/app/redis_server/rdb_files/redis_node_0_5460_14000.rdb      
+      - ./logs/node0.log:/app/logs/node0.log
     ulimits:
       nofile:
         soft: 65536
         hard: 65536
     command:
-    - /app/redis_server_bin
     - '4000'
   node1:
     networks:
@@ -51,7 +50,6 @@ services:
         soft: 65536
         hard: 65536
     command:
-    - /app/redis_server_bin
     - '4001'
   node2:
     networks:
@@ -73,7 +71,6 @@ services:
         soft: 65536
         hard: 65536
     command:
-    - /app/redis_server_bin
     - '4002'
   node3:
     networks:
@@ -95,7 +92,6 @@ services:
         soft: 65536
         hard: 65536
     command:
-    - /app/redis_server_bin
     - '4003'
   node4:
     networks:
@@ -117,7 +113,6 @@ services:
         soft: 65536
         hard: 65536
     command:
-    - /app/redis_server_bin
     - '4004'
   node5:
     networks:
@@ -139,7 +134,6 @@ services:
         soft: 65536
         hard: 65536
     command:
-    - /app/redis_server_bin
     - '4005'
   node6:
     networks:
@@ -161,7 +155,6 @@ services:
         soft: 65536
         hard: 65536
     command:
-    - /app/redis_server_bin
     - '4006'
   node7:
     networks:
@@ -183,7 +176,6 @@ services:
         soft: 65536
         hard: 65536
     command:
-    - /app/redis_server_bin
     - '4007'
   node8:
     networks:
@@ -205,12 +197,12 @@ services:
         soft: 65536
         hard: 65536
     command:
-    - /app/redis_server_bin
     - '4008'
   llm_microservice:
     networks:
     - redinternanodos
     build:
+      context: .
       dockerfile: llm_microservice/Dockerfile
     restart: on-failure
     image: llm_microservice
