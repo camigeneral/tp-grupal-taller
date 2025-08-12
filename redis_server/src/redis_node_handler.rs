@@ -444,7 +444,7 @@ fn handle_node(
                         }
                     }
                 }
-                
+
                 println!("\n\n node: {}, priority: {} \n\n", parsed_port, priority);
             }
             "sync_request" => {
@@ -557,7 +557,8 @@ fn handle_node(
                     "pfail" => NodeState::PFail,
                     _ => NodeState::Active,
                 };
-                let promote_replica = set_failed_node(local_node, &nodes, inactive_port, inactive_state);
+                let promote_replica =
+                    set_failed_node(local_node, &nodes, inactive_port, inactive_state);
                 if promote_replica {
                     initialize_replica_promotion(local_node, &nodes);
                 }
@@ -1066,7 +1067,10 @@ fn set_failed_node(
                         {
                             // si hay otra replica mas actualizada o si tenemos el mismo epoch pero la otra tiene una prioridad menor, no me vuelvo master
                             if replica_node.epoch > locked_local_node.epoch {
-                                println!("not promoting due to epoch, mine: {}, other replica: {}", locked_local_node.epoch, replica_node.epoch);
+                                println!(
+                                    "not promoting due to epoch, mine: {}, other replica: {}",
+                                    locked_local_node.epoch, replica_node.epoch
+                                );
                                 promote_replica = false;
                             } else if replica_node.priority < locked_local_node.priority {
                                 println!("not promoting due to priority, mine: {}, {}, other node: {}, {}", locked_local_node.port, locked_local_node.priority, replica_node.port, replica_node.priority);
@@ -1108,10 +1112,11 @@ fn set_failed_node(
                     // yo detecte que hizo fail -> le aviso al resto
                     for (_, peer) in locked_peer_nodes.iter_mut() {
                         if peer.port != inactive_port {
-                            let message = format!("node_status {} {:?}\n", inactive_port, NodeState::Fail);
+                            let message =
+                                format!("node_status {} {:?}\n", inactive_port, NodeState::Fail);
                             let encrypted_b64 = encrypt_message(&cipher, &message);
                             let mut write_result = peer.stream.write_all(encrypted_b64.as_bytes());
-                            
+
                             if write_result.is_err() {
                                 eprintln!("failed to write, retrying");
                                 write_result = peer.stream.write_all(encrypted_b64.as_bytes());
@@ -1119,8 +1124,8 @@ fn set_failed_node(
                                 if write_result.is_err() {
                                     eprintln!("failed to write");
                                     // to do: log error
-                                } 
-                            } 
+                                }
+                            }
                         }
                     }
                 }
@@ -1162,18 +1167,17 @@ fn initialize_replica_promotion(
     );
 
     let encrypted_b64 = encrypt_message(&cipher, &node_info_message);
-
     for (_, peer) in locked_peer_nodes.iter() {
         if peer.state == NodeState::Active {
             println!("sending promotion info to: {}", peer.port);
             match peer.stream.try_clone() {
                 Ok(mut peer_stream) => {
-                    if let Err(_) = peer_stream.write_all(encrypted_b64.as_bytes()) {
+                    if peer_stream.write_all(encrypted_b64.as_bytes()).is_err() {
                         eprintln!("Error writing node_info_message, retrying");
                         if let Err(e) = peer_stream.write_all(encrypted_b64.as_bytes()) {
                             eprintln!("Error writing node_info_message: {}", e);
                         }
-                    } 
+                    }
                 }
                 Err(_) => {
                     eprintln!("Error cloning stream");

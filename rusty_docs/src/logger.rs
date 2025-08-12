@@ -1,12 +1,12 @@
 use std::fs::{create_dir_all, OpenOptions};
-use std::io::{Write, ErrorKind};
+use std::io::{ErrorKind, Write};
 use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 extern crate chrono;
 use self::chrono::Local;
-use std::time::Duration;
 use std::thread::sleep;
+use std::time::Duration;
 
 #[derive(Clone, Debug)]
 pub struct Logger {
@@ -16,48 +16,47 @@ pub struct Logger {
 impl Logger {
     pub fn init(log_path: String, port: usize) -> Self {
         let (tx, rx): (Sender<String>, Receiver<String>) = channel();
-        
+
         // Crear directorio padre si no existe
         let log_dir = Path::new(&log_path)
             .parent()
             .expect("No se pudo obtener el directorio padre del log");
-        
+
         if let Err(e) = create_dir_all(log_dir) {
             eprintln!("Error creando directorio de logs: {}", e);
         }
 
         thread::spawn(move || {
             sleep(Duration::from_millis(200));
-            
+
             let mut file = None;
             for attempt in 1..=10 {
-                match OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&log_path)
-                {
+                match OpenOptions::new().create(true).append(true).open(&log_path) {
                     Ok(f) => {
                         println!("Archivo de log abierto correctamente: {}", log_path);
                         file = Some(f);
                         break;
                     }
                     Err(e) => {
-                        eprintln!("Error abriendo archivo (intento {}): {} - {}", attempt, log_path, e);
-                        
+                        eprintln!(
+                            "Error abriendo archivo (intento {}): {} - {}",
+                            attempt, log_path, e
+                        );
+
                         // Intentar crear el archivo manualmente si no existe
                         if e.kind() == ErrorKind::NotFound {
                             if let Err(create_err) = std::fs::File::create(&log_path) {
                                 eprintln!("Error creando archivo: {}", create_err);
                             }
                         }
-                        
+
                         if attempt < 10 {
                             sleep(Duration::from_millis(500));
                         }
                     }
                 }
             }
-            
+
             let mut file = match file {
                 Some(f) => f,
                 None => {
@@ -110,6 +109,6 @@ impl Logger {
             "microservice_log_path=" => "/app/logs/microservice.log".to_string(),
             "llm_microservice_path" => "/app/logs/llm_microservice.log".to_string(),
             _ => "/app/logs/server.log".to_string(),
-        }       
+        }
     }
 }

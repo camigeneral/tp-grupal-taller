@@ -827,7 +827,10 @@ pub fn resolve_key_location(
                 CommandResponse::String(hashed_key.clone().to_string()),
             ]);
 
-            println!("Hashing para nodo indefinido: {:?}", response_string.clone());
+            println!(
+                "Hashing para nodo indefinido: {:?}",
+                response_string.clone()
+            );
             logger.log(&format!(
                 "Hashing para nodo indefinido: {:?}",
                 response_string.clone()

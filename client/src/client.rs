@@ -654,7 +654,7 @@ impl LocalClient {
 
             let response_type = RedisClientResponseType::from_parts(response.clone());
             let cloned_connect_node_sender = connect_node_sender.clone();
-            
+
             match response_type {
                 RedisClientResponseType::Ask => {
                     Self::handle_ask(response, cloned_connect_node_sender, params_clone)
