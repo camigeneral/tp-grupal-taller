@@ -175,7 +175,7 @@ pub fn start_node_connection(
                         NodeRole::Unknown,
                         (0, 16383),
                         NodeState::Active,
-                        0,
+                        100,
                         0,
                     ),
                 );
@@ -424,6 +424,7 @@ fn handle_node(
                 } else if let Some(peer_node_to_update) = lock_nodes.get_mut(&node_address) {
                     peer_node_to_update.role = node_role.clone();
                     peer_node_to_update.hash_range = (hash_range_start, hash_range_end);
+                    peer_node_to_update.priority = priority;
 
                     if peer_node_to_update.hash_range == local_node_locked.hash_range {
                         if node_role != local_node_locked.role {
@@ -443,6 +444,8 @@ fn handle_node(
                         }
                     }
                 }
+
+                println!("\n\n node: {}, priority: {} \n\n", parsed_port, priority);
             }
             "sync_request" => {
                 if input.len() > 1 {
@@ -660,27 +663,28 @@ pub fn broadcast_to_replicas(
     println!("initial command {}", unparsed_command);
 
     for replica in replicas {
-        // let key = format!("127.0.0.1:{}", replica);
         let key = get_node_address(*replica);
         if let Some(peer_node) = locked_peer_nodes.get_mut(&key) {
-            let stream = &mut peer_node.stream;
+            if peer_node.state == NodeState::Active {
+                let stream = &mut peer_node.stream;
 
-            let start_cmd = encrypt_message(&cipher, "start_replica_command\n");
-            if stream.write_all(start_cmd.as_bytes()).is_err() {
-                eprintln!("Error escribiendo start_replica_command a {}", key);
-                continue;
-            }
+                let start_cmd = encrypt_message(&cipher, "start_replica_command\n");
+                if stream.write_all(start_cmd.as_bytes()).is_err() {
+                    eprintln!("Error escribiendo start_replica_command a {}", key);
+                    continue;
+                }
 
-            let encrypted_cmd = encrypt_message(&cipher, &unparsed_command);
-            if stream.write_all(encrypted_cmd.as_bytes()).is_err() {
-                eprintln!("Error enviando comando a {}", key);
-                continue;
-            }
+                let encrypted_cmd = encrypt_message(&cipher, &unparsed_command);
+                if stream.write_all(encrypted_cmd.as_bytes()).is_err() {
+                    eprintln!("Error enviando comando a {}", key);
+                    continue;
+                }
 
-            let end_cmd = encrypt_message(&cipher, "end_replica_command\n");
-            if stream.write_all(end_cmd.as_bytes()).is_err() {
-                eprintln!("Error escribiendo end_replica_command a {}", key);
-                continue;
+                let end_cmd = encrypt_message(&cipher, "end_replica_command\n");
+                if stream.write_all(end_cmd.as_bytes()).is_err() {
+                    eprintln!("Error escribiendo end_replica_command a {}", key);
+                    continue;
+                }
             }
         } else {
             eprintln!("No se encontró nodo réplica para {}", key);
@@ -1062,10 +1066,14 @@ fn set_failed_node(
                             && replica_node.role != NodeRole::Master
                         {
                             // si hay otra replica mas actualizada o si tenemos el mismo epoch pero la otra tiene una prioridad menor, no me vuelvo master
-                            if (replica_node.epoch > locked_local_node.epoch)
-                                || (replica_node.epoch == locked_local_node.epoch
-                                    && replica_node.priority < locked_local_node.priority)
-                            {
+                            if replica_node.epoch > locked_local_node.epoch {
+                                println!(
+                                    "not promoting due to epoch, mine: {}, other replica: {}",
+                                    locked_local_node.epoch, replica_node.epoch
+                                );
+                                promote_replica = false;
+                            } else if replica_node.priority < locked_local_node.priority {
+                                println!("not promoting due to priority, mine: {}, {}, other node: {}, {}", locked_local_node.port, locked_local_node.priority, replica_node.port, replica_node.priority);
                                 promote_replica = false;
                             }
                         }
@@ -1107,8 +1115,17 @@ fn set_failed_node(
                             let message =
                                 format!("node_status {} {:?}\n", inactive_port, NodeState::Fail);
                             let encrypted_b64 = encrypt_message(&cipher, &message);
-                            let _ = peer.stream.write_all(encrypted_b64.as_bytes());
-                            // to do: log error
+                            let mut write_result = peer.stream.write_all(encrypted_b64.as_bytes());
+
+                            if write_result.is_err() {
+                                eprintln!("failed to write, retrying");
+                                write_result = peer.stream.write_all(encrypted_b64.as_bytes());
+
+                                if write_result.is_err() {
+                                    eprintln!("failed to write");
+                                    // to do: log error
+                                }
+                            }
                         }
                     }
                 }
@@ -1150,14 +1167,16 @@ fn initialize_replica_promotion(
     );
 
     let encrypted_b64 = encrypt_message(&cipher, &node_info_message);
-
     for (_, peer) in locked_peer_nodes.iter() {
         if peer.state == NodeState::Active {
             println!("sending promotion info to: {}", peer.port);
             match peer.stream.try_clone() {
                 Ok(mut peer_stream) => {
-                    if let Err(e) = peer_stream.write_all(encrypted_b64.as_bytes()) {
-                        eprintln!("Error writing node_info_message: {}", e);
+                    if peer_stream.write_all(encrypted_b64.as_bytes()).is_err() {
+                        eprintln!("Error writing node_info_message, retrying");
+                        if let Err(e) = peer_stream.write_all(encrypted_b64.as_bytes()) {
+                            eprintln!("Error writing node_info_message: {}", e);
+                        }
                     }
                 }
                 Err(_) => {

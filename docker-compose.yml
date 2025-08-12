@@ -2,13 +2,17 @@ networks:
   redinternanodos:
     driver: bridge
 services:
+  redis-base:
+    build:
+      context: .
+      dockerfile: ./redis_server/Dockerfile
+    image: redis-base:latest
+    profiles:
+    - build-only
   node0:
     networks:
     - redinternanodos
-    build:
-      context: .
-      dockerfile: redis_server/Dockerfile
-    image: redis-node
+    image: redis-base:latest
     container_name: node0
     working_dir: /app/
     environment:
@@ -18,22 +22,18 @@ services:
     - 14000:14000
     - 4000:4000
     volumes:
-    - ./redis_server/rdb_files/redis_node_0_5460_14000.rdb:/app/redis_server/rdb_files/redis_node_0_5460_14000.rdb
-    - ./logs/node0.log:/app/logs/node0.log
+      - ./redis_server/rdb_files/redis_node_0_5460_14000.rdb:/app/redis_server/rdb_files/redis_node_0_5460_14000.rdb      
+      - ./logs/node0.log:/app/logs/node0.log
     ulimits:
       nofile:
         soft: 65536
         hard: 65536
     command:
-    - /app/redis_server_bin
     - '4000'
   node1:
     networks:
     - redinternanodos
-    build:
-      context: .
-      dockerfile: redis_server/Dockerfile
-    image: redis-node
+    image: redis-base:latest
     container_name: node1
     working_dir: /app/
     environment:
@@ -50,15 +50,11 @@ services:
         soft: 65536
         hard: 65536
     command:
-    - /app/redis_server_bin
     - '4001'
   node2:
     networks:
     - redinternanodos
-    build:
-      context: .
-      dockerfile: redis_server/Dockerfile
-    image: redis-node
+    image: redis-base:latest
     container_name: node2
     working_dir: /app/
     environment:
@@ -75,15 +71,11 @@ services:
         soft: 65536
         hard: 65536
     command:
-    - /app/redis_server_bin
     - '4002'
   node3:
     networks:
     - redinternanodos
-    build:
-      context: .
-      dockerfile: redis_server/Dockerfile
-    image: redis-node
+    image: redis-base:latest
     container_name: node3
     working_dir: /app/
     environment:
@@ -100,15 +92,11 @@ services:
         soft: 65536
         hard: 65536
     command:
-    - /app/redis_server_bin
     - '4003'
   node4:
     networks:
     - redinternanodos
-    build:
-      context: .
-      dockerfile: redis_server/Dockerfile
-    image: redis-node
+    image: redis-base:latest
     container_name: node4
     working_dir: /app/
     environment:
@@ -125,15 +113,11 @@ services:
         soft: 65536
         hard: 65536
     command:
-    - /app/redis_server_bin
     - '4004'
   node5:
     networks:
     - redinternanodos
-    build:
-      context: .
-      dockerfile: redis_server/Dockerfile
-    image: redis-node
+    image: redis-base:latest
     container_name: node5
     working_dir: /app/
     environment:
@@ -150,15 +134,11 @@ services:
         soft: 65536
         hard: 65536
     command:
-    - /app/redis_server_bin
     - '4005'
   node6:
     networks:
     - redinternanodos
-    build:
-      context: .
-      dockerfile: redis_server/Dockerfile
-    image: redis-node
+    image: redis-base:latest
     container_name: node6
     working_dir: /app/
     environment:
@@ -175,15 +155,11 @@ services:
         soft: 65536
         hard: 65536
     command:
-    - /app/redis_server_bin
     - '4006'
   node7:
     networks:
     - redinternanodos
-    build:
-      context: .
-      dockerfile: redis_server/Dockerfile
-    image: redis-node
+    image: redis-base:latest
     container_name: node7
     working_dir: /app/
     environment:
@@ -200,15 +176,11 @@ services:
         soft: 65536
         hard: 65536
     command:
-    - /app/redis_server_bin
     - '4007'
   node8:
     networks:
     - redinternanodos
-    build:
-      context: .
-      dockerfile: redis_server/Dockerfile
-    image: redis-node
+    image: redis-base:latest
     container_name: node8
     working_dir: /app/
     environment:
@@ -225,12 +197,12 @@ services:
         soft: 65536
         hard: 65536
     command:
-    - /app/redis_server_bin
     - '4008'
   llm_microservice:
     networks:
     - redinternanodos
     build:
+      context: .
       dockerfile: llm_microservice/Dockerfile
     restart: on-failure
     image: llm_microservice

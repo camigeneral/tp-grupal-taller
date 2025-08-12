@@ -88,11 +88,11 @@ fn start_server(
     peer_nodes: PeerNodeMap,
 ) -> std::io::Result<()> {
     let config_path = "redis.conf";
+
     let logger = logger::Logger::init(
         logger::Logger::get_log_path_from_config(config_path, ""),
         port,
     );
-
     let local_node = redis_node_handler::create_local_node(port)?;
 
     // Leo los archivos de persistencia solo si soy master
@@ -112,7 +112,6 @@ fn start_server(
         let node_role = locked_node.role.clone();
         (file_name, node_role)
     };
-
     let mut stored_documents = HashMap::new();
     if node_role == local_node::NodeRole::Master {
         stored_documents = match load_persisted_data(&file_name) {
@@ -123,7 +122,6 @@ fn start_server(
             }
         };
     }
-
     // Inicializar estructuras de datos compartidas
 
     let shared_documents: RedisDocumentsMap = Arc::new(Mutex::new(stored_documents));
@@ -829,6 +827,10 @@ pub fn resolve_key_location(
                 CommandResponse::String(hashed_key.clone().to_string()),
             ]);
 
+            println!(
+                "Hashing para nodo indefinido: {:?}",
+                response_string.clone()
+            );
             logger.log(&format!(
                 "Hashing para nodo indefinido: {:?}",
                 response_string.clone()

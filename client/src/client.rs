@@ -654,7 +654,7 @@ impl LocalClient {
 
             let response_type = RedisClientResponseType::from_parts(response.clone());
             let cloned_connect_node_sender = connect_node_sender.clone();
-            println!("Respuesta de redis: {}", response.join(" "));
+
             match response_type {
                 RedisClientResponseType::Ask => {
                     Self::handle_ask(response, cloned_connect_node_sender, params_clone)
@@ -665,6 +665,7 @@ impl LocalClient {
                 RedisClientResponseType::Write => Self::handle_write(response, cloned_ui_sender),
                 RedisClientResponseType::Llm => {
                     let comming_id_client = response[6].clone();
+                    println!("Respuesta de redis LLM: {}", response.join(" "));
                     if comming_id_client == params.id_client.clone() {
                         let filename = response[2].clone();
                         let command_parts = [
@@ -683,6 +684,7 @@ impl LocalClient {
                     }
                 }
                 RedisClientResponseType::ClientLlm => {
+                    println!("Respuesta de redis CLIENT-LLM: {}", response.join(" "));
                     Self::handle_client_llm(response, cloned_ui_sender, params.id_client.clone())
                 }
                 RedisClientResponseType::Error => Self::handle_error(response, cloned_ui_sender),
