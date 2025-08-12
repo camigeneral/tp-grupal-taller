@@ -308,31 +308,37 @@ impl SimpleComponent for FileWorkspace {
                         if line < doc_lines.len() {
                             let original_line_decoded = decode_text(doc_lines[line].to_string());
                             let parsed_content = decode_text(llm_parsed_content.to_string());
+                            let mut new_line = String::new();
 
-                            let byte_offset = original_line_decoded
+                            if original_line_decoded.trim().is_empty() {
+                                new_line.push_str(&parsed_content);
+                                new_content.push('\n');
+                                doc_lines[line] = parse_text(new_line);
+                            } else {
+                                let byte_offset = original_line_decoded
                                 .char_indices()
                                 .nth(offset)
                                 .map(|(i, _)| i)
                                 .unwrap_or(original_line_decoded.len());
 
-                            let before = &original_line_decoded[..byte_offset];
-                            let after = &original_line_decoded[byte_offset..];
+                                let before = &original_line_decoded[..byte_offset];
+                                let after = &original_line_decoded[byte_offset..];
 
-                            let mut new_line = String::new();
-                            new_line.push_str(before);
+                                new_line.push_str(before);
 
-                            if !after.starts_with(&parsed_content) {
-                                if !before.ends_with(' ') {
-                                    new_line.push(' ');
+                                if !after.starts_with(&parsed_content) {
+                                    if !before.trim().is_empty() {
+                                        new_line.push(' ');
+                                    }
+                                    new_line.push_str(&parsed_content);
+                                    if !after.starts_with(' ') {
+                                        new_line.push(' ');
+                                    }
                                 }
-                                new_line.push_str(&parsed_content);
-                                if !after.starts_with(' ') {
-                                    new_line.push(' ');
-                                }
-                            }
 
-                            new_line.push_str(after);
-                            doc_lines[line] = parse_text(new_line);
+                                new_line.push_str(after);
+                                doc_lines[line] = parse_text(new_line);
+                            }                            
                         } else {
                             let parsed_content = &decode_text(llm_parsed_content.to_string());
                             let mut new_line = String::new();

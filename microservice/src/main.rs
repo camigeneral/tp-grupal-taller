@@ -741,11 +741,11 @@ impl Microservice {
                                             let mut new_line = String::new();
                                             new_line.push_str(before);
 
-                                            if !after.starts_with(&parsed_content) {
-                                                if !before.ends_with(' ') {
+                                            if !after.starts_with(&parsed_content) {                                                
+                                                if !before.trim().is_empty() {
                                                     new_line.push(' ');
                                                 }
-                                                new_line.push_str(&parsed_content);
+                                                new_line.push_str(&parsed_content);                                                
                                                 if !after.starts_with(' ') {
                                                     new_line.push(' ');
                                                 }
