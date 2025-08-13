@@ -5,25 +5,30 @@ services:
   redis-base:
     build:
       context: .
-      dockerfile: ./redis_server/Dockerfile
+      dockerfile: ./redis_server/BaseDockerfile
     image: redis-base:latest
     profiles:
     - build-only
   node0:
     networks:
     - redinternanodos
-    image: redis-base:latest
+    build:
+      context: .
+      dockerfile: ./redis_server/NodeDockerfile
+      args:
+        RDB_PATH: redis_server/rdb_files/redis_node_0_5460_14000.rdb
     container_name: node0
     working_dir: /app/
     environment:
       LOG_FILE: /app/logs/node0.log
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      RDB_PATH: /app/redis_server/rdb_files/redis_node_0_5460_14000.rdb
     ports:
     - 14000:14000
     - 4000:4000
     volumes:
-      - ./redis_server/rdb_files/redis_node_0_5460_14000.rdb:/app/redis_server/rdb_files/redis_node_0_5460_14000.rdb      
-      - ./logs/node0.log:/app/logs/node0.log
+    - ./redis_server/rdb_files/redis_node_0_5460_14000.rdb:/app/redis_server/rdb_files/redis_node_0_5460_14000.rdb
+    - ./logs/node0.log:/app/logs/node0.log
     ulimits:
       nofile:
         soft: 65536
@@ -33,12 +38,17 @@ services:
   node1:
     networks:
     - redinternanodos
-    image: redis-base:latest
+    build:
+      context: .
+      dockerfile: ./redis_server/NodeDockerfile
+      args:
+        RDB_PATH: redis_server/rdb_files/redis_node_5460_10921_14001.rdb
     container_name: node1
     working_dir: /app/
     environment:
       LOG_FILE: /app/logs/node1.log
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      RDB_PATH: /app/redis_server/rdb_files/redis_node_5460_10921_14001.rdb
     ports:
     - 14001:14001
     - 4001:4001
@@ -54,12 +64,17 @@ services:
   node2:
     networks:
     - redinternanodos
-    image: redis-base:latest
+    build:
+      context: .
+      dockerfile: ./redis_server/NodeDockerfile
+      args:
+        RDB_PATH: redis_server/rdb_files/redis_node_10921_16383_14002.rdb
     container_name: node2
     working_dir: /app/
     environment:
       LOG_FILE: /app/logs/node2.log
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      RDB_PATH: /app/redis_server/rdb_files/redis_node_10921_16383_14002.rdb
     ports:
     - 14002:14002
     - 4002:4002
@@ -75,12 +90,17 @@ services:
   node3:
     networks:
     - redinternanodos
-    image: redis-base:latest
+    build:
+      context: .
+      dockerfile: ./redis_server/NodeDockerfile
+      args:
+        RDB_PATH: redis_server/rdb_files/redis_node_0_5460_14003.rdb
     container_name: node3
     working_dir: /app/
     environment:
       LOG_FILE: /app/logs/node3.log
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      RDB_PATH: /app/redis_server/rdb_files/redis_node_0_5460_14003.rdb
     ports:
     - 14003:14003
     - 4003:4003
@@ -96,12 +116,17 @@ services:
   node4:
     networks:
     - redinternanodos
-    image: redis-base:latest
+    build:
+      context: .
+      dockerfile: ./redis_server/NodeDockerfile
+      args:
+        RDB_PATH: redis_server/rdb_files/redis_node_0_5460_14004.rdb
     container_name: node4
     working_dir: /app/
     environment:
       LOG_FILE: /app/logs/node4.log
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      RDB_PATH: /app/redis_server/rdb_files/redis_node_0_5460_14004.rdb
     ports:
     - 14004:14004
     - 4004:4004
@@ -117,12 +142,17 @@ services:
   node5:
     networks:
     - redinternanodos
-    image: redis-base:latest
+    build:
+      context: .
+      dockerfile: ./redis_server/NodeDockerfile
+      args:
+        RDB_PATH: redis_server/rdb_files/redis_node_5460_10921_14005.rdb
     container_name: node5
     working_dir: /app/
     environment:
       LOG_FILE: /app/logs/node5.log
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      RDB_PATH: /app/redis_server/rdb_files/redis_node_5460_10921_14005.rdb
     ports:
     - 14005:14005
     - 4005:4005
@@ -138,12 +168,17 @@ services:
   node6:
     networks:
     - redinternanodos
-    image: redis-base:latest
+    build:
+      context: .
+      dockerfile: ./redis_server/NodeDockerfile
+      args:
+        RDB_PATH: redis_server/rdb_files/redis_node_5460_10921_14006.rdb
     container_name: node6
     working_dir: /app/
     environment:
       LOG_FILE: /app/logs/node6.log
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      RDB_PATH: /app/redis_server/rdb_files/redis_node_5460_10921_14006.rdb
     ports:
     - 14006:14006
     - 4006:4006
@@ -159,12 +194,17 @@ services:
   node7:
     networks:
     - redinternanodos
-    image: redis-base:latest
+    build:
+      context: .
+      dockerfile: ./redis_server/NodeDockerfile
+      args:
+        RDB_PATH: redis_server/rdb_files/redis_node_10921_16383_14007.rdb
     container_name: node7
     working_dir: /app/
     environment:
       LOG_FILE: /app/logs/node7.log
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      RDB_PATH: /app/redis_server/rdb_files/redis_node_10921_16383_14007.rdb
     ports:
     - 14007:14007
     - 4007:4007
@@ -180,12 +220,17 @@ services:
   node8:
     networks:
     - redinternanodos
-    image: redis-base:latest
+    build:
+      context: .
+      dockerfile: ./redis_server/NodeDockerfile
+      args:
+        RDB_PATH: redis_server/rdb_files/redis_node_10921_16383_14008.rdb
     container_name: node8
     working_dir: /app/
     environment:
       LOG_FILE: /app/logs/node8.log
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      RDB_PATH: /app/redis_server/rdb_files/redis_node_10921_16383_14008.rdb
     ports:
     - 14008:14008
     - 4008:4008

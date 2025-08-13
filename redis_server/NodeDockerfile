@@ -1,0 +1,10 @@
+FROM redis-base:latest
+
+# Argumento para el archivo RDB específico del nodo
+ARG RDB_PATH
+
+# Copiar el archivo RDB específico manteniendo su nombre original
+COPY ${RDB_PATH} /app/redis_server/rdb_files/
+
+# Mantener el mismo entrypoint de la imagen base
+ENTRYPOINT ["/app/redis_server_bin"]

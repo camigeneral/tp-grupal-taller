@@ -22,39 +22,57 @@ for node in node_config:
     if not os.path.exists(log_path):
         open(log_path, "a").close()
 
+# Crear logs para microservicios
+for service in ["llm_microservice", "microservice"]:
+    log_path = f"logs/{service}.log"
+    if not os.path.exists(log_path):
+        open(log_path, "a").close()
+
 services = {}
 network_name = "redinternanodos"
 
+# Servicio redis-base para build-only
 services['redis-base'] = {
     "build": {
-        "context" : ".",
-        "dockerfile": "./redis_server/Dockerfile"
+        "context": ".",
+        "dockerfile": "./redis_server/BaseDockerfile"
     },
     "image": "redis-base:latest",
     "profiles": ["build-only"]
 }
 
+# Generar servicios de nodos Redis
 for node in node_config:
     node_name = node["name"]
     port = node["port"]
-    log_file = f"./logs/{node_name}.log"
-    rdb_file = f"./redis_server/rdb_files/{node['rdb']}"
+    log_file = f"./logs/{node_name}.log"    
+    rdb_local_path = f"./redis_server/rdb_files/{node['rdb']}"
+    rdb_container_path = f"/app/redis_server/rdb_files/{node['rdb']}"
 
     services[node_name] = {
-        "networks": [network_name],        
-        "image": "redis-base:latest",
+        "networks": [network_name],
+        "build": {
+            "context": ".",
+            "dockerfile": "./redis_server/NodeDockerfile",  # Usar NodeDockerfile
+            "args": {
+                "RDB_PATH": f"redis_server/rdb_files/{node['rdb']}"
+            }
+        },
+        # Remover la línea image aquí ya que cada nodo tendrá su propia imagen
         "container_name": node_name,
         "working_dir": "/app/",
         "environment": {
             "LOG_FILE": f"/app/logs/{node_name}.log",
             "ENCRYPTION_KEY": "${ENCRYPTION_KEY}",
+            "RDB_PATH": rdb_container_path
         },
         "ports": [
             f"{14000 + (port - 4000)}:{14000 + (port - 4000)}",
             f"{port}:{port}"
         ],
         "volumes": [
-            f"{rdb_file}:/app/redis_server/rdb_files/{node['rdb']}",
+            # Solo el volumen de logs, el RDB ya está en la imagen
+            f"{rdb_local_path}:{rdb_container_path}",
             f"{log_file}:/app/logs/{node_name}.log"
         ],
         "ulimits": {
@@ -66,6 +84,7 @@ for node in node_config:
         "command": [str(port)]
     }
 
+# Microservicio LLM
 services["llm_microservice"] = {
     "networks": [network_name],
     "build": {
@@ -89,6 +108,7 @@ services["llm_microservice"] = {
     "command": ["/app/llm_microservice_bin"]
 }
 
+# Microservicio principal
 services["microservice"] = {
     "networks": [network_name],
     "build": {
@@ -111,6 +131,7 @@ services["microservice"] = {
     "command": ["/app/microservice_bin"]
 }
 
+# Estructura final del docker-compose
 docker_compose = {
     "networks": {
         network_name: {
@@ -120,7 +141,6 @@ docker_compose = {
     "services": services
 }
 
+# Escribir el archivo docker-compose.yml
 with open("docker-compose.yml", "w") as f:
-    yaml.dump(docker_compose, f, sort_keys=False)
-
-print("Archivo docker-compose.yml generado con archivos de logs vacíos creados.")
+    yaml.dump(docker_compose, f, sort_keys=False, default_flow_style=False, indent=2)

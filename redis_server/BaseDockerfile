@@ -42,9 +42,10 @@ RUN apk add --no-cache ca-certificates
 # Copiar binario optimizado
 COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/redis_server /app/redis_server_bin
 
+# Copiar archivos de configuración
 COPY redis_server/conf_files /app/redis_server/conf_files
-ARG RDB_PATH
-COPY ${RDB_PATH} /app/redis_server/rdb_files/
 
+# Crear directorio para archivos RDB
+RUN mkdir -p /app/redis_server/rdb_files
 
 ENTRYPOINT ["/app/redis_server_bin"]
