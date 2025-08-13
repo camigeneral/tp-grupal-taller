@@ -565,6 +565,25 @@ impl Microservice {
                         "Write recibido: índice {}, contenido '{}', archivo {}",
                         index, content, file
                     );
+                    let response_id = format!(
+                        "{}-{}-{}",
+                        index, content, file
+                    );
+                    if let Ok(mut processed) = processed_responses.lock() {                    
+                        if processed.contains(&response_id) {
+                            println!(
+                                "Respuesta duplicada detectada, omitiendo: {}",
+                                parts.join(" ")
+                            );
+                            continue;
+                        }
+                        processed.insert(response_id);                        
+
+                        if processed.len() > 1000 {
+                            processed.clear();
+                        }
+                    }
+
                     if let Ok(mut docs) = documents.lock() {
                         if let Some(documento) = docs.get_mut(&file) {
                             let parsed_index = match index.parse::<usize>() {
@@ -578,6 +597,7 @@ impl Microservice {
 
                             match documento {
                                 Document::Text(lines) => {
+                                    println!("content: {content}");
                                     if content.contains("<enter>") {
                                         let parts: Vec<&str> = content.split("<enter>").collect();
 

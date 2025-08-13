@@ -32,7 +32,7 @@ impl DocumentValueInfo {
 
     pub fn parse_text(&mut self) {
         self.value = if self.value.trim_end_matches('\n').is_empty() {
-            "<delete>".to_string()
+            "<enter>".to_string()
         } else {
             self.value.replace('\n', "<enter>")
         };

@@ -3,7 +3,7 @@
 pub enum RedisClientResponseType {
     Ask,
     Status,
-    Write,
+    Write,    
     Error,
     Llm,
     ClientLlm,
@@ -21,7 +21,7 @@ impl RedisClientResponseType {
         match parts[0].to_uppercase().as_str() {
             "ASK" => Self::Ask,
             "STATUS" => Self::Status,
-            "WRITE" => Self::Write,
+            "WRITE" => Self::Write,            
             "LLM-RESPONSE" => Self::Llm,
             "CLIENT-LLM-RESPONSE" => Self::ClientLlm,
             "LLM-RESPONSE-ERROR" => Self::Error,
