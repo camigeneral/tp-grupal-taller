@@ -571,10 +571,6 @@ impl Microservice {
                     );
                     if let Ok(mut processed) = processed_responses.lock() {                    
                         if processed.contains(&response_id) {
-                            println!(
-                                "Respuesta duplicada detectada, omitiendo: {}",
-                                parts.join(" ")
-                            );
                             continue;
                         }
                         processed.insert(response_id);                        
